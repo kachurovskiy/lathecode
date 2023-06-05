@@ -4,6 +4,10 @@ Text format for lathe parts and other objects with circular symmetry. Defines st
 
 Supports conversion to STL. When stock size and tool is specified, supports conversion to GCode.
 
+## Online editor
+
+https://kachurovskiy.github.io/lathecode/
+
 ## Examples
 
 Smallest possible lathecode file describing 7mm long ø6mm pin can be read as "Length 7mm, Diameter 6mm":
