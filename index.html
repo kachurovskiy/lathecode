@@ -13,17 +13,14 @@
       font-family: Roboto;
     }
 
-    .hcont {
-      align-items: stretch;
-      display: flex;
-      flex-direction: row;
-      height: 600px;
-      gap: 20px;
+    .vcont {
+      width: 600px;
+      margin: 0 auto;
     }
 
     .inputContainer {
-      flex-grow: 1;
-      flex-basis: 0;
+      width: 100%;
+      height: 300px;
       display: flex;
       flex-direction: column;
       position: relative;
@@ -51,9 +48,8 @@
     #container {
       flex-grow: 2;
       flex-basis: 0;
-      min-width: 100px;
-      min-height: 100px;
-      height: 100%;
+      width: 600px;
+      height: 600px;
     }
 
     .toolbar {
@@ -81,7 +77,7 @@
 </head>
 
 <body>
-  <div class="hcont">
+  <div class="vcont">
     <div class="inputContainer">
       <textarea id="latheCodeInput">
 STOCK D20
@@ -93,10 +89,10 @@ L3
       </textarea>
       <div id="errorContainer"></div>
     </div>
+    <div class="toolbar">
+      <button onclick="downloadStl()">Download STL</button>
+    </div>
     <div id="container"></div>
-  </div>
-  <div class="toolbar">
-    <button onclick="downloadStl()">Download STL</button>
   </div>
   <script>
     const container = document.getElementById('container');
@@ -168,6 +164,7 @@ L3
       const points = getPoints(latheData);
       console.log('points', points);
       const pointsWithoutExcessive = removeExcessivePoints(points);
+      if (!pointsWithoutExcessive.length) throw new Error('Unable to build the profile');
       console.log('pointsWithoutExcessive', pointsWithoutExcessive);
       const latheGeometry = new THREE.LatheGeometry(pointsWithoutExcessive, 32);
       const material = new THREE.MeshStandardMaterial({
@@ -281,7 +278,6 @@ L3
       const outsideLength = outsidePoints.length ? outsidePoints.at(-1).y : 0;
       const insidePoints = latheData[11] ? getPointsForSide(latheData[11][2], stockRadius).reverse() : [];
       const insideLength = insidePoints.length ? insidePoints[0].y : 0;
-      if (!stockRadius && outsideLength < insideLength) throw new Error('Inside cuts extend too far, specify stock or outside');
       if (!insidePoints.length && !outsidePoints.length) {
         return [];
       } else if (!insidePoints.length) {
@@ -291,6 +287,13 @@ L3
         // Just inside points.
         if (!stockRadius) throw new Error('Specify stock radius or diameter');
         points = [...insidePoints, new THREE.Vector2(stockRadius, 0), new THREE.Vector2(stockRadius, insideLength), insidePoints[0]];
+      } else if (insideLength === outsideLength) {
+        points = [...outsidePoints, ...insidePoints, outsidePoints[0]];
+      } else if (insideLength < outsideLength) {
+        points = [...outsidePoints, new THREE.Vector2(0, outsideLength), new THREE.Vector2(0, insideLength), ...insidePoints, outsidePoints[0]];
+      } else if (insideLength > outsideLength) {
+        if (!stockRadius) throw new Error('Inside cuts extend too far, specify stock or outside');
+        points = [...outsidePoints, new THREE.Vector2(stockRadius, outsideLength), new THREE.Vector2(stockRadius, insideLength), ...insidePoints, outsidePoints[0]];
       }
       return points;
     }
@@ -306,9 +309,6 @@ L3
         }
       }
       if (points.length >= 3) {
-        if (arePointsColinear(points.at(-1), points[0], points[1])) {
-          return removeExcessivePoints(points.slice(1));
-        }
         if (arePointsColinear(points.at(-2), points.at(-1), points[0])) {
           points.at(-1).y = points[0].y;
         }
