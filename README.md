@@ -62,9 +62,8 @@ comment* time?
 comment* stock?
 comment* tool?
 comment* feed?
-comment* lathe*
-comment* inside?
-comment* lathe*
+(comment* lathe)*
+(comment* inside (comment* lathe)+)?
 comment*
 
 units = "UNITS" spaces unitType comment
@@ -99,7 +98,7 @@ lathe =
 curveType = "CONV" / "CONC"
 
 comment = spaces a:(";" (!eol .)*)? eol { return text().substring(1).trim() }
-float = a:digits b:("." digits)? spaces { return parseFloat(`${a}${b}`); }
+float = digits ("." digits)? spaces { return parseFloat(text()); }
 digits = digit+
 digit = [0-9]
 spaces = space* { return null }

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>lathecode editor</title>
+  <script src="three.min.js"></script>
+  <script src="orbit.min.js"></script>
+  <script src="stl.min.js"></script>
+  <script src="parser.js"></script>
+  <style>
+    body {
+      font-family: Roboto;
+    }
+
+    .hcont {
+      align-items: stretch;
+      display: flex;
+      flex-direction: row;
+      height: 600px;
+      gap: 20px;
+    }
+
+    .inputContainer {
+      flex-grow: 1;
+      flex-basis: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    #latheCodeInput {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+    }
+
+    #errorContainer:not(:empty) {
+      position: absolute;
+      bottom: 0;
+      left: 10px;
+      right: 10px;
+      margin-bottom: 10px;
+      padding: 10px;
+      background-color: #ff4c4c;
+      color: #ffffff;
+      font-size: 14px;
+      border-radius: 0;
+    }
+
+    #container {
+      flex-grow: 2;
+      flex-basis: 0;
+      min-width: 100px;
+      min-height: 100px;
+      height: 100%;
+    }
+
+    .toolbar {
+      padding: 12px 0;
+    }
+
+    button {
+      display: inline-block;
+      padding: 12px 24px;
+      font-size: 16px;
+      text-align: center;
+      text-decoration: none;
+      color: #000;
+      background-color: #ffd500;
+      border-radius: 0;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #ffff00;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="hcont">
+    <div class="inputContainer">
+      <textarea id="latheCodeInput">
+STOCK D20
+L1
+L24 DS14.5 DE15.733
+L5 DS15.733 DE17.78
+L80 DS17.78 DE14.9
+L3
+      </textarea>
+      <div id="errorContainer"></div>
+    </div>
+    <div id="container"></div>
+  </div>
+  <div class="toolbar">
+    <button onclick="downloadStl()">Download STL</button>
+  </div>
+  <script>
+    const container = document.getElementById('container');
+    const errorContainer = document.getElementById('errorContainer');
+    const latheCodeInput = document.getElementById('latheCodeInput');
+    let scene, camera, renderer, controls, latheData, latheMesh;
+
+    function parseLatheCode(latheCode) {
+      try {
+        latheData = parser.parse(latheCode + '\n');
+        errorContainer.textContent = '';
+        visualizeObject();
+      } catch (error) {
+        errorContainer.textContent = error.message;
+        clearScene();
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function clearScene() {
+      if (!scene) return;
+      while (scene.children.length) {
+        scene.remove(scene.children[0]);
+      }
+    }
+
+    function fitMeshToOrthographicCamera() {
+      const box = new THREE.Box3().setFromObject(latheMesh);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDimension = Math.max(size.x, size.y, size.z);
+      const desiredSize = maxDimension * 0.7;
+      const desiredZoom = Math.max(1 / desiredSize, 1);
+      camera.left = -desiredSize;
+      camera.right = desiredSize;
+      camera.top = desiredSize;
+      camera.bottom = -desiredSize;
+      camera.zoom = desiredZoom;
+      camera.near = -100000;
+      camera.far = 100000;
+      camera.updateProjectionMatrix();
+    }
+
+    function visualizeObject() {
+      console.log(latheData);
+      if (!scene) {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+        const zoomOut = 7;
+        camera = new THREE.OrthographicCamera(-zoomOut, zoomOut, -zoomOut, zoomOut, 0, 1000);
+        camera.position.z = 5;
+        renderer = new THREE.WebGLRenderer();
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setSize(container.offsetWidth, container.offsetHeight);
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.autoRotate = true;
+        container.appendChild(renderer.domElement);
+        animate();
+      } else {
+        clearScene();
+      }
+
+      const points = getPoints(latheData);
+      console.log('points', points);
+      const pointsWithoutExcessive = removeExcessivePoints(points);
+      console.log('pointsWithoutExcessive', pointsWithoutExcessive);
+      const latheGeometry = new THREE.LatheGeometry(pointsWithoutExcessive, 32);
+      const material = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 1,
+        metalness: 0.8,
+        side: THREE.DoubleSide,
+        transparent: false,
+        opacity: 0.8,
+      });
+      material.castShadow = true;
+      latheMesh = new THREE.Mesh(latheGeometry, material);
+      scene.add(centerObject(rotateMesh(latheMesh)));
+
+      if (latheData[5]) {
+        const stockParams = latheData[5][2];
+        const stockDiameter = stockParams[1] * (stockParams[0] == 'D' ? 1 : 2);
+        scene.add(centerObject(rotateMesh(createStock(getStockLength(points), stockDiameter))));
+      }
+
+      let light;
+      light = new THREE.DirectionalLight(0xffffff, 1);
+      light.castShadow = true;
+      light.position.set(0, 1, 0);
+      scene.add(light);
+      light = new THREE.DirectionalLight(0xffffff, 0.8);
+      light.castShadow = true;
+      light.position.set(1, 0, 0);
+      scene.add(light);
+      light = new THREE.DirectionalLight(0xffffff, 0.6);
+      light.castShadow = true;
+      light.position.set(0, 0, 1);
+      scene.add(light);
+
+      fitMeshToOrthographicCamera();
+    }
+
+    function centerObject(mesh) {
+      const box = new THREE.Box3().setFromObject(mesh);
+      mesh.position.sub(box.getCenter(new THREE.Vector3()));
+      return mesh;
+    }
+
+    function rotateMesh(mesh) {
+      mesh.rotation.z = 8.5;
+      mesh.rotation.y = -1;
+      return mesh;
+    }
+
+    function addMeshEdges(mesh) {
+      const edgesGeometry = new THREE.EdgesGeometry(mesh.geometry);
+      const edgesMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+      const edgesMesh = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+      scene.add(edgesMesh);
+      return edgesMesh;
+    }
+
+    function createStock(length, diameter) {
+      const geometry = new THREE.CylinderGeometry(diameter / 2, diameter / 2, length, 32);
+      const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3 });
+      return new THREE.Mesh(geometry, material);
+    }
+
+    function getStockLength(points) {
+      let minZ = Infinity;
+      let maxZ = -Infinity;
+      for (let point of points) {
+        if (point.y < minZ) minZ = point.y;
+        if (point.y > maxZ) maxZ = point.y;
+      }
+      return maxZ - minZ;
+    }
+
+    function getPointsForSide(side, zeroX) {
+      const points = [];
+      let z = 0;
+      for (let commentsAndLine of side) {
+        let line = commentsAndLine[1];
+        let startX, endX;
+        if (line[2] === 'R') {
+          startX = endX = line[3];
+        } else if (line[2] === 'D') {
+          startX = endX = line[3] / 2;
+        } else if (line[2] === 'DS' || line[2] === 'RS') {
+          startX = line[3] / (line[2] === 'DS' ? 2 : 1);
+          endX = line[5] / (line[4] === 'DE' ? 2 : 1);
+        } else if (line[2] === '') {
+          startX = zeroX;
+          endX = zeroX;
+        }
+        points.push(new THREE.Vector2(startX, z));
+        z += line[1];
+        points.push(new THREE.Vector2(endX, z));
+      }
+      return points;
+    }
+
+    function getStockRadius(latheData) {
+      if (!latheData[5]) return 0;
+      const params = latheData[5][2];
+      return params[1] * (params[0] == 'D' ? 0.5 : 1);
+    }
+
+    function getPoints(latheData) {
+      const stockRadius = getStockRadius(latheData);
+      const outside = latheData[10];
+      let x = 0;
+      let z = 0;
+      let points = [];
+      const outsidePoints = getPointsForSide(latheData[10], 0);
+      const outsideLength = outsidePoints.length ? outsidePoints.at(-1).y : 0;
+      const insidePoints = latheData[11] ? getPointsForSide(latheData[11][2], stockRadius).reverse() : [];
+      const insideLength = insidePoints.length ? insidePoints[0].y : 0;
+      if (!stockRadius && outsideLength < insideLength) throw new Error('Inside cuts extend too far, specify stock or outside');
+      if (!insidePoints.length && !outsidePoints.length) {
+        return [];
+      } else if (!insidePoints.length) {
+        // Just outside points connecting to x=0 on start and end.
+        points = [new THREE.Vector2(x, z), ...outsidePoints, new THREE.Vector2(0, outsideLength)];
+      } else if (!outsidePoints.length) {
+        // Just inside points.
+        if (!stockRadius) throw new Error('Specify stock radius or diameter');
+        points = [...insidePoints, new THREE.Vector2(stockRadius, 0), new THREE.Vector2(stockRadius, insideLength), insidePoints[0]];
+      }
+      return points;
+    }
+
+    function arePointsColinear(p0, p1, p2) {
+      return p0.x === p1.x && p1.x === p2.x || p0.y === p1.y && p1.y === p2.y;
+    }
+
+    function removeExcessivePoints(points) {
+      for (let i = 0; i < points.length - 2; i++) {
+        if (arePointsColinear(points[i], points[i+1], points[i+2])) {
+          return removeExcessivePoints([...points.slice(0, i + 1), ...points.slice(i + 2)]);
+        }
+      }
+      if (points.length >= 3) {
+        if (arePointsColinear(points.at(-1), points[0], points[1])) {
+          return removeExcessivePoints(points.slice(1));
+        }
+        if (arePointsColinear(points.at(-2), points.at(-1), points[0])) {
+          points.at(-1).y = points[0].y;
+        }
+      }
+      return points;
+    }
+
+    function downloadStl() {
+      const exporter = new STLExporter();
+      const stlData = exporter.parse(resetRotation(latheMesh.clone(), false), { binary: true });
+      const blob = new Blob([stlData], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = getValidFileName(latheData[0][1] || `lathecode_${Date.now()}`);
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function resetRotation(object, isInner) {
+      object.rotation.set(-Math.PI / 2, 0, 0);
+      for (let child of object.children) {
+        resetRotation(child, true);
+      }
+      object.updateMatrix();
+      object.updateMatrixWorld(true);
+      return object;
+    }
+
+    function getValidFileName(filename) {
+      const sanitizedFilename = filename.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+      return sanitizedFilename.toLowerCase().endsWith('.stl') ? sanitizedFilename : sanitizedFilename + '.stl';
+    }
+
+    function update() {
+      parseLatheCode(latheCodeInput.value);
+    }
+
+    latheCodeInput.addEventListener('input', update);
+
+    update();
+  </script>
+</body>
+
+</html>
