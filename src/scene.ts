@@ -16,7 +16,7 @@ export class Scene extends THREE.Scene {
     this.background = new THREE.Color(0xffffff);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.setSize(container.offsetWidth, container.offsetHeight);
+    this.renderer.setSize(726, 726);
     this.addLight();
     container.appendChild(this.renderer.domElement);
     this.camera = new THREE.OrthographicCamera(-7, 7, -7, 7, 0, 1000);

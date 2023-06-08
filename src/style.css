@@ -3,7 +3,7 @@ body {
 }
 
 .vcont {
-  width: 600px;
+  width: 726px;
   margin: 0 auto;
 }
 
@@ -37,8 +37,8 @@ body {
 #container {
   flex-grow: 2;
   flex-basis: 0;
-  width: 600px;
-  height: 600px;
+  width: 726px;
+  height: 726px;
 }
 
 .toolbar {
