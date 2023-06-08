@@ -1,0 +1,23 @@
+{
+  "name": "lathecode",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/three": "^0.152.1",
+    "typescript": "^5.0.2",
+    "vite": "^4.3.9",
+    "vite-plugin-singlefile": "^0.13.5",
+    "vitest": "^0.31.4"
+  },
+  "dependencies": {
+    "three": "^0.153.0"
+  }
+}

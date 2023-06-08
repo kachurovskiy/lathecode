@@ -97,7 +97,6 @@ inside = "INSIDE" comment
 lathe =
 "L" float comment /
 "L" float ("D" / "R") float comment /
-"L" float ("D" / "R") float ("TP" / "TP-") float ("TD" float)? ("TA" float)? ("TS" float)? comment /
 "L" float ("DS" / "RS") float ("DE" / "RE") float curveType? comment
 curveType = "CONV" / "CONC"
 
