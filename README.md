@@ -2,11 +2,7 @@
 
 Text format for lathe parts and other objects with circular symmetry. Defines stock dimensions and substractions that should be made from it right-to-left just like a part is processed in a typical lathe. Allows to specify tools, pass depths and speeds.
 
-Supports conversion to STL. When stock size and tool is specified, supports conversion to GCode.
-
-## Online editor
-
-https://kachurovskiy.github.io/lathecode/
+Supports conversion to STL. When stock size and tool is specified, supports conversion to GCode. **[Try it in the online editor.](https://kachurovskiy.com/pages/lathecode)**
 
 ## Examples
 
