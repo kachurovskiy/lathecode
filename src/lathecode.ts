@@ -39,6 +39,19 @@ export class Segment {
 
 export class Stock {
   constructor(readonly diameter: number, readonly length: number) {}
+
+  getSegments(): Segment[] {
+    return [
+      new Segment('line', new Point(0, 0), new Point(this.diameter / 2, 0)),
+      new Segment('line', new Point(this.diameter / 2, 0), new Point(this.diameter / 2, this.length)),
+      new Segment('line', new Point(this.diameter / 2, this.length), new Point(0, this.length)),
+      new Segment('line', new Point(0, this.length), new Point(0, 0)),
+    ];
+  }
+}
+
+export class Tool {
+  constructor(readonly type: string, readonly widthMm: number, readonly heightMm: number, readonly cornerRadiusMm: number) {}
 }
 
 const UNITS: {
@@ -79,6 +92,10 @@ export class LatheCode {
     const d = this.getStockDiameter();
     const l = this.getStockLength();
     return d > 0 && l > 0 ? new Stock(d, l) : null;
+  }
+
+  getTool(): Tool {
+    return new Tool('rect', 3, 10, 0.5);
   }
 
   /** Segments forming the part after outside cuts. */

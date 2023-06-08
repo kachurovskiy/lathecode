@@ -34,15 +34,26 @@ body {
   border-radius: 0;
 }
 
-#container {
-  flex-grow: 2;
-  flex-basis: 0;
+#gcodeContainer {
+  position: absolute;
+  transform-origin: 0 0;
+}
+
+#gcodeContainer .tool {
+  position: absolute;
+}
+
+#sceneContainer {
   width: 726px;
   height: 726px;
 }
 
-.toolbar {
+#toolbar {
   padding: 12px 0;
+}
+
+#gcodeContainer {
+  margin: 12px 0;
 }
 
 button {
