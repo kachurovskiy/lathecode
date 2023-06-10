@@ -16,12 +16,12 @@ Smallest possible lathecode to cut same pin from ø10mm stock with a 3mm wide pa
 
 ```
 STOCK R5
-TOOL RECT L3
-L7 R3 ; pin
-L3 ; parting
+TOOL RECT R0.2 L3
+L7 R3
+L3
 ```
 
-Tool is assumed to be zeroed on the bottom-right corner of the stock when the gcode is generated. Default pass depth is 0.5mm, finish 0.1mm, cutting speed 50mm/min, parting speed 10mm/min, move speed 200mm/min. This can be adjusted with a FEED line.
+Tool is assumed to be zeroed on the centerline, right corner of the stock. Default pass depth is 0.5mm, finish 0.1mm, cutting speed 50mm/min, parting speed 10mm/min, move speed 200mm/min. This can be adjusted with a FEED line.
 
 To make a cone, specify start and end diameter or radius. MT2 to B16 arbor can be specified like:
 
