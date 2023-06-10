@@ -161,13 +161,16 @@ export class Planner {
         return true;
       }
       if (this.tryMove(-1, -1)) {
+        this.upAllowed = true;
         return true;
       }
     }
     if (this.tryMove(-1, 0)) {
+      this.upAllowed = true;
       return true;
     }
     if (this.tryMove(-1, 1)) {
+      this.upAllowed = true;
       return true;
     }
     if (this.tryMove(0, 1)) {
