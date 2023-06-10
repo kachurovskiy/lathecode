@@ -73,7 +73,7 @@ export class GCode {
   }
 
   private showGCode() {
-    const text = this.createGCode();
+    const text = createGCode(this.planner!.getMoves());
     const textarea = document.createElement('textarea');
     textarea.value = text;
     this.container.appendChild(textarea);
@@ -169,57 +169,156 @@ export class GCode {
     }
     this.gcodeCanvasContainer!.appendChild(this.tool);
   }
-
-  private createGCode(): string {
-    const lines = [
-      'G90', // absolute positioning
-      'X0',
-      'Z0',
-      'G91 G21', // relative positioning, metric
-    ];
-    const moves = this.planner!.getMoves();
-
-    // Trip non-cutting moves from the end until the last moment where we were outside the stock.
-    let trimIndex = moves.length;
-    for (let i = moves.length - 1; i >= 0; i--) {
-      const m = moves[i];
-      if (m.cutArea) break;
-      if (m.yStart === this.canvas!.height) trimIndex = i;
-    }
-    const trim = trimIndex < moves.length;
-    if (trim) moves.splice(trimIndex, moves.length - trimIndex);
-
-    let i = 0;
-    while (i < moves.length) {
-      let m = moves[i];
-      if (!m.isEmpty()) {
-        while (i < moves.length - 1) {
-          if (moves[i + 1].isCodirectional(m)) {
-            m = m.merge(moves[i + 1]);
-            i++;
-          } else {
-            break;
-          }
-        }
-        lines.push(this.moveToGCode(m));
-      }
-      i++;
-    }
-    if (trim) lines.push('G90', 'Z0');
-    return lines.join('\n');
-  }
-
-  private moveToGCode(m: Move): string {
-    const xAxisName = 'Z';
-    const yAxisName = 'X';
-    const parts = [];
-    if (m.xDelta) parts.push(xAxisName + pixelToMm(m.xDelta));
-    if (m.yDelta) parts.push(yAxisName + pixelToMm(m.yDelta));
-    if (m.cutArea) parts.push(`; cut area ${m.cutArea}`);
-    return parts.join(' ');
-  }
 }
 
-function pixelToMm(pixel: number): string {
+export function createGCode(moves: Move[]): string {
+  // prompt('moves', moves.map(m => m.toConstructorString()).join(',\n'));
+  const first = moves[0]!;
+  const lines = [
+    'G21 G18 G90', // metric, ZX plane, absolute positioning
+    `X${pixelToMm(first.yStart)}`,
+    `Z0`,
+    'G91', // relative positioning
+  ];
+  let i = 0;
+  while (i < moves.length) {
+    let m = moves[i];
+    if (m.isEmpty()) {
+      i++;
+      continue;
+    }
+
+    if (!m.cutArea) {
+      const travel = detectTravel(moves, i);
+      if (travel.length > 1) {
+        for (const tm of travel.moves) {
+          lines.push(moveToGCode(tm));
+        }
+        i += travel.length;
+        continue;
+      }
+    }
+
+    let maxCount = 1;
+    let occurrenceLength = 1;
+    for (let j = 2; j < 200; j++) {
+      const count = countPatterns(moves, i, j);
+      if (count > 1 && count * j > maxCount * occurrenceLength) {
+        maxCount = count;
+        occurrenceLength = j;
+      }
+    }
+    if (maxCount > 1) {
+      lines.push(moveToGCode(mergeMoves(moves, i, maxCount * occurrenceLength)));
+      i += maxCount * occurrenceLength;
+      continue;
+    }
+
+    const condirectional = detectCodirectional(moves, i);
+    if (condirectional.length > 1) {
+      lines.push(moveToGCode(condirectional.move));
+      i += condirectional.length;
+      continue;
+    }
+
+    lines.push(moveToGCode(m));
+    i++;
+  }
+  return lines.join('\n');
+}
+
+export function moveToGCode(m: Move): string {
+  const xAxisName = 'Z';
+  const yAxisName = 'X';
+  const parts = [];
+  if (m.xDelta) parts.push(xAxisName + pixelToMm(m.xDelta));
+  if (m.yDelta) parts.push(yAxisName + pixelToMm(m.yDelta));
+  if (m.cutArea) parts.push(`; cut ${toMmSquare(m.cutArea)}`);
+  return parts.join(' ');
+}
+
+export function toMmSquare(cutArea: number): string {
+  return (cutArea / PX_MULTIPLIER / PX_MULTIPLIER).toFixed(3) + ' mm2';
+}
+
+export function pixelToMm(pixel: number): string {
   return (-pixel / PX_MULTIPLIER).toFixed(3).replace(/\.?0+$/, '');
+}
+
+export function detectTravel(moves: Move[], i: number): {moves: Move[], length: number} {
+  if (moves[i].cutArea) throw new Error('expecting a travel move');
+  let end = i;
+  while (end < moves.length - 1 && !moves[end + 1].cutArea) {
+    end++;
+  }
+  return {moves: optimizeTravel(moves.slice(i, end + 1)), length: end - i + 1};
+}
+
+export function optimizeTravel(moves: Move[]): Move[] {
+  const result = [];
+  const start = moves[0];
+  const maxY = Math.max.apply(null, moves.map(m => m.yStart + m.yDelta));
+  if (moves[0].yStart !== maxY) {
+    // Move back.
+    result.push(Move.withoutCut(start.xStart, start.yStart, 0, maxY - start.yStart));
+  }
+  const end = moves.at(-1)!;
+  const endX = end.xStart + end.xDelta;
+  if (endX != start.xStart) {
+    // Move to target x.
+    result.push(Move.withoutCut(start.xStart, maxY, endX - start.xStart, 0));
+  }
+  const endY = end.yStart + end.yDelta;
+  if (endY != maxY) {
+    // Move to target x.
+    result.push(Move.withoutCut(endX, maxY, 0, endY - maxY));
+  }
+  return result;
+}
+
+export function detectCodirectional(moves: Move[], i: number): {move: Move, length: number} {
+  let m = moves[i];
+  let length = 1;
+  while (i < moves.length - 1) {
+    if (moves[i + 1].isCodirectional(m)) {
+      m = m.merge(moves[i + 1]);
+      length++;
+      i++;
+    } else {
+      break;
+    }
+  }
+  return {move: m, length};
+}
+
+export function mergeMoves(moves: Move[], startIndex: number, length: number): Move {
+  let m = moves[startIndex];
+  for (let i = 1; i < length; i++) {
+    m = m.merge(moves[startIndex + i]);
+  }
+  return m;
+}
+
+export function countPatterns(moves: Move[], startIndex: number, patternLength: number): number {
+  let count = 1;
+  let i = startIndex + patternLength;
+  while (i + patternLength <= moves.length) {
+    if (sameMoves(moves, startIndex, i, patternLength)) {
+      count++;
+      i += patternLength;
+    } else {
+      break;
+    }
+  }
+  return count;
+}
+
+export function sameMoves(moves: Move[], i: number, j: number, length: number): boolean {
+  if (j - i < length) throw new Error('overlapping move sequences');
+  for (let k = 0; k < length; k++) {
+    const moveI = moves[i + k];
+    const moveJ = moves[j + k];
+    if (moveI.xDelta != moveJ.xDelta || moveI.yDelta != moveJ.yDelta) return false;
+  }
+  return true;
 }

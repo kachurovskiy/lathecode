@@ -4,13 +4,13 @@ const REMOVED_RGB_NUMBER = Colors.COLOR_REMOVED.rgbNumber();
 const STOCK_RGB_NUMBER = Colors.COLOR_STOCK.rgbNumber();
 const PART_RGB_NUMBER = Colors.COLOR_PART.rgbNumber();
 
-class Pixel {
+export class Pixel {
   constructor(readonly x: number, readonly y: number) {}
 }
 
 export class Move {
   static withoutCut(xStart: number, yStart: number, xDelta: number, yDelta: number) {
-    return new Move(xStart, yStart, xDelta, yDelta, 0, 0, 0, []);
+    return new Move(xStart, yStart, xDelta, yDelta, 0, []);
   }
 
   constructor(
@@ -18,13 +18,15 @@ export class Move {
     readonly yStart: number,
     readonly xDelta: number,
     readonly yDelta: number,
-    readonly cutDepth: number,
-    readonly cutWidth: number,
     readonly cutArea: number,
     readonly cutPixels: Pixel[]) {}
 
   toString() {
     return `${this.xDelta},${this.yDelta}:${this.cutArea}`;
+  }
+
+  toConstructorString() {
+    return `new Move(${this.xStart}, ${this.yStart}, ${this.xDelta}, ${this.yDelta}, ${this.cutArea}, [])`;
   }
 
   isEmpty() {
@@ -39,7 +41,7 @@ export class Move {
   }
 
   merge(m: Move) {
-    return new Move(this.xStart, this.yStart, this.xDelta + m.xDelta, this.yDelta + m.yDelta, 0, 0, this.cutArea + m.cutArea, this.cutPixels.concat(m.cutPixels));
+    return new Move(this.xStart, this.yStart, this.xDelta + m.xDelta, this.yDelta + m.yDelta, this.cutArea + m.cutArea, this.cutPixels.concat(m.cutPixels));
   }
 }
 
@@ -75,7 +77,8 @@ export class Planner {
         if (
           this.toolData[i] == Colors.COLOR_TOOL.red() &&
           this.toolData[i + 1] == Colors.COLOR_TOOL.green() &&
-          this.toolData[i + 2] == Colors.COLOR_TOOL.blue()
+          this.toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
+          this.toolData[i + 3] > 200
         ) {
           this.toolCuttingEdges.add(i);
           this.toolCuttingEdgeX.set(i, x);
@@ -90,7 +93,8 @@ export class Planner {
         if (
           this.toolData[i] == Colors.COLOR_TOOL.red() &&
           this.toolData[i + 1] == Colors.COLOR_TOOL.green() &&
-          this.toolData[i + 2] == Colors.COLOR_TOOL.blue()
+          this.toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
+          this.toolData[i + 3] > 200
         ) {
           this.toolCuttingEdges.add(i);
           this.toolCuttingEdgeX.set(i, x);
@@ -216,26 +220,18 @@ export class Planner {
     const topLeftX = this.toolX + xDelta;
     const topLeftY = this.toolY + yDelta;
     if (topLeftX < 0 || topLeftX > this.partCanvas.width || topLeftY < 0 || topLeftY > this.partCanvas.height) return null;
-    let maxY = -Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let minX = Infinity;
     let pixels: Pixel[] = [];
     for (let i of this.toolCuttingEdges) {
       const x = this.toolCuttingEdgeX.get(i)!;
       const y = this.toolCuttingEdgeY.get(i)!;
       const rgb = this.getBitmap(topLeftX + x, topLeftY + y);
       if (rgb === STOCK_RGB_NUMBER) {
-        maxY = Math.max(maxY, y);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        minX = Math.min(minX, x);
         pixels.push(new Pixel(topLeftX + x, topLeftY + y));
       } else if (rgb === PART_RGB_NUMBER) {
         // Not allowed to place cutter onto the part.
         return null;
       }
     }
-    return new Move(this.toolX, this.toolY, xDelta, yDelta, maxY - minY + 1, maxX - minX + 1, pixels.length, pixels);
+    return new Move(this.toolX, this.toolY, xDelta, yDelta, pixels.length, pixels);
   }
 }
