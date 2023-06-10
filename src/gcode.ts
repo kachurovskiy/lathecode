@@ -91,6 +91,7 @@ export class GCode {
     this.container.appendChild(this.gcodeCanvasContainer);
     this.gcodeCanvasContainer.style.transform = `scale(${Math.min(1, 726 / width)})`;
     const spacer = document.createElement('div');
+    spacer.innerHTML = '&nbsp;';
     spacer.style.height = `${this.gcodeCanvasContainer.getBoundingClientRect().height}px`;
     this.container.appendChild(spacer);
   }

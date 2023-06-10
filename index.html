@@ -14,27 +14,27 @@
       <p>lathecode to cut same pin from ø10mm stock with a 3mm wide parting blade:</p>
       <pre><code>STOCK R5
 TOOL RECT L3
-L7 R3 ; pin
-L3 ; parting</code></pre>
+L7 R3
+L3</code></pre>
       <p>To make a cone, specify start and end diameter or radius. MT2 to B16 arbor can be specified like:</p>
       <pre><code>L80 DS14.9 DE17.78
 L2 D15.733 ; spacer
 L24 DS15.733 DE14.5</code></pre>
       <h2>Editor</h2>
+      <p>Early demo 🚧 of an editor that visualizes lathecode and generates GCode for it.</p>
       <div class="inputContainer">
-        <textarea id="latheCodeInput">STOCK D20
-L1
-L24 DS14.5 DE15.733
-L5 DS15.733 DE17.78
-L80 DS17.78 DE14.9
-L3</textarea>
+        <textarea id="latheCodeInput">STOCK D5
+TOOL RECT R0.2 L3
+L1 D2
+L3 D3
+L4 DS3 DE5</textarea>
         <div id="errorContainer"></div>
       </div>
-      <div id="sceneContainer"></div>
       <div id="toolbar">
         <button id="stlButton">Download STL</button>
         <button id="gcodeButton">Generate GCode</button>
       </div>
+      <div id="sceneContainer"></div>
       <div id="gcodeContainer"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
