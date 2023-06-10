@@ -8,12 +8,14 @@ class Pixel {
   constructor(readonly x: number, readonly y: number) {}
 }
 
-class Move {
-  static withoutCut(xDelta: number, yDelta: number) {
-    return new Move(xDelta, yDelta, 0, 0, 0, []);
+export class Move {
+  static withoutCut(xStart: number, yStart: number, xDelta: number, yDelta: number) {
+    return new Move(xStart, yStart, xDelta, yDelta, 0, 0, 0, []);
   }
 
   constructor(
+    readonly xStart: number,
+    readonly yStart: number,
     readonly xDelta: number,
     readonly yDelta: number,
     readonly cutDepth: number,
@@ -23,6 +25,21 @@ class Move {
 
   toString() {
     return `${this.xDelta},${this.yDelta}:${this.cutArea}`;
+  }
+
+  isEmpty() {
+    return !this.xDelta && !this.yDelta;
+  }
+
+  isCodirectional(m: Move) {
+    if (!this.xDelta && !m.xDelta && this.yDelta * m.yDelta > 0) return true;
+    if (!this.yDelta && !m.yDelta && this.xDelta * m.xDelta > 0) return true;
+    if (this.yDelta * m.yDelta >= 0 && this.xDelta * m.xDelta >= 0 && this.yDelta / this.xDelta === m.yDelta / m.xDelta) return true;
+    return false;
+  }
+
+  merge(m: Move) {
+    return new Move(this.xStart, this.yStart, this.xDelta + m.xDelta, this.yDelta + m.yDelta, 0, 0, this.cutArea + m.cutArea, this.cutPixels.concat(m.cutPixels));
   }
 }
 
@@ -84,6 +101,11 @@ export class Planner {
     }
   }
 
+  getMoves() {
+    if (!this.stopped) throw new Error('Planning did not finish yet');
+    return this.moves.concat();
+  }
+
   private createPartBitmap(): number[][] {
     const out: number[][] = [];
     const data = this.partCtx.getImageData(0, 0, this.partCanvas.width, this.partCanvas.height).data;
@@ -126,7 +148,7 @@ export class Planner {
   step(): boolean {
     if (this.stopped) return false;
     if (this.passIndex === 0) {
-      this.addMove(Move.withoutCut(0, this.getYForPass(1) - this.toolY));
+      this.addMove(Move.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(1) - this.toolY));
       this.passIndex = 1;
       return true;
     }
@@ -150,14 +172,14 @@ export class Planner {
     }
     if (this.getYForPass(this.passIndex) > 0 && this.passHasCuts) {
       this.upAllowed = true;
-      this.addMove(Move.withoutCut(0, this.partCanvas.height - this.toolY)); // pull back
-      this.addMove(Move.withoutCut(this.partCanvas.width - this.toolX, 0)); // return right
+      this.addMove(Move.withoutCut(this.toolX, this.toolY, 0, this.partCanvas.height - this.toolY)); // pull back
+      this.addMove(Move.withoutCut(this.toolX, this.toolY, this.partCanvas.width - this.toolX, 0)); // return right
       this.passIndex++;
       this.passHasCuts = false;
-      this.addMove(Move.withoutCut(0, this.getYForPass(this.passIndex) - this.toolY)); // move in
+      this.addMove(Move.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(this.passIndex) - this.toolY)); // move in
       return true;
     } else {
-      this.addMove(Move.withoutCut(this.partCanvas.width - this.toolX, 0)); // return right
+      this.addMove(Move.withoutCut(this.toolX, this.toolY, this.partCanvas.width - this.toolX, 0)); // return right
     }
     this.stopped = true;
     return false;
@@ -170,12 +192,9 @@ export class Planner {
   private tryMove(xDelta: number, yDelta: number): boolean {
     const move = this.calculateMove(xDelta, yDelta);
     if (!move) return false;
-    if (move.cutDepth <= this.passMaxDepth) {
-      if (move.cutArea) this.passHasCuts = true;
-      this.addMove(move);
-      return true;
-    }
-    return false;
+    if (move.cutArea) this.passHasCuts = true;
+    this.addMove(move);
+    return true;
   }
 
   private addMove(m: Move) {
@@ -217,6 +236,6 @@ export class Planner {
         return null;
       }
     }
-    return new Move(xDelta, yDelta, maxY - minY + 1, maxX - minX + 1, pixels.length, pixels);
+    return new Move(this.toolX, this.toolY, xDelta, yDelta, maxY - minY + 1, maxX - minX + 1, pixels.length, pixels);
   }
 }

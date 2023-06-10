@@ -51,7 +51,13 @@ export class Stock {
 }
 
 export class Tool {
-  constructor(readonly type: string, readonly widthMm: number, readonly heightMm: number, readonly cornerRadiusMm: number) {}
+  constructor(
+    readonly type: string,
+    readonly widthMm: number,
+    readonly heightMm: number,
+    readonly cornerRadiusMm: number,
+    readonly angleDeg?: number,
+    readonly angleCenterDeg?: number) {}
 }
 
 const UNITS: {
@@ -95,7 +101,18 @@ export class LatheCode {
   }
 
   getTool(): Tool {
-    return new Tool('rect', 3, 10, 0.5);
+    if (!this.data[7]) return new Tool('RECT', 3, 10, 0.2);
+    const type = this.data[7][2];
+    const params = this.data[7][4];
+    const radius = params[0] ? params[0][1] : 0;
+    if (type === 'RECT') {
+      return new Tool('RECT', params[1] ? params[1][1] : 3, params[2] ? params[2][1] : 10, radius);
+    } else if (type === 'ROUND') {
+      return new Tool('ROUND', radius * 2, radius * 2, radius);
+    } else if (type === 'ANG') {
+      return new Tool('ANG', params[1] ? params[1][1] : 10, params[2] ? params[2][1] : 10, radius, params[3] ? params[3][1] : 60, params[4] ? params[4][1] : 0);
+    }
+    throw new Error('Unknown tool ' + type);
   }
 
   /** Segments forming the part after outside cuts. */
@@ -158,7 +175,7 @@ export class LatheCode {
       } else if (line[2] === 'DS' || line[2] === 'RS') {
         startX = line[3] / (line[2] === 'DS' ? 2 : 1) * this.unitsMultiplier;
         endX = line[5] / (line[4] === 'DE' ? 2 : 1) * this.unitsMultiplier;
-      } else if (line[2] === '') {
+      } else if (line.length === 3) {
         startX = zeroX;
         endX = zeroX;
       } else {

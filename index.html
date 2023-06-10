@@ -3,12 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <title>lathecode editor</title>
+    <link rel="icon" href="data:,">
   </head>
   <body>
     <div class="vcont">
-      <p>Text format for lathe parts and other objects with circular symmetry. Defines stock dimensions and substractions that should be made from it right-to-left just like a part is processed in a typical lathe.</p>
-      <p>This editor is not yet fully functional, work in progress.</p>
-      <p><a href="https://github.com/kachurovskiy/lathecode">https://github.com/kachurovskiy/lathecode</a></p>
+      <p>Text format for lathe parts and other objects with circular symmetry, <a href="https://github.com/kachurovskiy/lathecode">see GitHub</a>.</p>
+      <h2>Examples</h2>
+      <p>Smallest possible lathecode file describing 7mm long ø6mm pin can be read as "Length 7mm, Diameter 6mm":</p>
+      <pre><code>L7 D6</code></pre>
+      <p>lathecode to cut same pin from ø10mm stock with a 3mm wide parting blade:</p>
+      <pre><code>STOCK R5
+TOOL RECT L3
+L7 R3 ; pin
+L3 ; parting</code></pre>
+      <p>To make a cone, specify start and end diameter or radius. MT2 to B16 arbor can be specified like:</p>
+      <pre><code>L80 DS14.9 DE17.78
+L2 D15.733 ; spacer
+L24 DS15.733 DE14.5</code></pre>
+      <h2>Editor</h2>
       <div class="inputContainer">
         <textarea id="latheCodeInput">STOCK D20
 L1
