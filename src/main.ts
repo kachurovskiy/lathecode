@@ -8,15 +8,11 @@ const scene = new Scene(document.getElementById('sceneContainer')!);
 const errorContainer = document.getElementById('errorContainer')!;
 const latheCodeInput = document.querySelector<HTMLTextAreaElement>('#latheCodeInput')!;
 const gcode = new GCode(document.getElementById('gcodeContainer')!);
-const sceneContainer = document.getElementById('sceneContainer')!;
-const toolbar = document.getElementById('toolbar')!;
 
 let latheCode: LatheCode | null = null;
 
 function update() {
-  sceneContainer.style.display = 'block';
   gcode.setLatheCode(null);
-  toolbar.style.display = 'block';
   try {
     latheCode = new LatheCode(latheCodeInput.value + '\n');
     scene.setLatheCode(latheCode);
@@ -38,8 +34,5 @@ document.querySelector<HTMLButtonElement>('#stlButton')!.addEventListener('click
 });
 
 document.querySelector<HTMLButtonElement>('#gcodeButton')!.addEventListener('click', () => {
-  scene.setLatheCode(null);
-  sceneContainer.style.display = 'none';
   gcode.setLatheCode(latheCode);
-  toolbar.style.display = 'none';
 });

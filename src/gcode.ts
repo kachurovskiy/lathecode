@@ -10,11 +10,21 @@ export class GCode {
   private canvas: HTMLCanvasElement | null = null;
   private tool: HTMLCanvasElement | null = null;
   private worker: Worker | null = null;
+  private textareaContainer: HTMLDivElement | null = null;
 
   constructor(private container: HTMLElement) { }
 
   setLatheCode(value: LatheCode | null) {
     if (this.latheCode) {
+      if (this.worker) {
+        this.worker.onmessage = null;
+        this.worker.terminate();
+        this.worker = null;
+      }
+      if (this.textareaContainer) {
+        this.textareaContainer.remove();
+        this.textareaContainer = null;
+      }
       this.container.replaceChildren();
       this.progress = null;
       this.textarea = null;
@@ -39,14 +49,18 @@ export class GCode {
     if (data.gcode) {
       this.progress?.remove();
       if (!this.textarea) {
-        this.container.insertAdjacentHTML('beforeend', '<h2>GCode</h2>');
+        this.textareaContainer = document.createElement('div');
+        this.textareaContainer.className = 'textareaContainer';
+        this.container.parentNode!.appendChild(this.textareaContainer);
+        this.textareaContainer.innerHTML = '<h2>GCode</h2>';
         this.textarea = document.createElement('textarea');
-        this.container.appendChild(this.textarea);
+        this.textareaContainer.appendChild(this.textarea);
       }
       this.textarea.value = data.gcode;
+      this.textarea.scrollIntoView({ behavior: "smooth" });
     }
     if ((data.canvas || data.tool) && !this.gcodeCanvasContainer) {
-      this.container.insertAdjacentHTML('beforeend', '<h2>Profile</h2>');
+      this.container.insertAdjacentHTML('beforeend', '<h2>2D profile</h2>');
       this.gcodeCanvasContainer = document.createElement('div');
       this.gcodeCanvasContainer.className = 'gcodeCanvasContainer';
       this.container.appendChild(this.gcodeCanvasContainer);
@@ -54,6 +68,7 @@ export class GCode {
       spacer.innerHTML = '&nbsp;';
       spacer.style.height = `${this.gcodeCanvasContainer.getBoundingClientRect().height}px`;
       this.container.appendChild(spacer);
+      spacer.scrollIntoView({ behavior: "smooth" });
     }
     if (data.canvas) {
       if (!this.canvas) {
@@ -62,7 +77,7 @@ export class GCode {
         this.canvas.width = data.canvas.width;
         this.canvas.height = data.canvas.height;
         this.gcodeCanvasContainer!.appendChild(this.canvas);
-        this.gcodeCanvasContainer!.style.transform = `scale(${Math.min(1, 726 / data.canvas.width)})`;
+        this.gcodeCanvasContainer!.style.transform = `scale(${Math.min(1, 500 / data.canvas.width)})`;
         const spacer = document.createElement('div');
         spacer.innerHTML = '&nbsp;';
         spacer.style.height = `${this.gcodeCanvasContainer!.getBoundingClientRect().height}px`;

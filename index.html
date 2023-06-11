@@ -7,32 +7,36 @@
   </head>
   <body>
     <div class="vcont">
-      <p>Text format for lathe parts and other objects with circular symmetry, <a href="https://github.com/kachurovskiy/lathecode">see GitHub</a>.</p>
-      <h2>Examples</h2>
-      <p>Smallest possible lathecode file describing 7mm long ø6mm pin can be read as "Length 7mm, Diameter 6mm":</p>
-      <pre><code>L7 D6</code></pre>
-      <p>lathecode to cut same pin from ø10mm stock with a 3mm wide parting blade:</p>
-      <pre><code>STOCK R5
+      <div>
+        <h1>lathecode</h1>
+        <p>Text format for lathe parts and other objects with circular symmetry, <a href="https://github.com/kachurovskiy/lathecode">see GitHub</a>.</p>
+        <p>Smallest possible lathecode file describing 7mm long ø6mm pin can be read as "Length 7mm, Diameter 6mm":</p>
+        <pre><code>L7 D6</code></pre>
+        <p>lathecode to cut same pin from ø10mm stock with a 3mm wide parting blade:</p>
+        <pre><code>STOCK R5
 TOOL RECT L3
 L7 R3
 L3</code></pre>
-      <p>To make a cone, specify start and end diameter or radius. MT2 to B16 arbor can be specified like:</p>
-      <pre><code>L80 DS14.9 DE17.78
+        <p>To make a cone, specify start and end diameter or radius. MT2 to B16 arbor can be specified like:</p>
+        <pre><code>L80 DS14.9 DE17.78
 L2 D15.733 ; spacer
 L24 DS15.733 DE14.5</code></pre>
-      <h2>Editor</h2>
-      <p>Early demo 🚧 of an editor that visualizes lathecode and generates GCode for it.</p>
-      <div class="inputContainer">
-        <textarea id="latheCodeInput">STOCK D5
+      </div>
+      <div>
+        <h2>Editor</h2>
+        <p>Early demo 🚧 of an editor that visualizes lathecode and generates GCode for it.</p>
+        <div class="inputContainer">
+          <textarea id="latheCodeInput">STOCK D5
 TOOL RECT R0.2 L3
 L1 D2
 L3 D3
 L4 DS3 DE5</textarea>
-        <div id="errorContainer"></div>
-      </div>
-      <div id="toolbar">
-        <button id="stlButton">Download STL</button>
-        <button id="gcodeButton">Generate GCode</button>
+          <div id="errorContainer"></div>
+        </div>
+        <div id="toolbar">
+          <button id="stlButton">Download STL</button>
+          <button id="gcodeButton">Generate GCode</button>
+        </div>
       </div>
       <div id="sceneContainer"></div>
       <div id="gcodeContainer"></div>

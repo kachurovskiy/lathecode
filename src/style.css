@@ -1,10 +1,13 @@
 body {
   font-family: Roboto;
+  padding: 0 20px;
 }
 
 .vcont {
-  width: 726px;
-  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  grid-auto-rows: auto;
+  grid-gap: 20px;
 }
 
 .vcont pre {
@@ -16,7 +19,7 @@ body {
 
 .inputContainer {
   width: 100%;
-  height: 150px;
+  height: 400px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -56,15 +59,15 @@ body {
   position: absolute;
 }
 
-#gcodeContainer textarea {
+.textareaContainer textarea {
   box-sizing: border-box;
-  height: 600px;
+  height: 500px;
   width: 100%;
 }
 
 #sceneContainer {
-  width: 726px;
-  height: 726px;
+  width: 500px;
+  height: 500px;
 }
 
 #toolbar {
