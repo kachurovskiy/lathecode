@@ -108,6 +108,13 @@ describe('gcode', () => {
       Move.withoutCut(3, 4, 1, 2),
       Move.withoutCut(4, 6, 1, 2),
     ], 0, 4)).toEqual(Move.withoutCut(0, 0, 4, 6));
+
+    expect(mergeMoves([
+      Move.withoutCut(0, 0, 1, 1),
+      Move.withoutCut(1, 1, 1, 1),
+      Move.withoutCut(2, 3, -1, -1),
+      Move.withoutCut(3, 4, -1, -1),
+    ], 0, 4)).toEqual(Move.withoutCut(0, 0, 0, 0));
   });
 
   it('detectCodirectional', () => {
@@ -171,6 +178,22 @@ describe('gcode', () => {
       Move.withoutCut(100, 104, -4, 0),
       Move.withoutCut(96, 104, 0, -4),
     ]);
+
+    expect(optimizeTravel([
+      Move.withoutCut(0, 0, 0, 1),
+      Move.withoutCut(0, 1, 0, 1),
+      Move.withoutCut(0, 2, 0, -1),
+      Move.withoutCut(0, 1, 0, -1),
+    ])).toEqual([]);
+
+    expect(optimizeTravel([
+      Move.withoutCut(0, 0, 0, 1),
+      Move.withoutCut(0, 1, 0, 1),
+      Move.withoutCut(0, 2, 1, 0),
+      Move.withoutCut(1, 2, -1, 0),
+      Move.withoutCut(0, 2, 0, -1),
+      Move.withoutCut(0, 1, 0, -1),
+    ])).toEqual([]);
   });
 
   it('detectTravel', () => {

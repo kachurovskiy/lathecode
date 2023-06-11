@@ -24,6 +24,9 @@ export class Scene extends THREE.Scene {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.autoRotate = true;
     this.animate();
+    this.rotation.z = -8.5;
+    this.rotation.y = 1;
+    this.rotation.x = 1.5;
   }
 
   getLatheMesh(): THREE.Object3D | null {
@@ -76,12 +79,12 @@ export class Scene extends THREE.Scene {
     }
     this.latheCode = value;
     if (this.latheCode) {
-      this.setLatheMesh(this.centerObject(this.rotateObject(this.createLatheMesh())) as THREE.Mesh);
       const stock = this.createStock();
-      if (stock) this.setStock(this.centerObject(this.rotateObject(stock)));
-
-      if (this.stock) this.fit(this.stock);
-      else if (this.latheMesh) this.fit(this.latheMesh);
+      this.setStock(centerObject(stock));
+      const latheMesh = this.createLatheMesh();
+      latheMesh.position.set(stock.position.x, stock.position.y - this.latheCode!.getStock()!.length / 2, stock.position.z);
+      this.setLatheMesh(latheMesh);
+      this.fit(stock);
     }
   }
 
@@ -95,18 +98,6 @@ export class Scene extends THREE.Scene {
     if (this.stock) this.remove(this.stock);
     this.stock = value;
     if (this.stock) this.add(this.stock);
-  }
-
-  private centerObject(object: THREE.Object3D) {
-    const box = new THREE.Box3().setFromObject(object);
-    object.position.sub(box.getCenter(new THREE.Vector3()));
-    return object;
-  }
-
-  private rotateObject(object: THREE.Object3D) {
-    object.rotation.z = 8.5;
-    object.rotation.y = -1;
-    return object;
   }
 
   private createLatheMesh(): THREE.Object3D {
@@ -124,11 +115,17 @@ export class Scene extends THREE.Scene {
 
   private createStock() {
     const stock = this.latheCode!.getStock();
-    if (!stock) return null;
-    const geometry = new THREE.CylinderGeometry(stock.diameter / 2, stock.diameter / 2, stock.length, 32);
+    if (!stock) throw new Error('stock is required');
+    const geometry = new THREE.CylinderGeometry(stock.diameter / 2, stock.diameter / 2, stock.length, 256);
     const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3 });
     return new THREE.Mesh(geometry, material);
   }
+}
+
+function centerObject(object: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(object);
+  object.position.sub(box.getCenter(new THREE.Vector3()));
+  return object;
 }
 
 function createMetalMaterial() {

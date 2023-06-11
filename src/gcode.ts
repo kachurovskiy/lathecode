@@ -172,7 +172,6 @@ export class GCode {
 }
 
 export function createGCode(moves: Move[]): string {
-  // prompt('moves', moves.map(m => m.toConstructorString()).join(',\n'));
   const first = moves[0]!;
   const lines = [
     'G21 G18 G90', // metric, ZX plane, absolute positioning
@@ -258,20 +257,22 @@ export function optimizeTravel(moves: Move[]): Move[] {
   const result = [];
   const start = moves[0];
   const maxY = Math.max.apply(null, moves.map(m => m.yStart + m.yDelta));
-  if (moves[0].yStart !== maxY) {
-    // Move back.
-    result.push(Move.withoutCut(start.xStart, start.yStart, 0, maxY - start.yStart));
-  }
   const end = moves.at(-1)!;
   const endX = end.xStart + end.xDelta;
+  const endY = end.yStart + end.yDelta;
+  let currentY = start.yStart;
   if (endX != start.xStart) {
+    if (start.yStart !== maxY) {
+      // Move back.
+      result.push(Move.withoutCut(start.xStart, start.yStart, 0, maxY - start.yStart));
+      currentY = maxY;
+    }
     // Move to target x.
     result.push(Move.withoutCut(start.xStart, maxY, endX - start.xStart, 0));
   }
-  const endY = end.yStart + end.yDelta;
-  if (endY != maxY) {
-    // Move to target x.
-    result.push(Move.withoutCut(endX, maxY, 0, endY - maxY));
+  if (endY != currentY) {
+    // Move to target y.
+    result.push(Move.withoutCut(endX, currentY, 0, endY - currentY));
   }
   return result;
 }
