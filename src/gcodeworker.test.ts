@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, pixelToMm, moveToGCode } from './gcode';
+import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, pixelToMm, moveToGCode } from './gcodeworker';
 import { Move, Pixel } from './planner';
 
 describe('gcode', () => {

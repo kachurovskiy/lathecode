@@ -54,15 +54,15 @@ export class Planner {
   private passIndex = 0;
   private passHasCuts = false;
   private moves: Move[] = [];
-  private partCtx: CanvasRenderingContext2D;
+  private partCtx: OffscreenCanvasRenderingContext2D;
   private partBitmap: number[][] = [];
-  private toolCtx: CanvasRenderingContext2D;
+  private toolCtx: OffscreenCanvasRenderingContext2D;
   private toolData: Uint8ClampedArray;
   private toolCuttingEdges: Set<number> = new Set();
   private toolCuttingEdgeX: Map<number, number> = new Map();
   private toolCuttingEdgeY: Map<number, number> = new Map();
 
-  constructor(private partCanvas: HTMLCanvasElement, private toolCanvas: HTMLCanvasElement) {
+  constructor(private partCanvas: OffscreenCanvas, private toolCanvas: OffscreenCanvas) {
     this.toolX = this.partCanvas.width;
     this.toolY = this.partCanvas.height;
     this.partCtx = this.partCanvas.getContext("2d")!;
@@ -103,6 +103,18 @@ export class Planner {
         }
       }
     }
+  }
+
+  getToolX() {
+    return this.toolX;
+  }
+
+  getToolY() {
+    return this.toolY;
+  }
+
+  getProgress() {
+    return this.passIndex * this.passMaxDepth / this.partCanvas.height;
   }
 
   getMoves() {
@@ -209,8 +221,6 @@ export class Planner {
     this.drawMove(m);
     this.toolX += m.xDelta;
     this.toolY += m.yDelta;
-    this.toolCanvas.style.left = `${this.toolX}px`;
-    this.toolCanvas.style.top = `${this.toolY}px`;
   }
 
   private drawMove(m: Move) {
