@@ -72,6 +72,7 @@ export class Planner {
     this.toolData = this.toolCtx.getImageData(0, 0, this.toolCanvas.width, this.toolCanvas.height).data;
 
     for (let y = 0; y < this.toolCanvas.height; y++) {
+      let depth = 0;
       for (let x = 0; x < this.toolCanvas.width; x++) {
         const i = (y * this.toolCanvas.width + x) * 4;
         if (
@@ -83,23 +84,24 @@ export class Planner {
           this.toolCuttingEdges.add(i);
           this.toolCuttingEdgeX.set(i, x);
           this.toolCuttingEdgeY.set(i, y);
-          break;
+          if (++depth > 2) break;
         }
       }
     }
     for (let x = 0; x < this.toolCanvas.width; x++) {
+      let depth = 0;
       for (let y = 0; y < this.toolCanvas.height; y++) {
         const i = (y * this.toolCanvas.width + x) * 4;
         if (
           this.toolData[i] == Colors.COLOR_TOOL.red() &&
           this.toolData[i + 1] == Colors.COLOR_TOOL.green() &&
           this.toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
-          this.toolData[i + 3] > 200
+          this.toolData[i + 3] > 200 && depth < 2
         ) {
           this.toolCuttingEdges.add(i);
           this.toolCuttingEdgeX.set(i, x);
           this.toolCuttingEdgeY.set(i, y);
-          break;
+          if (++depth > 2) break;
         }
       }
     }
