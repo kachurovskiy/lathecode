@@ -1,4 +1,4 @@
-import { LatheCode, Segment, Stock, Tool } from './lathecode';
+import { Feed, LatheCode, Segment, Stock, Tool } from './lathecode';
 import * as Colors from './colors';
 import { Move, Planner } from './planner';
 
@@ -60,26 +60,27 @@ export class GCodeWorker {
       if (i++ % 1000 === 0) this.postProgress();
     }
     this.postProgress();
-    postMessage({gcode: createGCode(this.planner.getMoves())});
+    postMessage({gcode: createGCode(this.latheCode, this.planner.getMoves())});
   }
 
   private postProgress() {
     if (!this.canvas || !this.canvasCtx || !this.planner) return;
-    this.planner.flushBitmap();
+    const sendCanvas = this.canvas.width * this.canvas.height < 2000000;
+    if (sendCanvas) this.planner.flushBitmap();
     this.postMessage.call(null, {
       progress: this.planner.getProgress(),
-      canvas: {
+      canvas: sendCanvas ? {
         width: this.canvas.width,
         height: this.canvas.height,
         data: this.canvasCtx.getImageData(0, 0, this.canvas.width, this.canvas.height).data,
-      },
-      tool: {
+      } : undefined,
+      tool: sendCanvas ? {
         width: this.tool!.width,
         height: this.tool!.height,
         data: this.tool!.getContext('2d')!.getImageData(0, 0, this.tool!.width, this.tool!.height).data,
         x: this.planner.getToolX(),
         y: this.planner.getToolY(),
-      },
+      } : undefined,
     });
   }
 
@@ -153,10 +154,12 @@ export class GCodeWorker {
   }
 }
 
-export function createGCode(moves: Move[]): string {
+export function createGCode(latheCode: LatheCode, moves: Move[]): string {
+  let feed = latheCode.getFeed().moveMmMin;
   const first = moves[0]!;
   const lines = [
     'G21 G18 G90', // metric, ZX plane, absolute positioning
+    feedToGCode(feed),
     `X${pixelToMm(first.yStart)}`,
     `Z0`,
     'G91', // relative positioning
@@ -173,7 +176,7 @@ export function createGCode(moves: Move[]): string {
       const travel = detectTravel(moves, i);
       if (travel.length > 1) {
         for (const tm of travel.moves) {
-          lines.push(moveToGCode(tm));
+          feed = insertGCodeMove(lines, latheCode, tm, feed);
         }
         i += travel.length;
         continue;
@@ -190,7 +193,7 @@ export function createGCode(moves: Move[]): string {
       }
     }
     if (maxCount > 1) {
-      lines.push(moveToGCode(mergeMoves(moves, i, maxCount * occurrenceLength)));
+      feed = insertGCodeMove(lines, latheCode, mergeMoves(moves, i, maxCount * occurrenceLength), feed);
       i += maxCount * occurrenceLength;
       continue;
     }
@@ -208,6 +211,16 @@ export function createGCode(moves: Move[]): string {
   return lines.join('\n');
 }
 
+export function insertGCodeMove(lines: string[], latheCode: LatheCode, m: Move, feed: number): number {
+  const moveFeed = getFeedMmMin(m, latheCode.getFeed(), latheCode.getTool());
+  if (feed !== moveFeed) {
+    lines.push('');
+    lines.push(feedToGCode(moveFeed));
+  }
+  lines.push(moveToGCode(m));
+  return moveFeed;
+}
+
 export function moveToGCode(m: Move): string {
   const xAxisName = 'Z';
   const yAxisName = 'X';
@@ -218,8 +231,18 @@ export function moveToGCode(m: Move): string {
   return parts.join(' ');
 }
 
+export function getFeedMmMin(m: Move, feed: Feed, tool: Tool) {
+  if (!m.cutArea) return feed.moveMmMin;
+  if (!m.xDelta && (m.getCutWidth() >= tool.widthMm / 2)) return feed.partMmMin;
+  return feed.passMmMin;
+}
+
+export function feedToGCode(mmMin: number): string {
+  return 'F' + mmMin.toFixed(3).replace(/\.?0+$/, '');
+}
+
 export function toMmSquare(cutArea: number): string {
-  return (cutArea / PX_MULTIPLIER / PX_MULTIPLIER).toFixed(3) + ' mm2';
+  return (cutArea / PX_MULTIPLIER / PX_MULTIPLIER).toFixed(3).replace(/\.?0+$/, '') + ' mm2';
 }
 
 export function pixelToMm(pixel: number): string {

@@ -1,5 +1,4 @@
 import * as Colors from "./colors";
-
 const REMOVED_RGB_NUMBER = Colors.COLOR_REMOVED.rgbNumber();
 const STOCK_RGB_NUMBER = Colors.COLOR_STOCK.rgbNumber();
 const PART_RGB_NUMBER = Colors.COLOR_PART.rgbNumber();
@@ -42,6 +41,17 @@ export class Move {
 
   merge(m: Move) {
     return new Move(this.xStart, this.yStart, this.xDelta + m.xDelta, this.yDelta + m.yDelta, this.cutArea + m.cutArea, this.cutPixels.concat(m.cutPixels));
+  }
+
+  getCutWidth() {
+    if (!this.cutArea) return 0;
+    let minX = Infinity;
+    let maxX = 0;
+    for (let p of this.cutPixels) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+    }
+    return maxX - minX;
   }
 }
 
@@ -116,7 +126,9 @@ export class Planner {
   }
 
   getProgress() {
-    return this.passIndex * this.passMaxDepth / this.partCanvas.height;
+    if (this.stopped) return 1;
+    const currentPassProgress0To1 = (this.partCanvas.width - this.toolX) / this.partCanvas.width;
+    return (this.passIndex - 1 + currentPassProgress0To1) * this.passMaxDepth / this.partCanvas.height;
   }
 
   getMoves() {

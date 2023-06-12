@@ -60,6 +60,10 @@ export class Tool {
     readonly angleCenterDeg?: number) {}
 }
 
+export class Feed {
+  constructor(readonly moveMmMin: number, readonly passMmMin: number, readonly partMmMin: number) {}
+}
+
 const UNITS: {
   [key: string]: number,
  } = {
@@ -83,9 +87,9 @@ export class LatheCode {
     this.data = parser.parse(text + '\n');
     this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2] as string] : 1;
     // console.log('this.data', this.data);
-    this.outside = this.getSegmentsForSide(this.data[10], 0);
+    this.outside = this.getSegmentsForSide(this.data[8], 0);
     this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
-    this.inside = this.data[11] ? this.getSegmentsForSide(this.data[11][2], this.getStockDiameter() / 2) : [];
+    this.inside = this.data[9] ? this.getSegmentsForSide(this.data[9][2], this.getStockDiameter() / 2) : [];
     this.outsideSegments = this.closeLoop(this.outside, 0);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
   }
@@ -101,18 +105,24 @@ export class LatheCode {
   }
 
   getTool(): Tool {
-    if (!this.data[7]) return new Tool('RECT', 3, 10, 0.2);
-    const type = this.data[7][2];
-    const params = this.data[7][4];
-    const radius = params[0] ? params[0][1] : 0;
+    if (!this.data[5]) return new Tool('RECT', 3, 10, 0.2);
+    const type = this.data[5][2];
+    const params = this.data[5][4];
+    const radius = params[0] ? params[0][1] * this.unitsMultiplier : 0;
     if (type === 'RECT') {
-      return new Tool('RECT', params[1] ? params[1][1] : 3, params[2] ? params[2][1] : 10, radius);
+      return new Tool('RECT', params[1] ? params[1][1] * this.unitsMultiplier : 3, params[2] ? params[2][1] * this.unitsMultiplier : 10, radius);
     } else if (type === 'ROUND') {
       return new Tool('ROUND', radius * 2, radius * 2, radius);
-    } else if (type === 'ANG') {
-      return new Tool('ANG', params[1] ? params[1][1] : 10, params[2] ? params[2][1] : 10, radius, params[3] ? params[3][1] : 60, params[4] ? params[4][1] : 0);
     }
     throw new Error('Unknown tool ' + type);
+  }
+
+  getFeed(): Feed {
+    const params = this.data[7] ? this.data[7][2] : [];
+    return new Feed(
+      ((params[0] ? params[0][1] : 0) * this.unitsMultiplier) || 200,
+      ((params[1] ? params[1][1] : 0) * this.unitsMultiplier) || 50,
+      ((params[2] ? params[2][1] : 0) * this.unitsMultiplier) || 10);
   }
 
   /** Segments forming the part after outside cuts. */
@@ -138,8 +148,8 @@ export class LatheCode {
   }
 
   private getStockDiameter(): number {
-    if (!this.data || !this.data[5]) return this.outsideMaxRadius * 2;
-    const stockParams = this.data[5][2];
+    if (!this.data || !this.data[3]) return this.outsideMaxRadius * 2;
+    const stockParams = this.data[3][2];
     return stockParams[1] * (stockParams[0] == 'D' ? 1 : 2) * this.unitsMultiplier;
   }
 
