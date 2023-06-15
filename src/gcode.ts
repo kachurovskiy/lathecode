@@ -1,16 +1,22 @@
-import { LatheCode, } from './lathecode';
+import { LatheCode } from './lathecode';
 import InlineWorker from './gcodeworker?worker&inline';
 import { FromWorkerMessage } from './gcodeworker';
+import { Sender } from './sender';
 
 export class GCode {
   private latheCode: LatheCode | null = null;
   private gcodeCanvasContainer: HTMLDivElement | null = null;
-  private progress: HTMLProgressElement | null = null;
-  private textarea: HTMLTextAreaElement | null = null;
+  private generationProgress: HTMLProgressElement | null = null;
+  private runTextarea: HTMLTextAreaElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private tool: HTMLCanvasElement | null = null;
   private worker: Worker | null = null;
-  private textareaContainer: HTMLDivElement | null = null;
+  private runContainer: HTMLDivElement | null = null;
+  private sendButton: HTMLButtonElement | null = null;
+  private stopButton: HTMLButtonElement | null = null;
+  private senderError: HTMLDivElement | null = null;
+  private runProgress: HTMLProgressElement | null = null;
+  private sender: Sender | null = null;
 
   constructor(private container: HTMLElement) { }
 
@@ -21,13 +27,13 @@ export class GCode {
         this.worker.terminate();
         this.worker = null;
       }
-      if (this.textareaContainer) {
-        this.textareaContainer.remove();
-        this.textareaContainer = null;
+      if (this.runContainer) {
+        this.runContainer.remove();
+        this.runContainer = null;
       }
       this.container.replaceChildren();
-      this.progress = null;
-      this.textarea = null;
+      this.generationProgress = null;
+      this.runTextarea = null;
       this.gcodeCanvasContainer = null;
       this.canvas = null;
       this.tool = null;
@@ -47,17 +53,41 @@ export class GCode {
       this.container.innerText = data.error;
     }
     if (data.gcode) {
-      this.progress?.remove();
-      if (!this.textarea) {
-        this.textareaContainer = document.createElement('div');
-        this.textareaContainer.className = 'textareaContainer';
-        this.container.parentNode!.appendChild(this.textareaContainer);
-        this.textareaContainer.innerHTML = '<h2>GCode</h2>';
-        this.textarea = document.createElement('textarea');
-        this.textareaContainer.appendChild(this.textarea);
+      this.generationProgress?.remove();
+      if (!this.runTextarea) {
+        this.runContainer = document.createElement('div');
+        this.runContainer.className = 'textareaContainer';
+        this.container.parentNode!.appendChild(this.runContainer);
+        this.runContainer.innerHTML = '<h2>GCode</h2>';
+        this.runTextarea = document.createElement('textarea');
+        this.runContainer.appendChild(this.runTextarea);
+
+        this.senderError = document.createElement('div');
+        this.senderError.className = 'senderError';
+        this.senderError.style.display = 'none';
+        this.runContainer.appendChild(this.senderError);
+
+        this.runProgress = document.createElement('progress');
+        this.runProgress.max = 1;
+        this.runProgress.style.display = 'none';
+        this.runContainer.appendChild(this.runProgress);
+
+        this.sendButton = document.createElement('button');
+        this.sendButton.innerText = 'Send to NanoEls H4';
+        this.sendButton.addEventListener('click', () => {
+          if (!this.sender) this.sender = new Sender(() => this.senderStatusChange());
+          this.sender.start(this.runTextarea!.value);
+        });
+        this.runContainer.appendChild(this.sendButton);
+
+        this.stopButton = document.createElement('button');
+        this.stopButton.innerText = 'Stop';
+        this.stopButton.addEventListener('click', () => this.sender!.stop());
+        this.stopButton.style.display = 'none';
+        this.runContainer.appendChild(this.stopButton);
       }
-      this.textarea.value = data.gcode;
-      this.textarea.scrollIntoView({ behavior: "smooth" });
+      this.runTextarea.value = data.gcode;
+      this.runTextarea.scrollIntoView({ behavior: "smooth" });
     }
     if ((data.canvas || data.tool) && !this.gcodeCanvasContainer) {
       this.container.insertAdjacentHTML('beforeend', '<h2>2D profile</h2>');
@@ -98,12 +128,27 @@ export class GCode {
       this.tool.style.top = `${data.tool.y}px`;
     }
     if (data.progress) {
-      if (!this.progress) {
-        this.progress = document.createElement('progress');
-        this.progress.max = 1;
-        this.container.appendChild(this.progress);
+      if (!this.generationProgress) {
+        this.generationProgress = document.createElement('progress');
+        this.generationProgress.max = 1;
+        this.container.appendChild(this.generationProgress);
       }
-      this.progress.value = data.progress;
+      this.generationProgress.value = data.progress;
+    }
+  }
+
+  private senderStatusChange() {
+    if (!this.sender) return;
+    const status = this.sender.getStatus();
+    if (this.runProgress) {
+      this.runProgress.value = status.progress;
+      this.runProgress.style.display = status.condition === 'run' ? 'block' : 'none';
+    }
+    if (this.stopButton) this.stopButton.style.display = status.condition === 'run' ? 'inline-block' : 'none';
+    if (this.sendButton) this.sendButton.style.display = status.condition === 'run' ? 'none' : 'inline-block';
+    if (this.senderError) {
+      this.senderError.style.display = status.error ? 'block' : 'none';
+      this.senderError.innerText = status.error || '';
     }
   }
 }

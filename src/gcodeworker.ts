@@ -158,11 +158,15 @@ export function createGCode(latheCode: LatheCode, moves: Move[]): string {
   let feed = latheCode.getFeed().moveMmMin;
   const first = moves[0]!;
   const lines = [
-    'G21 G18 G90', // metric, ZX plane, absolute positioning
+    ... latheCode.getText().trim().split('\n').map(line => line.startsWith(';') ? line : `; ${line}`),
+    '',
+    'G21 ; metric',
+    'G18 ; ZX plane',
+    'G90 ; absolute positioning',
     feedToGCode(feed),
     `X${pixelToMm(first.yStart)}`,
     `Z0`,
-    'G91', // relative positioning
+    'G91 ; relative positioning',
   ];
   let i = 0;
   while (i < moves.length) {

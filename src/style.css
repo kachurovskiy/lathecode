@@ -61,7 +61,7 @@ body {
 
 .textareaContainer textarea {
   box-sizing: border-box;
-  height: 500px;
+  height: 400px;
   width: 100%;
 }
 
@@ -70,13 +70,10 @@ body {
   height: 500px;
 }
 
-#toolbar {
-  padding: 12px 0;
-}
-
 button {
   display: inline-block;
   padding: 12px 24px;
+  margin: 8px 4px 8px 0;
   font-size: 16px;
   text-align: center;
   text-decoration: none;
@@ -93,6 +90,13 @@ button:hover {
 }
 
 progress {
-  margin: 48px auto;
   display: block;
+}
+
+.senderError {
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #ff4c4c;
+  color: #ffffff;
+  font-size: 14px;
 }

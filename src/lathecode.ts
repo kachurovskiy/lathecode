@@ -83,7 +83,7 @@ export class LatheCode {
   private inside: Segment[];
   private insideSegments: Segment[];
 
-  constructor(text: string) {
+  constructor(private text: string) {
     this.data = parser.parse(text + '\n');
     this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2] as string] : 1;
     // console.log('this.data', this.data);
@@ -92,6 +92,10 @@ export class LatheCode {
     this.inside = this.data[9] ? this.getSegmentsForSide(this.data[9][2], this.getStockDiameter() / 2) : [];
     this.outsideSegments = this.closeLoop(this.outside, 0);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
+  }
+
+  getText(): string {
+    return this.text;
   }
 
   getTitle(): string {
