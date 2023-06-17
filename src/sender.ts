@@ -20,6 +20,7 @@ export class Sender {
   private lineIndex = 0;
   private unparsedResponse = '';
   private error = '';
+  private statusReceived = false;
   private z = 0;
   private x = 0;
   private feed = 0;
@@ -43,11 +44,10 @@ export class Sender {
     if (s.startsWith('<')) s = s.substring(1);
     if (s.endsWith('>')) {
       s = s.slice(0, -1);
-    } else {
-      debugger
     }
     const parts = s.split('|');
     if (parts.length >= 3) {
+      this.statusReceived = true;
       if (parts[1].startsWith('WPos:')) {
         const coords = parts[1].substring('WPos:'.length).split(',');
         this.z = Number(coords[2]);
@@ -58,8 +58,6 @@ export class Sender {
         this.feed = Number(coords[0]);
         this.rpm = Number(coords[1]);
       }
-    } else {
-      debugger
     }
     this.statusChangeCallback();
   }
@@ -77,6 +75,15 @@ export class Sender {
     if (!this.port) {
       await this.selectPort();
       if (!this.port) return;
+    }
+    await this.askForStatus();
+    if (!(await waitForTrue(() => this.statusReceived))) {
+      this.setError('Device is not reponding, is it in GCODE mode?');
+      return;
+    }
+    if (!this.rpm) {
+      this.setError('Spindle is not running, turn it on first');
+      return;
     }
     this.lines = text.split('\n');
     this.lineIndex = 0;
@@ -138,7 +145,7 @@ export class Sender {
 
   private async processResponse(response: string) {
     this.unparsedResponse = (this.unparsedResponse + response).trimStart();
-    console.log(`response: "${response}"`, `unparsedResponse: "${this.unparsedResponse}"`);
+    console.log(`response: "${response}"`);
 
     // Cut out status message.
     const statuses = this.unparsedResponse.match(/(<[^>]+>)/);
@@ -170,14 +177,14 @@ export class Sender {
     if (navigator.serial) {
       this.port = await navigator.serial.requestPort();
     } else {
-      this.error = 'Browser does not support Serial API';
+      this.error = 'This browser does not support Serial API, try Chrome or Edge';
+      this.statusChangeCallback();
     }
     if (this.port) {
       try {
         await this.port.open({ baudRate: 115200 });
         this.statusChangeCallback();
         this.readSoon();
-        await this.askForStatus();
       } catch (e) {
         this.setError(`Unable to open port - likely some other app is using it - try closing Arduino IDE.\n${e}`);
         this.closePort();
@@ -242,6 +249,29 @@ export class Sender {
       // Ignore close errors.
     }
     this.port = null;
+    this.statusReceived = false;
+    this.z = 0;
+    this.x = 0;
+    this.feed = 0;
+    this.rpm = 0;
   }
+}
 
+function waitForTrue(checkFunction: () => boolean): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    let iteration = 0;
+
+    function check() {
+      if (checkFunction()) {
+        resolve(true);
+      } else if (iteration >= 10) {
+        resolve(false);
+      } else {
+        iteration++;
+        setTimeout(check, 100);
+      }
+    }
+
+    check();
+  });
 }

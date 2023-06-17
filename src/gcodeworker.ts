@@ -59,8 +59,9 @@ export class GCodeWorker {
     while (this.planner.step()) {
       if (i++ % 1000 === 0) this.postProgress();
     }
+    const moves = optimizeMoves(this.planner.getMoves());
     this.postProgress();
-    postMessage({gcode: createGCode(this.latheCode, this.planner.getMoves())});
+    postMessage({gcode: createGCode(this.latheCode, moves)});
   }
 
   private postProgress() {
@@ -168,6 +169,19 @@ export function createGCode(latheCode: LatheCode, moves: Move[]): string {
     `Z0`,
     'G91 ; relative positioning',
   ];
+  for (const m of moves) {
+    const newFeed = getFeedMmMin(m, latheCode.getFeed(), latheCode.getTool());
+    if (feed !== newFeed) {
+      feed = newFeed;
+      lines.push('', feedToGCode(feed));
+    }
+    lines.push(moveToGCode(m));
+  }
+  return lines.join('\n');
+}
+
+export function optimizeMoves(moves: Move[]): Move[] {
+  const result: Move[] = [];
   let i = 0;
   while (i < moves.length) {
     let m = moves[i];
@@ -179,9 +193,7 @@ export function createGCode(latheCode: LatheCode, moves: Move[]): string {
     if (!m.cutArea) {
       const travel = detectTravel(moves, i);
       if (travel.length > 1) {
-        for (const tm of travel.moves) {
-          feed = insertGCodeMove(lines, latheCode, tm, feed);
-        }
+        result.push(... travel.moves);
         i += travel.length;
         continue;
       }
@@ -197,32 +209,22 @@ export function createGCode(latheCode: LatheCode, moves: Move[]): string {
       }
     }
     if (maxCount > 1) {
-      feed = insertGCodeMove(lines, latheCode, mergeMoves(moves, i, maxCount * occurrenceLength), feed);
+      result.push(mergeMoves(moves, i, maxCount * occurrenceLength));
       i += maxCount * occurrenceLength;
       continue;
     }
 
     const condirectional = detectCodirectional(moves, i);
     if (condirectional.length > 1) {
-      lines.push(moveToGCode(condirectional.move));
+      result.push(condirectional.move);
       i += condirectional.length;
       continue;
     }
 
-    lines.push(moveToGCode(m));
+    result.push(m);
     i++;
   }
-  return lines.join('\n');
-}
-
-export function insertGCodeMove(lines: string[], latheCode: LatheCode, m: Move, feed: number): number {
-  const moveFeed = getFeedMmMin(m, latheCode.getFeed(), latheCode.getTool());
-  if (feed !== moveFeed) {
-    lines.push('');
-    lines.push(feedToGCode(moveFeed));
-  }
-  lines.push(moveToGCode(m));
-  return moveFeed;
+  return result.length < moves.length ? optimizeMoves(result) : result;
 }
 
 export function moveToGCode(m: Move): string {

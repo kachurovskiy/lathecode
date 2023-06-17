@@ -100,3 +100,8 @@ progress {
   color: #ffffff;
   font-size: 14px;
 }
+
+.whatLink {
+  padding: 12px 24px;
+  margin: 8px 4px 8px 0;
+}

@@ -14,6 +14,7 @@ let latheCode: LatheCode | null = null;
 function update() {
   gcode.setLatheCode(null);
   try {
+    localStorage.setItem('latheCode', latheCodeInput.value);
     latheCode = new LatheCode(latheCodeInput.value + '\n');
     scene.setLatheCode(latheCode);
     errorContainer.textContent = '';
@@ -23,6 +24,7 @@ function update() {
   }
 }
 latheCodeInput.addEventListener('input', update);
+latheCodeInput.value = localStorage.getItem('latheCode') || latheCodeInput.value;
 update();
 
 document.querySelector<HTMLButtonElement>('#stlButton')!.addEventListener('click', () => {

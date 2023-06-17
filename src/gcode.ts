@@ -14,6 +14,7 @@ export class GCode {
   private runContainer: HTMLDivElement | null = null;
   private sendButton: HTMLButtonElement | null = null;
   private stopButton: HTMLButtonElement | null = null;
+  private whatLink: HTMLAnchorElement | null = null;
   private senderError: HTMLDivElement | null = null;
   private runProgress: HTMLProgressElement | null = null;
   private sender: Sender | null = null;
@@ -85,6 +86,13 @@ export class GCode {
         this.stopButton.addEventListener('click', () => this.sender!.stop());
         this.stopButton.style.display = 'none';
         this.runContainer.appendChild(this.stopButton);
+
+        this.whatLink = document.createElement('a');
+        this.whatLink.className = 'whatLink';
+        this.whatLink.href = 'https://github.com/kachurovskiy/nanoels/tree/main/h4';
+        this.whatLink.setAttribute('target', '_blank');
+        this.whatLink.innerText = 'What is NanoEls H4?';
+        this.runContainer.appendChild(this.whatLink);
       }
       this.runTextarea.value = data.gcode;
       this.runTextarea.scrollIntoView({ behavior: "smooth" });
@@ -140,12 +148,17 @@ export class GCode {
   private senderStatusChange() {
     if (!this.sender) return;
     const status = this.sender.getStatus();
+    const isRun = status.condition === 'run';
     if (this.runProgress) {
       this.runProgress.value = status.progress;
-      this.runProgress.style.display = status.condition === 'run' ? 'block' : 'none';
+      this.runProgress.style.display = isRun ? 'block' : 'none';
     }
-    if (this.stopButton) this.stopButton.style.display = status.condition === 'run' ? 'inline-block' : 'none';
-    if (this.sendButton) this.sendButton.style.display = status.condition === 'run' ? 'none' : 'inline-block';
+    if (status.condition !== 'disconnected' && this.whatLink) {
+      this.whatLink.remove();
+      this.whatLink = null;
+    }
+    if (this.stopButton) this.stopButton.style.display = isRun ? 'inline-block' : 'none';
+    if (this.sendButton) this.sendButton.style.display = isRun ? 'none' : 'inline-block';
     if (this.senderError) {
       this.senderError.style.display = status.error ? 'block' : 'none';
       this.senderError.innerText = status.error || '';
