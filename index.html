@@ -22,24 +22,35 @@ L3</code></pre>
 L2 D15.733 ; spacer
 L24 DS15.733 DE14.5</code></pre>
       </div>
-      <div>
+      <div id="editorContainer">
         <h2>Editor</h2>
         <p>Early demo 🚧 of an editor that visualizes lathecode and generates GCode for it.</p>
         <div class="inputContainer">
-          <textarea id="latheCodeInput">STOCK D5
+          <textarea class="latheCodeInput">STOCK D5
 TOOL RECT R0.2 L3
 L1 D2
 L3 D3
 L4 DS3 DE5</textarea>
-          <div id="errorContainer"></div>
+          <div class="errorContainer"></div>
         </div>
-        <div id="toolbar">
-          <button id="stlButton">Download STL</button>
-          <button id="gcodeButton">Generate GCode</button>
+        <div class="toolbar">
+          <button class="stlButton">Download STL</button>
+          <button class="planButton">Generate GCode</button>
         </div>
       </div>
-      <div id="sceneContainer"></div>
-      <div id="gcodeContainer"></div>
+      <div id="sceneContainer">
+        <h2>3D rendering</h2>
+      </div>
+      <div id="plannerContainer"></div>
+      <div id="gcodeContainer">
+        <h2>GCode</h2>
+        <textarea></textarea>
+        <div class="senderError" style="display: none;"></div>
+        <progress max="1" style="display: none;"></progress>
+        <button class="sendButton">Send to NanoEls H4</button>
+        <button class="stopButton" style="display: none;">Stop</button>
+        <a class="whatLink" href="https://github.com/kachurovskiy/nanoels/tree/main/h4" target="_blank">What is NanoEls H4?</a>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

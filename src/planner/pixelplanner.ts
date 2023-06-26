@@ -1,4 +1,5 @@
-import * as Colors from "./colors";
+import * as Colors from "../common/colors";
+import { Move } from "../common/move";
 const REMOVED_RGB_NUMBER = Colors.COLOR_REMOVED.rgbNumber();
 const STOCK_RGB_NUMBER = Colors.COLOR_STOCK.rgbNumber();
 const PART_RGB_NUMBER = Colors.COLOR_PART.rgbNumber();
@@ -7,9 +8,9 @@ export class Pixel {
   constructor(readonly x: number, readonly y: number) {}
 }
 
-export class Move {
+export class PixelMove {
   static withoutCut(xStart: number, yStart: number, xDelta: number, yDelta: number) {
-    return new Move(xStart, yStart, xDelta, yDelta, 0, []);
+    return new PixelMove(xStart, yStart, xDelta, yDelta, 0, []);
   }
 
   constructor(
@@ -28,19 +29,23 @@ export class Move {
     return `new Move(${this.xStart}, ${this.yStart}, ${this.xDelta}, ${this.yDelta}, ${this.cutArea}, [])`;
   }
 
+  toMove(pxPerMm: number): Move {
+    return new Move(-this.xStart / pxPerMm, -this.yStart / pxPerMm, -this.xDelta / pxPerMm, -this.yDelta / pxPerMm, this.cutArea / pxPerMm / pxPerMm);
+  }
+
   isEmpty() {
     return !this.xDelta && !this.yDelta;
   }
 
-  isCodirectional(m: Move) {
+  isCodirectional(m: PixelMove) {
     if (!this.xDelta && !m.xDelta && this.yDelta * m.yDelta > 0) return true;
     if (!this.yDelta && !m.yDelta && this.xDelta * m.xDelta > 0) return true;
     if (this.yDelta * m.yDelta >= 0 && this.xDelta * m.xDelta >= 0 && this.yDelta / this.xDelta === m.yDelta / m.xDelta) return true;
     return false;
   }
 
-  merge(m: Move) {
-    return new Move(this.xStart, this.yStart, this.xDelta + m.xDelta, this.yDelta + m.yDelta, this.cutArea + m.cutArea, this.cutPixels.concat(m.cutPixels));
+  merge(m: PixelMove) {
+    return new PixelMove(this.xStart, this.yStart, this.xDelta + m.xDelta, this.yDelta + m.yDelta, this.cutArea + m.cutArea, this.cutPixels.concat(m.cutPixels));
   }
 
   getCutWidth() {
@@ -55,7 +60,7 @@ export class Move {
   }
 }
 
-export class Planner {
+export class PixelPlanner {
   private stopped = false;
   private toolX;
   private toolY;
@@ -63,7 +68,7 @@ export class Planner {
   private passMaxDepth = 50;
   private passIndex = 0;
   private passHasCuts = false;
-  private moves: Move[] = [];
+  private moves: PixelMove[] = [];
   private partCtx: OffscreenCanvasRenderingContext2D;
   private partBitmap: number[][] = [];
   private toolCtx: OffscreenCanvasRenderingContext2D;
@@ -178,7 +183,7 @@ export class Planner {
   step(): boolean {
     if (this.stopped) return false;
     if (this.passIndex === 0) {
-      this.addMove(Move.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(1) - this.toolY));
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(1) - this.toolY));
       this.passIndex = 1;
       return true;
     }
@@ -205,14 +210,14 @@ export class Planner {
     }
     if (this.getYForPass(this.passIndex) > 0 && this.passHasCuts) {
       this.upAllowed = true;
-      this.addMove(Move.withoutCut(this.toolX, this.toolY, 0, this.partCanvas.height - this.toolY)); // pull back
-      this.addMove(Move.withoutCut(this.toolX, this.toolY, this.partCanvas.width - this.toolX, 0)); // return right
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.partCanvas.height - this.toolY)); // pull back
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.partCanvas.width - this.toolX, 0)); // return right
       this.passIndex++;
       this.passHasCuts = false;
-      this.addMove(Move.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(this.passIndex) - this.toolY)); // move in
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(this.passIndex) - this.toolY)); // move in
       return true;
     } else {
-      this.addMove(Move.withoutCut(this.toolX, this.toolY, this.partCanvas.width - this.toolX, 0)); // return right
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.partCanvas.width - this.toolX, 0)); // return right
     }
     this.stopped = true;
     return false;
@@ -230,20 +235,20 @@ export class Planner {
     return true;
   }
 
-  private addMove(m: Move) {
+  private addMove(m: PixelMove) {
     this.moves.push(m);
     this.drawMove(m);
     this.toolX += m.xDelta;
     this.toolY += m.yDelta;
   }
 
-  private drawMove(m: Move) {
+  private drawMove(m: PixelMove) {
     for (let p of m.cutPixels) {
       this.setBitmap(p.x, p.y, REMOVED_RGB_NUMBER);
     }
   }
 
-  private calculateMove(xDelta: number, yDelta: number): Move | null {
+  private calculateMove(xDelta: number, yDelta: number): PixelMove | null {
     const topLeftX = this.toolX + xDelta;
     const topLeftY = this.toolY + yDelta;
     if (topLeftX < 0 || topLeftX > this.partCanvas.width || topLeftY < 0 || topLeftY > this.partCanvas.height) return null;
@@ -259,6 +264,6 @@ export class Planner {
         return null;
       }
     }
-    return new Move(this.toolX, this.toolY, xDelta, yDelta, pixels.length, pixels);
+    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixels.length, pixels);
   }
 }

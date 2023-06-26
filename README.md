@@ -96,3 +96,7 @@ spaces = space* { return null }
 space = " "
 eol = ("\r")? "\n"
 ```
+
+## Development
+
+If you'd like to edit the online editor code e.g. to modify the online editor, use `npm run dev` for local runs, `npm test` to run tests and `npm run build` to build the `docs/index.html` all-in-one editor webpage.

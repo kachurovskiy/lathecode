@@ -1,30 +1,28 @@
-import { Feed, LatheCode, Segment, Stock, Tool } from './lathecode';
-import * as Colors from './colors';
-import { Move, Planner } from './planner';
-
-const PX_MULTIPLIER = 100;
+import { LatheCode, Segment, Stock, Tool } from '../common/lathecode';
+import * as Colors from '../common/colors';
+import { PixelMove, PixelPlanner } from './pixelplanner';
 
 export class ToWorkerMessage {
-  constructor(readonly latheCode?: LatheCode) {}
+  constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number) {}
 }
 
 export class FromWorkerMessage {
   constructor(
     readonly progress?: number,
     readonly error?: string,
-    readonly gcode?: string,
+    readonly moves?: PixelMove[],
     readonly canvas?: {width: number, height: number, data: Uint8ClampedArray},
     readonly tool?: {width: number, height: number, data: Uint8ClampedArray, x: number, y: number}) {}
 }
 
-export class GCodeWorker {
-  private planner: Planner | null = null;
+export class PlannerWorker {
+  private pixelPlanner: PixelPlanner | null = null;
   private stock: Stock | null = null;
   private canvas: OffscreenCanvas | null = null;
   private canvasCtx: OffscreenCanvasRenderingContext2D | null = null;
   private tool: OffscreenCanvas | null = null;
 
-  constructor(private latheCode: LatheCode, readonly postMessage: (message: any) => any) {
+  constructor(private latheCode: LatheCode, private pxPerMm: number, readonly postMessage: (message: any) => any) {
     this.stock = this.latheCode.getStock();
     if (!this.stock) {
       postMessage({error: 'Error: specify stock'});
@@ -48,28 +46,28 @@ export class GCodeWorker {
       postMessage({error: 'Error: no segments'});
       return;
     }
-    this.canvas = new OffscreenCanvas(this.stock.length * PX_MULTIPLIER, this.stock.diameter / 2 * PX_MULTIPLIER);
+    this.canvas = new OffscreenCanvas(this.stock.length * this.pxPerMm, this.stock.diameter / 2 * this.pxPerMm);
     this.canvasCtx = this.canvas.getContext('2d')!;
     this.fillSegments(this.canvasCtx, this.stock.getSegments(), Colors.COLOR_STOCK.hex());
     this.fillSegments(this.canvasCtx, insideSegments.length ? insideSegments : outsideSegments, Colors.COLOR_PART.hex());
     this.createTool(this.latheCode.getTool());
-    this.planner = new Planner(this.canvas!, this.tool!);
+    this.pixelPlanner = new PixelPlanner(this.canvas!, this.tool!);
     let i = 0;
     this.postProgress();
-    while (this.planner.step()) {
+    while (this.pixelPlanner.step()) {
       if (i++ % 1000 === 0) this.postProgress();
     }
-    const moves = optimizeMoves(this.planner.getMoves());
+    const moves = optimizeMoves(this.pixelPlanner.getMoves());
     this.postProgress();
-    postMessage({gcode: createGCode(this.latheCode, moves)});
+    postMessage({moves});
   }
 
   private postProgress() {
-    if (!this.canvas || !this.canvasCtx || !this.planner) return;
+    if (!this.canvas || !this.canvasCtx || !this.pixelPlanner) return;
     const sendCanvas = this.canvas.width * this.canvas.height < 2000000;
-    if (sendCanvas) this.planner.flushBitmap();
+    if (sendCanvas) this.pixelPlanner.flushBitmap();
     this.postMessage.call(null, {
-      progress: this.planner.getProgress(),
+      progress: this.pixelPlanner.getProgress(),
       canvas: sendCanvas ? {
         width: this.canvas.width,
         height: this.canvas.height,
@@ -79,18 +77,18 @@ export class GCodeWorker {
         width: this.tool!.width,
         height: this.tool!.height,
         data: this.tool!.getContext('2d')!.getImageData(0, 0, this.tool!.width, this.tool!.height).data,
-        x: this.planner.getToolX(),
-        y: this.planner.getToolY(),
+        x: this.pixelPlanner.getToolX(),
+        y: this.pixelPlanner.getToolY(),
       } : undefined,
     });
   }
 
   private xToY(x: number) {
-    return x * PX_MULTIPLIER;
+    return x * this.pxPerMm;
   }
 
   private zToX(z: number) {
-    return this.stock!.length * PX_MULTIPLIER - z * PX_MULTIPLIER;
+    return this.stock!.length * this.pxPerMm - z * this.pxPerMm;
   }
 
   private fillSegments(ctx: OffscreenCanvasRenderingContext2D, segments: Segment[], color: string) {
@@ -110,9 +108,9 @@ export class GCodeWorker {
 
   private createTool(tool: Tool) {
     if (tool.type === 'RECT') {
-      const widthPixels = tool.widthMm * PX_MULTIPLIER;
-      const heightPixels = tool.heightMm * PX_MULTIPLIER;
-      const cornerRadiusPixels = tool.cornerRadiusMm * PX_MULTIPLIER;
+      const widthPixels = tool.widthMm * this.pxPerMm;
+      const heightPixels = tool.heightMm * this.pxPerMm;
+      const cornerRadiusPixels = tool.cornerRadiusMm * this.pxPerMm;
       this.tool = new OffscreenCanvas(widthPixels, heightPixels);
       const ctx = this.tool.getContext('2d')!;
       ctx.strokeStyle = Colors.COLOR_TOOL.hex();
@@ -132,9 +130,9 @@ export class GCodeWorker {
       ctx.fill();
       ctx.stroke();
     } else if (tool.type === 'ROUND') {
-      const widthPixels = tool.cornerRadiusMm * 2 * PX_MULTIPLIER;
-      const heightPixels = tool.cornerRadiusMm * 2 * PX_MULTIPLIER;
-      const cornerRadiusPixels = tool.cornerRadiusMm * PX_MULTIPLIER;
+      const widthPixels = tool.cornerRadiusMm * 2 * this.pxPerMm;
+      const heightPixels = tool.cornerRadiusMm * 2 * this.pxPerMm;
+      const cornerRadiusPixels = tool.cornerRadiusMm * this.pxPerMm;
       this.tool = new OffscreenCanvas(widthPixels, heightPixels);
       const ctx = this.tool.getContext('2d')!;
       ctx.strokeStyle = Colors.COLOR_TOOL.hex();
@@ -155,33 +153,8 @@ export class GCodeWorker {
   }
 }
 
-export function createGCode(latheCode: LatheCode, moves: Move[]): string {
-  let feed = latheCode.getFeed().moveMmMin;
-  const first = moves[0]!;
-  const lines = [
-    ... latheCode.getText().trim().split('\n').map(line => line.startsWith(';') ? line : `; ${line}`),
-    '',
-    'G21 ; metric',
-    'G18 ; ZX plane',
-    'G90 ; absolute positioning',
-    feedToGCode(feed),
-    `X${pixelToMm(first.yStart)}`,
-    `Z0`,
-    'G91 ; relative positioning',
-  ];
-  for (const m of moves) {
-    const newFeed = getFeedMmMin(m, latheCode.getFeed(), latheCode.getTool());
-    if (feed !== newFeed) {
-      feed = newFeed;
-      lines.push('', feedToGCode(feed));
-    }
-    lines.push(moveToGCode(m));
-  }
-  return lines.join('\n');
-}
-
-export function optimizeMoves(moves: Move[]): Move[] {
-  const result: Move[] = [];
+export function optimizeMoves(moves: PixelMove[]): PixelMove[] {
+  const result: PixelMove[] = [];
   let i = 0;
   while (i < moves.length) {
     let m = moves[i];
@@ -227,35 +200,7 @@ export function optimizeMoves(moves: Move[]): Move[] {
   return result.length < moves.length ? optimizeMoves(result) : result;
 }
 
-export function moveToGCode(m: Move): string {
-  const xAxisName = 'Z';
-  const yAxisName = 'X';
-  const parts = [];
-  if (m.xDelta) parts.push(xAxisName + pixelToMm(m.xDelta));
-  if (m.yDelta) parts.push(yAxisName + pixelToMm(m.yDelta));
-  if (m.cutArea) parts.push(`; cut ${toMmSquare(m.cutArea)}`);
-  return parts.join(' ');
-}
-
-export function getFeedMmMin(m: Move, feed: Feed, tool: Tool) {
-  if (!m.cutArea) return feed.moveMmMin;
-  if (!m.xDelta && (m.getCutWidth() >= tool.widthMm / 2)) return feed.partMmMin;
-  return feed.passMmMin;
-}
-
-export function feedToGCode(mmMin: number): string {
-  return 'F' + mmMin.toFixed(3).replace(/\.?0+$/, '');
-}
-
-export function toMmSquare(cutArea: number): string {
-  return (cutArea / PX_MULTIPLIER / PX_MULTIPLIER).toFixed(3).replace(/\.?0+$/, '') + ' mm2';
-}
-
-export function pixelToMm(pixel: number): string {
-  return (-pixel / PX_MULTIPLIER).toFixed(3).replace(/\.?0+$/, '');
-}
-
-export function detectTravel(moves: Move[], i: number): {moves: Move[], length: number} {
+export function detectTravel(moves: PixelMove[], i: number): {moves: PixelMove[], length: number} {
   if (moves[i].cutArea) throw new Error('expecting a travel move');
   let end = i;
   while (end < moves.length - 1 && !moves[end + 1].cutArea) {
@@ -264,7 +209,7 @@ export function detectTravel(moves: Move[], i: number): {moves: Move[], length: 
   return {moves: optimizeTravel(moves.slice(i, end + 1)), length: end - i + 1};
 }
 
-export function optimizeTravel(moves: Move[]): Move[] {
+export function optimizeTravel(moves: PixelMove[]): PixelMove[] {
   const result = [];
   const start = moves[0];
   const maxY = Math.max.apply(null, moves.map(m => m.yStart + m.yDelta));
@@ -275,20 +220,20 @@ export function optimizeTravel(moves: Move[]): Move[] {
   if (endX != start.xStart) {
     if (start.yStart !== maxY) {
       // Move back.
-      result.push(Move.withoutCut(start.xStart, start.yStart, 0, maxY - start.yStart));
+      result.push(PixelMove.withoutCut(start.xStart, start.yStart, 0, maxY - start.yStart));
       currentY = maxY;
     }
     // Move to target x.
-    result.push(Move.withoutCut(start.xStart, maxY, endX - start.xStart, 0));
+    result.push(PixelMove.withoutCut(start.xStart, maxY, endX - start.xStart, 0));
   }
   if (endY != currentY) {
     // Move to target y.
-    result.push(Move.withoutCut(endX, currentY, 0, endY - currentY));
+    result.push(PixelMove.withoutCut(endX, currentY, 0, endY - currentY));
   }
   return result;
 }
 
-export function detectCodirectional(moves: Move[], i: number): {move: Move, length: number} {
+export function detectCodirectional(moves: PixelMove[], i: number): {move: PixelMove, length: number} {
   let m = moves[i];
   let length = 1;
   while (i < moves.length - 1) {
@@ -303,7 +248,7 @@ export function detectCodirectional(moves: Move[], i: number): {move: Move, leng
   return {move: m, length};
 }
 
-export function mergeMoves(moves: Move[], startIndex: number, length: number): Move {
+export function mergeMoves(moves: PixelMove[], startIndex: number, length: number): PixelMove {
   let m = moves[startIndex];
   for (let i = 1; i < length; i++) {
     m = m.merge(moves[startIndex + i]);
@@ -311,7 +256,7 @@ export function mergeMoves(moves: Move[], startIndex: number, length: number): M
   return m;
 }
 
-export function countPatterns(moves: Move[], startIndex: number, patternLength: number): number {
+export function countPatterns(moves: PixelMove[], startIndex: number, patternLength: number): number {
   let count = 1;
   let i = startIndex + patternLength;
   while (i + patternLength <= moves.length) {
@@ -325,7 +270,7 @@ export function countPatterns(moves: Move[], startIndex: number, patternLength: 
   return count;
 }
 
-export function sameMoves(moves: Move[], i: number, j: number, length: number): boolean {
+export function sameMoves(moves: PixelMove[], i: number, j: number, length: number): boolean {
   if (j - i < length) throw new Error('overlapping move sequences');
   for (let k = 0; k < length; k++) {
     const moveI = moves[i + k];
@@ -340,6 +285,6 @@ self.onmessage = (event) => {
   const latheCode = data.latheCode;
   if (latheCode) {
     Object.setPrototypeOf(latheCode, LatheCode.prototype);
-    new GCodeWorker(latheCode, self.postMessage);
+    new PlannerWorker(latheCode, data.pxPerMm || 100, self.postMessage);
   }
 };

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { LatheCode, Segment } from './lathecode';
+import { LatheCode, Segment } from './common/lathecode';
 
 export class Scene extends THREE.Scene {
   private camera: THREE.OrthographicCamera;
@@ -13,7 +13,6 @@ export class Scene extends THREE.Scene {
   constructor(container: HTMLElement) {
     super();
 
-    container.innerHTML = '<h2>3D rendering</h2>';
     this.background = new THREE.Color(0xffffff);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
