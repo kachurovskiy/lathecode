@@ -1,6 +1,8 @@
-import { LatheCode, Segment, Stock, Tool } from '../common/lathecode';
-import * as Colors from '../common/colors';
-import { PixelMove, PixelPlanner } from './pixelplanner';
+import { LatheCode } from '../common/lathecode';
+import { optimizeMoves } from './optimize';
+import { Painter } from './painter';
+import * as Colors from "../common/colors";
+import { Pixel, PixelMove } from "./pixel";
 
 export class ToWorkerMessage {
   constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number) {}
@@ -15,269 +17,242 @@ export class FromWorkerMessage {
     readonly tool?: {width: number, height: number, data: Uint8ClampedArray, x: number, y: number}) {}
 }
 
-export class PlannerWorker {
-  private pixelPlanner: PixelPlanner | null = null;
-  private stock: Stock | null = null;
-  private canvas: OffscreenCanvas | null = null;
-  private canvasCtx: OffscreenCanvasRenderingContext2D | null = null;
-  private tool: OffscreenCanvas | null = null;
+const REMOVED_RGB_NUMBER = Colors.COLOR_REMOVED.rgbNumber();
+const STOCK_RGB_NUMBER = Colors.COLOR_STOCK.rgbNumber();
+const PART_RGB_NUMBER = Colors.COLOR_PART.rgbNumber();
 
-  constructor(private latheCode: LatheCode, private pxPerMm: number, readonly postMessage: (message: any) => any) {
-    this.stock = this.latheCode.getStock();
-    if (!this.stock) {
-      postMessage({error: 'Error: specify stock'});
-      return;
+export class PlannerWorker {
+  private painter: Painter;
+  private canvas: OffscreenCanvas;
+  private canvasCtx: OffscreenCanvasRenderingContext2D;
+  private tool: OffscreenCanvas;
+  private toolCtx: OffscreenCanvasRenderingContext2D;
+
+  private done = false;
+  private toolX;
+  private toolY;
+  private upAllowed = true;
+  private passMaxDepth = 50;
+  private passIndex = 0;
+  private passHasCuts = false;
+  private moves: PixelMove[] = [];
+  private partBitmap: number[][] = [];
+  private toolData: Uint8ClampedArray;
+  private toolCuttingEdges: Set<number> = new Set();
+  private toolCuttingEdgeX: Map<number, number> = new Map();
+  private toolCuttingEdgeY: Map<number, number> = new Map();
+
+  constructor(latheCode: LatheCode, pxPerMm: number, readonly postMessage: (message: any) => any) {
+    this.painter = new Painter(latheCode, pxPerMm);
+    this.canvas = this.painter.createCanvas();
+    this.tool = this.painter.createTool();
+
+    this.toolX = this.canvas.width;
+    this.toolY = this.canvas.height;
+    this.canvasCtx = this.canvas.getContext("2d")!;
+    this.partBitmap = this.createPartBitmap();
+
+    this.toolCtx = this.tool.getContext("2d")!;
+    this.toolData = this.toolCtx.getImageData(0, 0, this.tool.width, this.tool.height).data;
+
+    for (let y = 0; y < this.tool.height; y++) {
+      let depth = 0;
+      for (let x = 0; x < this.tool.width; x++) {
+        const i = (y * this.tool.width + x) * 4;
+        if (
+          this.toolData[i] == Colors.COLOR_TOOL.red() &&
+          this.toolData[i + 1] == Colors.COLOR_TOOL.green() &&
+          this.toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
+          this.toolData[i + 3] > 200
+        ) {
+          this.toolCuttingEdges.add(i);
+          this.toolCuttingEdgeX.set(i, x);
+          this.toolCuttingEdgeY.set(i, y);
+          if (++depth > 2) break;
+        }
+      }
     }
-    if (this.stock.diameter == 0) {
-      postMessage({error: 'Error: stock diameter is 0'});
-      return;
+    for (let x = 0; x < this.tool.width; x++) {
+      let depth = 0;
+      for (let y = 0; y < this.tool.height; y++) {
+        const i = (y * this.tool.width + x) * 4;
+        if (
+          this.toolData[i] == Colors.COLOR_TOOL.red() &&
+          this.toolData[i + 1] == Colors.COLOR_TOOL.green() &&
+          this.toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
+          this.toolData[i + 3] > 200 && depth < 2
+        ) {
+          this.toolCuttingEdges.add(i);
+          this.toolCuttingEdgeX.set(i, x);
+          this.toolCuttingEdgeY.set(i, y);
+          if (++depth > 2) break;
+        }
+      }
     }
-    if (this.stock.length == 0) {
-      postMessage({error: 'Error: stock length is 0'});
-      return;
-    }
-    const insideSegments = this.latheCode.getInsideSegments();
-    const outsideSegments = this.latheCode.getOutsideSegments();
-    if (insideSegments.length && outsideSegments.length) {
-      postMessage({error: 'Error: inside and outside not supported yet'});
-      return;
-    }
-    if (!insideSegments.length && !outsideSegments.length) {
-      postMessage({error: 'Error: no segments'});
-      return;
-    }
-    this.canvas = new OffscreenCanvas(this.stock.length * this.pxPerMm, this.stock.diameter / 2 * this.pxPerMm);
-    this.canvasCtx = this.canvas.getContext('2d')!;
-    this.fillSegments(this.canvasCtx, this.stock.getSegments(), Colors.COLOR_STOCK.hex());
-    this.fillSegments(this.canvasCtx, insideSegments.length ? insideSegments : outsideSegments, Colors.COLOR_PART.hex());
-    this.createTool(this.latheCode.getTool());
-    this.pixelPlanner = new PixelPlanner(this.canvas!, this.tool!);
+  }
+
+  plan() {
     let i = 0;
     this.postProgress();
-    while (this.pixelPlanner.step()) {
+    while (this.step()) {
       if (i++ % 1000 === 0) this.postProgress();
     }
-    const moves = optimizeMoves(this.pixelPlanner.getMoves());
+    const moves = optimizeMoves(this.moves);
     this.postProgress();
     postMessage({moves});
   }
 
+  private getProgress() {
+    if (this.done) return 1;
+    const currentPassProgress0To1 = (this.canvas.width - this.toolX) / this.canvas.width;
+    return (this.passIndex - 1 + currentPassProgress0To1) * this.passMaxDepth / this.canvas.height;
+  }
+
   private postProgress() {
-    if (!this.canvas || !this.canvasCtx || !this.pixelPlanner) return;
-    const sendCanvas = this.canvas.width * this.canvas.height < 2000000;
-    if (sendCanvas) this.pixelPlanner.flushBitmap();
+    const includeCanvas = this.canvas.width * this.canvas.height < 2000000;
+    if (includeCanvas) this.flushBitmap();
     this.postMessage.call(null, {
-      progress: this.pixelPlanner.getProgress(),
-      canvas: sendCanvas ? {
+      progress: this.getProgress(),
+      canvas: includeCanvas ? {
         width: this.canvas.width,
         height: this.canvas.height,
-        data: this.canvasCtx.getImageData(0, 0, this.canvas.width, this.canvas.height).data,
+        data: this.canvas.getContext('2d')!.getImageData(0, 0, this.canvas.width, this.canvas.height).data,
       } : undefined,
-      tool: sendCanvas ? {
+      tool: includeCanvas ? {
         width: this.tool!.width,
         height: this.tool!.height,
         data: this.tool!.getContext('2d')!.getImageData(0, 0, this.tool!.width, this.tool!.height).data,
-        x: this.pixelPlanner.getToolX(),
-        y: this.pixelPlanner.getToolY(),
+        x: this.toolX,
+        y: this.toolY,
       } : undefined,
     });
   }
 
-  private xToY(x: number) {
-    return x * this.pxPerMm;
-  }
-
-  private zToX(z: number) {
-    return this.stock!.length * this.pxPerMm - z * this.pxPerMm;
-  }
-
-  private fillSegments(ctx: OffscreenCanvasRenderingContext2D, segments: Segment[], color: string) {
-    ctx.beginPath();
-    ctx.moveTo(this.zToX(segments[0].start.z), this.xToY(segments[0].start.x));
-    for (let s of segments) {
-      this.drawSegment(ctx, s);
-    }
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-  }
-
-  private drawSegment(ctx: OffscreenCanvasRenderingContext2D, s: Segment) {
-    ctx.lineTo(this.zToX(s.end.z), this.xToY(s.end.x));
-  }
-
-  private createTool(tool: Tool) {
-    if (tool.type === 'RECT') {
-      const widthPixels = tool.widthMm * this.pxPerMm;
-      const heightPixels = tool.heightMm * this.pxPerMm;
-      const cornerRadiusPixels = tool.cornerRadiusMm * this.pxPerMm;
-      this.tool = new OffscreenCanvas(widthPixels, heightPixels);
-      const ctx = this.tool.getContext('2d')!;
-      ctx.strokeStyle = Colors.COLOR_TOOL.hex();
-      ctx.fillStyle = Colors.COLOR_TOOL_FILL.hex();
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cornerRadiusPixels, 0);
-      ctx.lineTo(widthPixels - cornerRadiusPixels, 0);
-      ctx.arcTo(widthPixels, 0, widthPixels, cornerRadiusPixels, cornerRadiusPixels);
-      ctx.lineTo(widthPixels, heightPixels - cornerRadiusPixels);
-      ctx.arcTo(widthPixels, heightPixels, widthPixels - cornerRadiusPixels, heightPixels, cornerRadiusPixels);
-      ctx.lineTo(cornerRadiusPixels, heightPixels);
-      ctx.arcTo(0, heightPixels, 0, heightPixels - cornerRadiusPixels, cornerRadiusPixels);
-      ctx.lineTo(0, cornerRadiusPixels);
-      ctx.arcTo(0, 0, cornerRadiusPixels, 0, cornerRadiusPixels);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else if (tool.type === 'ROUND') {
-      const widthPixels = tool.cornerRadiusMm * 2 * this.pxPerMm;
-      const heightPixels = tool.cornerRadiusMm * 2 * this.pxPerMm;
-      const cornerRadiusPixels = tool.cornerRadiusMm * this.pxPerMm;
-      this.tool = new OffscreenCanvas(widthPixels, heightPixels);
-      const ctx = this.tool.getContext('2d')!;
-      ctx.strokeStyle = Colors.COLOR_TOOL.hex();
-      ctx.fillStyle = Colors.COLOR_TOOL_FILL.hex();
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cornerRadiusPixels, 0);
-      ctx.arcTo(widthPixels, 0, widthPixels, cornerRadiusPixels, cornerRadiusPixels);
-      ctx.arcTo(widthPixels, heightPixels, widthPixels - cornerRadiusPixels, heightPixels, cornerRadiusPixels);
-      ctx.arcTo(0, heightPixels, 0, heightPixels - cornerRadiusPixels, cornerRadiusPixels);
-      ctx.arcTo(0, 0, cornerRadiusPixels, 0, cornerRadiusPixels);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      throw new Error(`tool of type ${tool.type} not implemented`);
-    }
-  }
-}
-
-export function optimizeMoves(moves: PixelMove[]): PixelMove[] {
-  const result: PixelMove[] = [];
-  let i = 0;
-  while (i < moves.length) {
-    let m = moves[i];
-    if (m.isEmpty()) {
-      i++;
-      continue;
-    }
-
-    if (!m.cutArea) {
-      const travel = detectTravel(moves, i);
-      if (travel.length > 1) {
-        result.push(... travel.moves);
-        i += travel.length;
-        continue;
+  private createPartBitmap(): number[][] {
+    const out: number[][] = [];
+    const data = this.canvasCtx.getImageData(0, 0, this.canvas.width, this.canvas.height).data;
+    for (let x = 0; x < this.canvas.width; x++) {
+      out[x] = [];
+      for (let y = 0; y < this.canvas.height; y++) {
+        const i = (y * this.canvas.width + x) * 4;
+        out[x][y] = (data[i] << 16) | (data[i+1] << 8) | data[i+2];
       }
     }
+    return out;
+  }
 
-    let maxCount = 1;
-    let occurrenceLength = 1;
-    for (let j = 2; j < 200; j++) {
-      const count = countPatterns(moves, i, j);
-      if (count > 1 && count * j > maxCount * occurrenceLength) {
-        maxCount = count;
-        occurrenceLength = j;
+  private getBitmap(x: number, y: number) {
+    if (!this.partBitmap[x]) return 0;
+    return this.partBitmap[x][y] || 0;
+  }
+
+  private setBitmap(x: number, y: number, rgb: number) {
+    this.partBitmap[x][y] = rgb;
+  }
+
+  flushBitmap() {
+    const imageData = this.canvasCtx.createImageData(this.canvas.width, this.canvas.height);
+    const data = imageData.data;
+    for (let x = 0; x < this.canvas.width; x++) {
+      for (let y = 0; y < this.canvas.height; y++) {
+        const i = (y * this.canvas.width + x) * 4;
+        const rgbNumber = this.partBitmap[x][y];
+        data[i] = (rgbNumber >> 16) & 0xFF;
+        data[i+1] = (rgbNumber >> 8) & 0xFF;
+        data[i+2] = rgbNumber & 0xFF;
+        data[i+3] = 255;
       }
     }
-    if (maxCount > 1) {
-      result.push(mergeMoves(moves, i, maxCount * occurrenceLength));
-      i += maxCount * occurrenceLength;
-      continue;
+    this.canvasCtx.putImageData(imageData, 0, 0);
+  }
+
+  /** Step tool by 1 pixel. */
+  step(): boolean {
+    if (this.done) return false;
+    if (this.passIndex === 0) {
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(1) - this.toolY));
+      this.passIndex = 1;
+      return true;
     }
-
-    const condirectional = detectCodirectional(moves, i);
-    if (condirectional.length > 1) {
-      result.push(condirectional.move);
-      i += condirectional.length;
-      continue;
+    if (this.toolY > this.getYForPass(this.passIndex)) {
+      if (this.upAllowed && this.tryMove(0, -1)) {
+        return true;
+      }
+      if (this.tryMove(-1, -1)) {
+        this.upAllowed = true;
+        return true;
+      }
     }
-
-    result.push(m);
-    i++;
-  }
-  return result.length < moves.length ? optimizeMoves(result) : result;
-}
-
-export function detectTravel(moves: PixelMove[], i: number): {moves: PixelMove[], length: number} {
-  if (moves[i].cutArea) throw new Error('expecting a travel move');
-  let end = i;
-  while (end < moves.length - 1 && !moves[end + 1].cutArea) {
-    end++;
-  }
-  return {moves: optimizeTravel(moves.slice(i, end + 1)), length: end - i + 1};
-}
-
-export function optimizeTravel(moves: PixelMove[]): PixelMove[] {
-  const result = [];
-  const start = moves[0];
-  const maxY = Math.max.apply(null, moves.map(m => m.yStart + m.yDelta));
-  const end = moves.at(-1)!;
-  const endX = end.xStart + end.xDelta;
-  const endY = end.yStart + end.yDelta;
-  let currentY = start.yStart;
-  if (endX != start.xStart) {
-    if (start.yStart !== maxY) {
-      // Move back.
-      result.push(PixelMove.withoutCut(start.xStart, start.yStart, 0, maxY - start.yStart));
-      currentY = maxY;
+    if (this.tryMove(-1, 0)) {
+      this.upAllowed = true;
+      return true;
     }
-    // Move to target x.
-    result.push(PixelMove.withoutCut(start.xStart, maxY, endX - start.xStart, 0));
-  }
-  if (endY != currentY) {
-    // Move to target y.
-    result.push(PixelMove.withoutCut(endX, currentY, 0, endY - currentY));
-  }
-  return result;
-}
-
-export function detectCodirectional(moves: PixelMove[], i: number): {move: PixelMove, length: number} {
-  let m = moves[i];
-  let length = 1;
-  while (i < moves.length - 1) {
-    if (moves[i + 1].isCodirectional(m)) {
-      m = m.merge(moves[i + 1]);
-      length++;
-      i++;
+    if (this.tryMove(-1, 1)) {
+      this.upAllowed = true;
+      return true;
+    }
+    if (this.tryMove(0, 1)) {
+      this.upAllowed = false;
+      return true;
+    }
+    if (this.getYForPass(this.passIndex) > 0 && this.passHasCuts) {
+      this.upAllowed = true;
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
+      this.passIndex++;
+      this.passHasCuts = false;
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(this.passIndex) - this.toolY)); // move in
+      return true;
     } else {
-      break;
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
+    }
+    this.done = true;
+    return false;
+  }
+
+  private getYForPass(i: number) {
+    return Math.max(0, this.canvas.height - this.passMaxDepth * i);
+  }
+
+  private tryMove(xDelta: number, yDelta: number): boolean {
+    const move = this.calculateMove(xDelta, yDelta);
+    if (!move) return false;
+    if (move.cutArea) this.passHasCuts = true;
+    this.addMove(move);
+    return true;
+  }
+
+  private addMove(m: PixelMove) {
+    this.moves.push(m);
+    this.drawMove(m);
+    this.toolX += m.xDelta;
+    this.toolY += m.yDelta;
+  }
+
+  private drawMove(m: PixelMove) {
+    for (let p of m.cutPixels) {
+      this.setBitmap(p.x, p.y, REMOVED_RGB_NUMBER);
     }
   }
-  return {move: m, length};
-}
 
-export function mergeMoves(moves: PixelMove[], startIndex: number, length: number): PixelMove {
-  let m = moves[startIndex];
-  for (let i = 1; i < length; i++) {
-    m = m.merge(moves[startIndex + i]);
-  }
-  return m;
-}
-
-export function countPatterns(moves: PixelMove[], startIndex: number, patternLength: number): number {
-  let count = 1;
-  let i = startIndex + patternLength;
-  while (i + patternLength <= moves.length) {
-    if (sameMoves(moves, startIndex, i, patternLength)) {
-      count++;
-      i += patternLength;
-    } else {
-      break;
+  private calculateMove(xDelta: number, yDelta: number): PixelMove | null {
+    const topLeftX = this.toolX + xDelta;
+    const topLeftY = this.toolY + yDelta;
+    if (topLeftX < 0 || topLeftX > this.canvas.width || topLeftY < 0 || topLeftY > this.canvas.height) return null;
+    let pixels: Pixel[] = [];
+    for (let i of this.toolCuttingEdges) {
+      const x = this.toolCuttingEdgeX.get(i)!;
+      const y = this.toolCuttingEdgeY.get(i)!;
+      const rgb = this.getBitmap(topLeftX + x, topLeftY + y);
+      if (rgb === STOCK_RGB_NUMBER) {
+        pixels.push(new Pixel(topLeftX + x, topLeftY + y));
+      } else if (rgb === PART_RGB_NUMBER) {
+        // Not allowed to place cutter onto the part.
+        return null;
+      }
     }
+    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixels.length, pixels);
   }
-  return count;
-}
-
-export function sameMoves(moves: PixelMove[], i: number, j: number, length: number): boolean {
-  if (j - i < length) throw new Error('overlapping move sequences');
-  for (let k = 0; k < length; k++) {
-    const moveI = moves[i + k];
-    const moveJ = moves[j + k];
-    if (moveI.xDelta != moveJ.xDelta || moveI.yDelta != moveJ.yDelta) return false;
-  }
-  return true;
 }
 
 self.onmessage = (event) => {
@@ -285,6 +260,10 @@ self.onmessage = (event) => {
   const latheCode = data.latheCode;
   if (latheCode) {
     Object.setPrototypeOf(latheCode, LatheCode.prototype);
-    new PlannerWorker(latheCode, data.pxPerMm || 100, self.postMessage);
+    try {
+      new PlannerWorker(latheCode, data.pxPerMm || 100, self.postMessage).plan();
+    } catch (e) {
+      self.postMessage({error: e instanceof Error ? e.message : String(e)});
+    }
   }
 };

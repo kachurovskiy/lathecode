@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel } from './plannerworker';
-import { PixelMove } from './pixelplanner';
+import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel } from './optimize';
+import { PixelMove } from './pixel';
 
 describe('plannerworker', () => {
   it('sameMoves', () => {

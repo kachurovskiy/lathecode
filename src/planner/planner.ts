@@ -2,7 +2,7 @@ import { LatheCode } from '../common/lathecode';
 import InlineWorker from './plannerworker?worker&inline';
 import { FromWorkerMessage, ToWorkerMessage } from './plannerworker';
 import { Move } from '../common/move';
-import { PixelMove } from './pixelplanner';
+import { PixelMove } from './pixel';
 
 const PX_PER_MM = 100;
 const CANVAS_SIZE = 500;
