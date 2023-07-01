@@ -1,6 +1,51 @@
-import { PixelMove } from "./pixel";
+import * as Colors from "../common/colors";
+import { Pixel, PixelMove } from "./pixel";
 
-export function optimizeMoves(moves: PixelMove[]): PixelMove[] {
+export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
+  const toolData = tool.getContext("2d")!.getImageData(0, 0, tool.width, tool.height).data;
+  const set: Set<string> = new Set();
+  const result: Pixel[] = [];
+  const maybeAdd = (x: number, y: number) => {
+    const p = new Pixel(x, y);
+    if (!set.has(p.toString())) {
+      result.push(p);
+      set.add(p.toString());
+    }
+  }
+  for (let y = 0; y < tool.height; y++) {
+    let depth = 0;
+    for (let x = 0; x < tool.width; x++) {
+      const i = (y * tool.width + x) * 4;
+      if (
+        toolData[i] == Colors.COLOR_TOOL.red() &&
+        toolData[i + 1] == Colors.COLOR_TOOL.green() &&
+        toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
+        toolData[i + 3] > 200
+      ) {
+        maybeAdd(x, y);
+        if (++depth > 2) break;
+      }
+    }
+  }
+  for (let x = 0; x < tool.width; x++) {
+    let depth = 0;
+    for (let y = 0; y < tool.height; y++) {
+      const i = (y * tool.width + x) * 4;
+      if (
+        toolData[i] == Colors.COLOR_TOOL.red() &&
+        toolData[i + 1] == Colors.COLOR_TOOL.green() &&
+        toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
+        toolData[i + 3] > 200
+      ) {
+        maybeAdd(x, y);
+        if (++depth > 2) break;
+      }
+    }
+  }
+  return result;
+}
+
+export function optimizeMoves(moves: PixelMove[], progressCallback: (message: string) => void): PixelMove[] {
   const result: PixelMove[] = [];
   let i = 0;
   while (i < moves.length) {
@@ -44,7 +89,12 @@ export function optimizeMoves(moves: PixelMove[]): PixelMove[] {
     result.push(m);
     i++;
   }
-  return result.length < moves.length ? optimizeMoves(result) : result;
+  if (result.length < moves.length) {
+    progressCallback(`Optimized ${moves.length} moves down to ${result.length}`);
+    return optimizeMoves(result, progressCallback);
+  } else {
+    return result;
+  }
 }
 
 export function detectTravel(moves: PixelMove[], i: number): {moves: PixelMove[], length: number} {

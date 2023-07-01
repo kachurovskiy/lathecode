@@ -2,7 +2,13 @@ import { Move } from "../common/move";
 
 export class Pixel {
   constructor(readonly x: number, readonly y: number) {}
+
+  toString() {
+    return `${this.x},${this.y}`;
+  }
 }
+
+const ATAN_EPSILON = 0.05 /* degrees */ * Math.PI / 180;
 
 export class PixelMove {
   static withoutCut(xStart: number, yStart: number, xDelta: number, yDelta: number) {
@@ -36,7 +42,7 @@ export class PixelMove {
   isCodirectional(m: PixelMove) {
     if (!this.xDelta && !m.xDelta && this.yDelta * m.yDelta > 0) return true;
     if (!this.yDelta && !m.yDelta && this.xDelta * m.xDelta > 0) return true;
-    if (this.yDelta * m.yDelta >= 0 && this.xDelta * m.xDelta >= 0 && this.yDelta / this.xDelta === m.yDelta / m.xDelta) return true;
+    if (this.yDelta * m.yDelta >= 0 && this.xDelta * m.xDelta >= 0 && Math.abs(Math.atan(this.yDelta / this.xDelta) - Math.atan(m.yDelta / m.xDelta)) < ATAN_EPSILON) return true;
     return false;
   }
 

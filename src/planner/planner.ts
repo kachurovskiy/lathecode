@@ -11,7 +11,7 @@ export class Planner extends EventTarget {
   private latheCode: LatheCode | null = null;
   private moves: Move[] | null = null;
   private canvasContainer: HTMLDivElement | null = null;
-  private generationProgress: HTMLProgressElement | null = null;
+  private generationProgressMessage: HTMLDivElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private tool: HTMLCanvasElement | null = null;
   private worker: Worker | null = null;
@@ -30,7 +30,6 @@ export class Planner extends EventTarget {
         this.worker = null;
       }
       this.container.replaceChildren();
-      this.generationProgress = null;
       this.canvasContainer = null;
       this.canvas = null;
       this.tool = null;
@@ -57,7 +56,7 @@ export class Planner extends EventTarget {
       this.container.innerText = data.error;
     }
     if (data.moves) {
-      this.generationProgress?.remove();
+      this.generationProgressMessage?.remove();
       this.moves = data.moves.map(m => {
         Object.setPrototypeOf(m, PixelMove.prototype);
         return m.toMove(PX_PER_MM);
@@ -102,13 +101,12 @@ export class Planner extends EventTarget {
       this.tool.style.left = `${data.tool.x}px`;
       this.tool.style.top = `${data.tool.y}px`;
     }
-    if (data.progress) {
-      if (!this.generationProgress) {
-        this.generationProgress = document.createElement('progress');
-        this.generationProgress.max = 1;
-        this.container.appendChild(this.generationProgress);
+    if (data.progressMessage) {
+      if (!this.generationProgressMessage) {
+        this.generationProgressMessage = document.createElement('div');
+        this.container.appendChild(this.generationProgressMessage);
       }
-      this.generationProgress.value = data.progress;
+      this.generationProgressMessage.innerText = data.progressMessage;
     }
   }
 

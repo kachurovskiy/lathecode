@@ -1,5 +1,5 @@
 import { LatheCode } from '../common/lathecode';
-import { optimizeMoves } from './optimize';
+import { getCuttingEdges, optimizeMoves } from './optimize';
 import { Painter } from './painter';
 import * as Colors from "../common/colors";
 import { Pixel, PixelMove } from "./pixel";
@@ -10,7 +10,7 @@ export class ToWorkerMessage {
 
 export class FromWorkerMessage {
   constructor(
-    readonly progress?: number,
+    readonly progressMessage?: string,
     readonly error?: string,
     readonly moves?: PixelMove[],
     readonly canvas?: {width: number, height: number, data: Uint8ClampedArray},
@@ -26,9 +26,7 @@ export class PlannerWorker {
   private canvas: OffscreenCanvas;
   private canvasCtx: OffscreenCanvasRenderingContext2D;
   private tool: OffscreenCanvas;
-  private toolCtx: OffscreenCanvasRenderingContext2D;
-
-  private done = false;
+  private toolCuttingEdges: Pixel[];
   private toolX;
   private toolY;
   private upAllowed = true;
@@ -37,82 +35,36 @@ export class PlannerWorker {
   private passHasCuts = false;
   private moves: PixelMove[] = [];
   private partBitmap: number[][] = [];
-  private toolData: Uint8ClampedArray;
-  private toolCuttingEdges: Set<number> = new Set();
-  private toolCuttingEdgeX: Map<number, number> = new Map();
-  private toolCuttingEdgeY: Map<number, number> = new Map();
 
-  constructor(latheCode: LatheCode, pxPerMm: number, readonly postMessage: (message: any) => any) {
+  constructor(latheCode: LatheCode, pxPerMm: number) {
     this.painter = new Painter(latheCode, pxPerMm);
     this.canvas = this.painter.createCanvas();
+    this.canvasCtx = this.canvas.getContext("2d")!;
     this.tool = this.painter.createTool();
-
+    this.toolCuttingEdges = getCuttingEdges(this.tool);
     this.toolX = this.canvas.width;
     this.toolY = this.canvas.height;
-    this.canvasCtx = this.canvas.getContext("2d")!;
     this.partBitmap = this.createPartBitmap();
 
-    this.toolCtx = this.tool.getContext("2d")!;
-    this.toolData = this.toolCtx.getImageData(0, 0, this.tool.width, this.tool.height).data;
-
-    for (let y = 0; y < this.tool.height; y++) {
-      let depth = 0;
-      for (let x = 0; x < this.tool.width; x++) {
-        const i = (y * this.tool.width + x) * 4;
-        if (
-          this.toolData[i] == Colors.COLOR_TOOL.red() &&
-          this.toolData[i + 1] == Colors.COLOR_TOOL.green() &&
-          this.toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
-          this.toolData[i + 3] > 200
-        ) {
-          this.toolCuttingEdges.add(i);
-          this.toolCuttingEdgeX.set(i, x);
-          this.toolCuttingEdgeY.set(i, y);
-          if (++depth > 2) break;
-        }
-      }
-    }
-    for (let x = 0; x < this.tool.width; x++) {
-      let depth = 0;
-      for (let y = 0; y < this.tool.height; y++) {
-        const i = (y * this.tool.width + x) * 4;
-        if (
-          this.toolData[i] == Colors.COLOR_TOOL.red() &&
-          this.toolData[i + 1] == Colors.COLOR_TOOL.green() &&
-          this.toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
-          this.toolData[i + 3] > 200 && depth < 2
-        ) {
-          this.toolCuttingEdges.add(i);
-          this.toolCuttingEdgeX.set(i, x);
-          this.toolCuttingEdgeY.set(i, y);
-          if (++depth > 2) break;
-        }
-      }
-    }
-  }
-
-  plan() {
-    let i = 0;
+    // Generate moves.
+    let time = Date.now();
+    postMessage({progressMessage: `Starting first pass...`});
     this.postProgress();
     while (this.step()) {
-      if (i++ % 1000 === 0) this.postProgress();
+      if (Date.now() > time + 1000) {
+        this.postProgress();
+        time = Date.now();
+      }
     }
-    const moves = optimizeMoves(this.moves);
     this.postProgress();
-    postMessage({moves});
-  }
-
-  private getProgress() {
-    if (this.done) return 1;
-    const currentPassProgress0To1 = (this.canvas.width - this.toolX) / this.canvas.width;
-    return (this.passIndex - 1 + currentPassProgress0To1) * this.passMaxDepth / this.canvas.height;
+    postMessage({progressMessage: `Optimizing ${this.moves.length} moves...`});
+    postMessage({moves: optimizeMoves(this.moves, (progressMessage) => postMessage({progressMessage}))});
   }
 
   private postProgress() {
     const includeCanvas = this.canvas.width * this.canvas.height < 2000000;
     if (includeCanvas) this.flushBitmap();
-    this.postMessage.call(null, {
-      progress: this.getProgress(),
+    postMessage({
       canvas: includeCanvas ? {
         width: this.canvas.width,
         height: this.canvas.height,
@@ -150,7 +102,7 @@ export class PlannerWorker {
     this.partBitmap[x][y] = rgb;
   }
 
-  flushBitmap() {
+  private flushBitmap() {
     const imageData = this.canvasCtx.createImageData(this.canvas.width, this.canvas.height);
     const data = imageData.data;
     for (let x = 0; x < this.canvas.width; x++) {
@@ -166,9 +118,7 @@ export class PlannerWorker {
     this.canvasCtx.putImageData(imageData, 0, 0);
   }
 
-  /** Step tool by 1 pixel. */
-  step(): boolean {
-    if (this.done) return false;
+  private step(): boolean {
     if (this.passIndex === 0) {
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(1) - this.toolY));
       this.passIndex = 1;
@@ -199,6 +149,7 @@ export class PlannerWorker {
       this.upAllowed = true;
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
+      postMessage({progressMessage: `Finished pass ${this.passIndex}`});
       this.passIndex++;
       this.passHasCuts = false;
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(this.passIndex) - this.toolY)); // move in
@@ -206,7 +157,6 @@ export class PlannerWorker {
     } else {
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
     }
-    this.done = true;
     return false;
   }
 
@@ -240,12 +190,10 @@ export class PlannerWorker {
     const topLeftY = this.toolY + yDelta;
     if (topLeftX < 0 || topLeftX > this.canvas.width || topLeftY < 0 || topLeftY > this.canvas.height) return null;
     let pixels: Pixel[] = [];
-    for (let i of this.toolCuttingEdges) {
-      const x = this.toolCuttingEdgeX.get(i)!;
-      const y = this.toolCuttingEdgeY.get(i)!;
-      const rgb = this.getBitmap(topLeftX + x, topLeftY + y);
+    for (let p of this.toolCuttingEdges) {
+      const rgb = this.getBitmap(topLeftX + p.x, topLeftY + p.y);
       if (rgb === STOCK_RGB_NUMBER) {
-        pixels.push(new Pixel(topLeftX + x, topLeftY + y));
+        pixels.push(new Pixel(topLeftX + p.x, topLeftY + p.y));
       } else if (rgb === PART_RGB_NUMBER) {
         // Not allowed to place cutter onto the part.
         return null;
@@ -261,9 +209,9 @@ self.onmessage = (event) => {
   if (latheCode) {
     Object.setPrototypeOf(latheCode, LatheCode.prototype);
     try {
-      new PlannerWorker(latheCode, data.pxPerMm || 100, self.postMessage).plan();
+      new PlannerWorker(latheCode, data.pxPerMm || 100);
     } catch (e) {
-      self.postMessage({error: e instanceof Error ? e.message : String(e)});
+      postMessage({error: e instanceof Error ? e.message : String(e)});
     }
   }
 };
