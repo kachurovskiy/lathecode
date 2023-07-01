@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel } from './optimize';
+import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, optimizeMoves, isSmoothingAllowed } from './optimize';
 import { PixelMove } from './pixel';
 
 describe('plannerworker', () => {
@@ -112,8 +112,8 @@ describe('plannerworker', () => {
     expect(mergeMoves([
       PixelMove.withoutCut(0, 0, 1, 1),
       PixelMove.withoutCut(1, 1, 1, 1),
-      PixelMove.withoutCut(2, 3, -1, -1),
-      PixelMove.withoutCut(3, 4, -1, -1),
+      PixelMove.withoutCut(2, 2, -1, -1),
+      PixelMove.withoutCut(1, 1, -1, -1),
     ], 0, 4)).toEqual(PixelMove.withoutCut(0, 0, 0, 0));
   });
 
@@ -194,6 +194,13 @@ describe('plannerworker', () => {
       PixelMove.withoutCut(0, 2, 0, -1),
       PixelMove.withoutCut(0, 1, 0, -1),
     ])).toEqual([]);
+
+    expect(optimizeTravel([
+      PixelMove.withoutCut(0, 0, -2, 0),
+      PixelMove.withoutCut(-2, 0, -5, 0),
+    ])).toEqual([
+      PixelMove.withoutCut(0, 0, -7, 0),
+    ]);
   });
 
   it('detectTravel', () => {
@@ -218,5 +225,28 @@ describe('plannerworker', () => {
       PixelMove.withoutCut(100, 104, -4, 0),
       PixelMove.withoutCut(96, 104, 0, -4),
     ], length: 9});
+  });
+
+  it('optimizeMoves', () => {
+    expect(optimizeMoves([
+      PixelMove.withoutCut(0, 0, -2, 0),
+      PixelMove.withoutCut(-2, 0, -5, 0),
+    ], () => {})).toEqual([
+      PixelMove.withoutCut(0, 0, -7, 0),
+    ]);
+  });
+
+  it('isSmoothingAllowed', () => {
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 0))).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 1))).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 2))).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 3))).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 4))).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 5))).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 6))).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 7))).toBeFalsy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 8))).toBeFalsy();
+
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 0), PixelMove.withoutCut(1, 0, 2, 2))).toBeTruthy();
   });
 });

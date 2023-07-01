@@ -17,4 +17,8 @@ export class Move {
   isEmpty() {
     return !this.xDeltaMm && !this.yDeltaMm;
   }
+
+  isBasic() {
+    return Math.abs(this.xDeltaMm) <= 0.01 && Math.abs(this.yDeltaMm) <= 0.01;
+  }
 }

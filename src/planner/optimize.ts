@@ -1,6 +1,8 @@
 import * as Colors from "../common/colors";
 import { Pixel, PixelMove } from "./pixel";
 
+const CUTTING_EDGE_THICKNESS = 2;
+
 export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
   const toolData = tool.getContext("2d")!.getImageData(0, 0, tool.width, tool.height).data;
   const set: Set<string> = new Set();
@@ -17,13 +19,13 @@ export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
     for (let x = 0; x < tool.width; x++) {
       const i = (y * tool.width + x) * 4;
       if (
-        toolData[i] == Colors.COLOR_TOOL.red() &&
-        toolData[i + 1] == Colors.COLOR_TOOL.green() &&
-        toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
-        toolData[i + 3] > 200
+        Math.abs(toolData[i] - Colors.COLOR_TOOL.red()) <= 1 &&
+        Math.abs(toolData[i + 1] - Colors.COLOR_TOOL.green()) <= 1 &&
+        Math.abs(toolData[i + 2] - Colors.COLOR_TOOL.blue()) <= 1 &&
+        toolData[i + 3] > 100
       ) {
         maybeAdd(x, y);
-        if (++depth > 2) break;
+        if (++depth > CUTTING_EDGE_THICKNESS) break;
       }
     }
   }
@@ -32,17 +34,47 @@ export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
     for (let y = 0; y < tool.height; y++) {
       const i = (y * tool.width + x) * 4;
       if (
-        toolData[i] == Colors.COLOR_TOOL.red() &&
-        toolData[i + 1] == Colors.COLOR_TOOL.green() &&
-        toolData[i + 2] == Colors.COLOR_TOOL.blue() &&
-        toolData[i + 3] > 200
+        Math.abs(toolData[i] - Colors.COLOR_TOOL.red()) <= 1 &&
+        Math.abs(toolData[i + 1] - Colors.COLOR_TOOL.green()) <= 1 &&
+        Math.abs(toolData[i + 2] - Colors.COLOR_TOOL.blue()) <= 1 &&
+        toolData[i + 3] > 100
       ) {
         maybeAdd(x, y);
-        if (++depth > 2) break;
+        if (++depth > CUTTING_EDGE_THICKNESS) break;
       }
     }
   }
   return result;
+}
+
+const EPSILON_DEGREES_DEFAULT = 0.05;
+const EPSILON_SMOOTH_PX = 0.7;
+
+export function isSmoothingAllowed(m1: PixelMove, m2: PixelMove) {
+  const m = m1.merge(m2);
+  const angleDegrees = m.getAngleToDegrees(m1);
+  const mistake = Math.sin(angleDegrees / 180 * Math.PI) * m1.length();
+  return mistake <= EPSILON_SMOOTH_PX;
+}
+
+export function smoothMoves(moves: PixelMove[]): PixelMove[] {
+  const result: PixelMove[] = [];
+  let i = 0;
+  while (i < moves.length) {
+    let m = moves[i];
+    if (i + 1 < moves.length && isSmoothingAllowed(moves[i], moves[i + 1])) {
+      result.push(moves[i].merge(moves[i + 1]));
+      i += 2;
+      continue;
+    }
+    result.push(m);
+    i++;
+  }
+  if (result.length < moves.length) {
+    return smoothMoves(result);
+  } else {
+    return result;
+  }
 }
 
 export function optimizeMoves(moves: PixelMove[], progressCallback: (message: string) => void): PixelMove[] {
@@ -57,26 +89,11 @@ export function optimizeMoves(moves: PixelMove[], progressCallback: (message: st
 
     if (!m.cutArea) {
       const travel = detectTravel(moves, i);
-      if (travel.length > 1) {
+      if (travel.length > 1 && travel.moves.length < travel.length) {
         result.push(... travel.moves);
         i += travel.length;
         continue;
       }
-    }
-
-    let maxCount = 1;
-    let occurrenceLength = 1;
-    for (let j = 2; j < 200; j++) {
-      const count = countPatterns(moves, i, j);
-      if (count > 1 && count * j > maxCount * occurrenceLength) {
-        maxCount = count;
-        occurrenceLength = j;
-      }
-    }
-    if (maxCount > 1) {
-      result.push(mergeMoves(moves, i, maxCount * occurrenceLength));
-      i += maxCount * occurrenceLength;
-      continue;
     }
 
     const condirectional = detectCodirectional(moves, i);
@@ -86,14 +103,35 @@ export function optimizeMoves(moves: PixelMove[], progressCallback: (message: st
       continue;
     }
 
+    // Detect cones.
+    if (i + 1 < moves.length &&
+        moves[i].isBasic() &&
+        moves[i + 1].isHorizontalOrVertical()) {
+      let count = 1;
+      while (i + 1 + count * 2 < moves.length) {
+        const j = i + count * 2;
+        if (moves[j].isBasic() &&
+            moves[j + 1].isHorizontalOrVertical() &&
+            moves[j - 2].merge(moves[j - 1]).getAngleToDegrees(moves[j].merge(moves[j + 1])) < EPSILON_DEGREES_DEFAULT) {
+          count++;
+        } else {
+          break;
+        }
+      }
+      if (count > 1) {
+        result.push(mergeMoves(moves, i, 2 * count));
+        i += 2 * count;
+        continue;
+      }
+    }
+
     result.push(m);
     i++;
   }
   if (result.length < moves.length) {
-    progressCallback(`Optimized ${moves.length} moves down to ${result.length}`);
     return optimizeMoves(result, progressCallback);
   } else {
-    return result;
+    return smoothMoves(result);
   }
 }
 
@@ -134,8 +172,9 @@ export function detectCodirectional(moves: PixelMove[], i: number): {move: Pixel
   let m = moves[i];
   let length = 1;
   while (i < moves.length - 1) {
-    if (moves[i + 1].isCodirectional(m)) {
-      m = m.merge(moves[i + 1]);
+    const m1 = moves[i + 1];
+    if (!m1.getAngleToDegrees(m)) {
+      m = m.merge(m1);
       length++;
       i++;
     } else {

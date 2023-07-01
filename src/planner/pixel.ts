@@ -8,8 +8,6 @@ export class Pixel {
   }
 }
 
-const ATAN_EPSILON = 0.05 /* degrees */ * Math.PI / 180;
-
 export class PixelMove {
   static withoutCut(xStart: number, yStart: number, xDelta: number, yDelta: number) {
     return new PixelMove(xStart, yStart, xDelta, yDelta, 0, []);
@@ -28,7 +26,7 @@ export class PixelMove {
   }
 
   toConstructorString() {
-    return `new Move(${this.xStart}, ${this.yStart}, ${this.xDelta}, ${this.yDelta}, ${this.cutArea}, [])`;
+    return `new PixelMove(${this.xStart}, ${this.yStart}, ${this.xDelta}, ${this.yDelta}, ${this.cutArea}, [])`;
   }
 
   toMove(pxPerMm: number): Move {
@@ -39,25 +37,47 @@ export class PixelMove {
     return !this.xDelta && !this.yDelta;
   }
 
-  isCodirectional(m: PixelMove) {
-    if (!this.xDelta && !m.xDelta && this.yDelta * m.yDelta > 0) return true;
-    if (!this.yDelta && !m.yDelta && this.xDelta * m.xDelta > 0) return true;
-    if (this.yDelta * m.yDelta >= 0 && this.xDelta * m.xDelta >= 0 && Math.abs(Math.atan(this.yDelta / this.xDelta) - Math.atan(m.yDelta / m.xDelta)) < ATAN_EPSILON) return true;
-    return false;
+  isBasic() {
+    return (this.xDelta === 1 || this.xDelta === 0 || this.xDelta === -1) && (this.yDelta === 1 || this.yDelta === 0 || this.yDelta === -1);
+  }
+
+  length() {
+    return Math.sqrt(this.xDelta * this.xDelta + this.yDelta * this.yDelta);
+  }
+
+  isHorizontalOrVertical() {
+    return this.xDelta * this.yDelta === 0 && !this.isEmpty();
+  }
+
+  getAngleDegrees(): number {
+    if (this.isEmpty()) return NaN;
+    let degrees = Math.atan2(this.yDelta, this.xDelta) * 180 / Math.PI;
+    if (degrees < 0) degrees += 360;
+    return degrees;
+  }
+
+  getAngleToDegrees(m: PixelMove): number {
+    let a = Math.abs(this.getAngleDegrees() - m.getAngleDegrees());
+    return 360 - a < a ? 360 - a : a;
   }
 
   merge(m: PixelMove) {
+    if (this.xStart + this.xDelta !== m.xStart || this.yStart + this.yDelta !== m.yStart) throw new Error(`merge error: ${this} + ${m}`);
     return new PixelMove(this.xStart, this.yStart, this.xDelta + m.xDelta, this.yDelta + m.yDelta, this.cutArea + m.cutArea, this.cutPixels.concat(m.cutPixels));
   }
 
-  getCutWidth() {
-    if (!this.cutArea) return 0;
+  getCut(): {width: number, height: number} {
+    if (!this.cutArea) return {width: 0, height: 0};
     let minX = Infinity;
-    let maxX = 0;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
     for (let p of this.cutPixels) {
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
     }
-    return maxX - minX;
+    return {width: maxX - minX + 1, height: maxY - minY + 1};
   }
 }
