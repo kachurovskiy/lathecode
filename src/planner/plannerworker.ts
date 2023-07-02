@@ -123,7 +123,7 @@ export class PlannerWorker {
 
   private step(): boolean {
     if (this.passIndex === 0) {
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(1) - this.toolX, -this.toolOvershootY));
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(1) - this.toolX, 0));
       this.passIndex = 1;
       return true;
     }
@@ -162,7 +162,6 @@ export class PlannerWorker {
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
     }
-    console.log('done');
     return false;
   }
 
@@ -175,7 +174,6 @@ export class PlannerWorker {
   }
 
   private tryMove(xDelta: number, yDelta: number): boolean {
-    console.log('tryMove', xDelta, yDelta);
     const move = this.calculateMove(xDelta, yDelta);
     if (!move) return false;
     if (move.cutArea) this.passHasCuts = true;
