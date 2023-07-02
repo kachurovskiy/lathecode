@@ -31,9 +31,7 @@ export class PlannerWorker {
   private toolOvershootY: number;
   private toolX;
   private toolY;
-  private leftAllowed = true;
   private passIndex = 0;
-  private passHasCuts = false;
   private moves: PixelMove[] = [];
   private partBitmap: number[][] = [];
 
@@ -127,41 +125,30 @@ export class PlannerWorker {
       this.passIndex = 1;
       return true;
     }
-    if (this.toolX > this.getXForPass(this.passIndex)) {
-      if (this.leftAllowed && this.tryMove(-1, 0)) {
-        return true;
-      }
-      if (this.tryMove(-1, -1)) {
-        this.leftAllowed = true;
-        return true;
-      }
-    }
     if (this.tryMove(0, -1)) {
-      this.leftAllowed = true;
       return true;
     }
     const rightAllowed = this.toolX < this.getXForPass(this.passIndex - 1);
     if (rightAllowed && this.tryMove(1, -1)) {
-      this.leftAllowed = true;
       return true;
     }
     if (rightAllowed && this.tryMove(1, 0)) {
-      this.leftAllowed = false;
       return true;
     }
-    if (this.getXForPass(this.passIndex) > 0 && this.passHasCuts) {
-      this.leftAllowed = true;
+    if (rightAllowed && this.tryMove(1, 1)) {
+      return true;
+    }
+    if (this.getXForPass(this.passIndex) > 0) {
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getDepthOfCutPx(), 0)); // return right
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
       postMessage({progressMessage: `Finished pass ${this.passIndex}`});
       this.passIndex++;
-      this.passHasCuts = false;
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(this.passIndex) - this.toolX, 0)); // position for the next face
       return true;
-    } else {
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
     }
+    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
+    console.log('done');
     return false;
   }
 
@@ -176,7 +163,6 @@ export class PlannerWorker {
   private tryMove(xDelta: number, yDelta: number): boolean {
     const move = this.calculateMove(xDelta, yDelta);
     if (!move) return false;
-    if (move.cutArea) this.passHasCuts = true;
     this.addMove(move);
     return true;
   }

@@ -4,10 +4,12 @@ import { Move } from "../common/move";
 export function createGCode(latheCode: LatheCode, moves: Move[]): string {
   let feed = latheCode.getFeed().moveMmMin;
   const first = moves[0]!;
+  const area = getMoveArea(moves);
   const lines = [
     ... latheCode.getText().trim().split('\n').map(line => line.startsWith(';') ? line : `; ${line}`),
     '',
     '; Run time $duration min, cutting $cutPercent% of time',
+    `; Working area ${area.widthMm} by ${area.heightMm} mm`,
     '',
     'G21 ; metric',
     'G18 ; ZX plane',
@@ -30,7 +32,23 @@ export function createGCode(latheCode: LatheCode, moves: Move[]): string {
     duration += moveDuration;
     if (m.cutAreaMmSq) cutDuration += moveDuration;
   }
-  return lines.join('\n').replace('$duration', duration.toFixed(1)).replace('$cutPercent', (cutDuration * 100 / duration).toFixed(0));
+  return lines.join('\n')
+      .replace('$duration', duration.toFixed(1))
+      .replace('$cutPercent', (cutDuration * 100 / duration).toFixed(0));
+}
+
+export function getMoveArea(moves: Move[]): {widthMm: number, heightMm: number} {
+  let minXMm = Infinity;
+  let maxXMm = -Infinity;
+  let minYMm = Infinity;
+  let maxYMm = -Infinity;
+  moves.forEach(move => {
+    minXMm = Math.min(move.xStartMm, move.xStartMm + move.xDeltaMm, minXMm);
+    maxXMm = Math.max(move.xStartMm, move.xStartMm + move.xDeltaMm, maxXMm);
+    minYMm = Math.min(move.yStartMm, move.yStartMm + move.yDeltaMm, minYMm);
+    maxYMm = Math.max(move.yStartMm, move.yStartMm + move.yDeltaMm, maxYMm);
+  });
+  return {widthMm: maxXMm - minXMm, heightMm: maxYMm - minYMm};
 }
 
 export function moveToGCode(m: Move): string {

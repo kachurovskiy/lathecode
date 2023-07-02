@@ -109,36 +109,73 @@ export class Planner extends EventTarget {
   }
 
   private drawMoves(moves: Move[]): void {
-    let minXMm = Infinity;
-    let maxXMm = -Infinity;
-    let minYMm = Infinity;
-    let maxYMm = -Infinity;
-    moves.forEach(move => {
-      minXMm = Math.min(move.xStartMm, move.xStartMm + move.xDeltaMm, minXMm);
-      maxXMm = Math.max(move.xStartMm, move.xStartMm + move.xDeltaMm, maxXMm);
-      minYMm = Math.min(move.yStartMm, move.yStartMm + move.yDeltaMm, minYMm);
-      maxYMm = Math.max(move.yStartMm, move.yStartMm + move.yDeltaMm, maxYMm);
-    });
-    const coeff = Math.min(CANVAS_SIZE / (maxXMm - minXMm), (CANVAS_SIZE / 2) / (maxYMm - minYMm));
-    const canvasWidth = CANVAS_SIZE;
-    const canvasHeight = Math.ceil(coeff * (maxYMm - minYMm));
-    const xToPx = (xMm: number): number => { return (maxXMm - xMm) * coeff; };
-    const yToPx = (yMm: number): number => { return (maxYMm - yMm) * coeff; };
-
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d')!;
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
     this.container.insertAdjacentHTML('beforeend', '<h3>Toolpath</h3>');
-    this.container.appendChild(canvas);
-
-    context.lineWidth = 1;
-    moves.forEach(move => {
-      context.beginPath();
-      context.strokeStyle = move.cutAreaMmSq ? 'red' : 'green';
-      context.moveTo(xToPx(move.xStartMm), yToPx(move.yStartMm));
-      context.lineTo(xToPx(move.xStartMm + move.xDeltaMm), yToPx(move.yStartMm + move.yDeltaMm));
-      context.stroke();
+    this.container.appendChild(createMovesCanvas(moves, CANVAS_SIZE, CANVAS_SIZE / 2));
+    const button = document.createElement('button');
+    button.innerText = 'Zoom in';
+    button.addEventListener('click', () => {
+      createFullScreenDialog(createMovesCanvas(moves, window.visualViewport!.width - 100, window.visualViewport!.height - 100), 'Toolpath');
     });
+    this.container.appendChild(button);
   }
+}
+
+function createMovesCanvas(moves: Move[], width: number, height: number): HTMLCanvasElement {
+  let minXMm = Infinity;
+  let maxXMm = -Infinity;
+  let minYMm = Infinity;
+  let maxYMm = -Infinity;
+  moves.forEach(move => {
+    minXMm = Math.min(move.xStartMm, move.xStartMm + move.xDeltaMm, minXMm);
+    maxXMm = Math.max(move.xStartMm, move.xStartMm + move.xDeltaMm, maxXMm);
+    minYMm = Math.min(move.yStartMm, move.yStartMm + move.yDeltaMm, minYMm);
+    maxYMm = Math.max(move.yStartMm, move.yStartMm + move.yDeltaMm, maxYMm);
+  });
+  const coeff = Math.min(width / (maxXMm - minXMm), height / (maxYMm - minYMm));
+  const xToPx = (xMm: number): number => { return (maxXMm - xMm) * coeff; };
+  const yToPx = (yMm: number): number => { return (maxYMm - yMm) * coeff; };
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = Math.ceil(coeff * (maxYMm - minYMm));
+
+  const context = canvas.getContext('2d')!;
+  context.lineWidth = 1;
+  moves.forEach(move => {
+    context.beginPath();
+    context.strokeStyle = move.cutAreaMmSq ? 'red' : 'green';
+    const xOffset = move.cutAreaMmSq ? 0 : 1;
+    context.moveTo(xToPx(move.xStartMm) + xOffset, yToPx(move.yStartMm));
+    context.lineTo(xToPx(move.xStartMm + move.xDeltaMm) + xOffset, yToPx(move.yStartMm + move.yDeltaMm));
+    context.stroke();
+  });
+
+  return canvas;
+}
+
+function createFullScreenDialog(element: HTMLElement, title: string) {
+  const dialogContainer = document.createElement('div');
+  dialogContainer.style.position = 'fixed';
+  dialogContainer.style.top = '0';
+  dialogContainer.style.left = '0';
+  dialogContainer.style.width = '100%';
+  dialogContainer.style.height = '100%';
+  dialogContainer.style.backgroundColor = 'white';
+  dialogContainer.style.padding = '12px';
+
+  const dialogTitle = document.createElement('h2');
+  dialogTitle.textContent = title;
+  dialogContainer.appendChild(dialogTitle);
+
+  dialogContainer.appendChild(element);
+  element.style.margin = '12px';
+
+  const closeButton = document.createElement('button');
+  closeButton.textContent = 'Close';
+  closeButton.style.display = 'block';
+  closeButton.addEventListener('click', () => {
+    document.body.removeChild(dialogContainer);
+  });
+  dialogContainer.appendChild(closeButton);
+  document.body.appendChild(dialogContainer);
 }
