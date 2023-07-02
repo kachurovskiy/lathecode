@@ -27,10 +27,11 @@ export class PlannerWorker {
   private canvasCtx: OffscreenCanvasRenderingContext2D;
   private tool: OffscreenCanvas;
   private toolCuttingEdges: Pixel[];
+  private toolOvershootX: number;
   private toolOvershootY: number;
   private toolX;
   private toolY;
-  private upAllowed = true;
+  private leftAllowed = true;
   private passIndex = 0;
   private passHasCuts = false;
   private moves: PixelMove[] = [];
@@ -42,6 +43,7 @@ export class PlannerWorker {
     this.canvasCtx = this.canvas.getContext("2d")!;
     this.tool = this.painter.createTool();
     this.toolCuttingEdges = getCuttingEdges(this.tool);
+    this.toolOvershootX = this.toolCuttingEdges.filter(e => e.y === 0)[0]?.x || 0;
     this.toolOvershootY = this.toolCuttingEdges.filter(e => e.x === 0)[0]?.y || 0;
     this.toolX = this.canvas.width;
     this.toolY = this.canvas.height;
@@ -121,53 +123,59 @@ export class PlannerWorker {
 
   private step(): boolean {
     if (this.passIndex === 0) {
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(1) - this.toolY));
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(1) - this.toolX, -this.toolOvershootY));
       this.passIndex = 1;
       return true;
     }
-    if (this.toolY > this.getYForPass(this.passIndex)) {
-      if (this.upAllowed && this.tryMove(0, -1)) {
+    if (this.toolX > this.getXForPass(this.passIndex)) {
+      if (this.leftAllowed && this.tryMove(-1, 0)) {
         return true;
       }
       if (this.tryMove(-1, -1)) {
-        this.upAllowed = true;
+        this.leftAllowed = true;
         return true;
       }
     }
-    if (this.tryMove(-1, 0)) {
-      this.upAllowed = true;
+    if (this.tryMove(0, -1)) {
+      this.leftAllowed = true;
       return true;
     }
-    if (this.tryMove(-1, 1)) {
-      this.upAllowed = true;
+    const rightAllowed = this.toolX < this.getXForPass(this.passIndex - 1);
+    if (rightAllowed && this.tryMove(1, -1)) {
+      this.leftAllowed = true;
       return true;
     }
-    if (this.tryMove(0, 1)) {
-      this.upAllowed = false;
+    if (rightAllowed && this.tryMove(1, 0)) {
+      this.leftAllowed = false;
       return true;
     }
-    if (this.getYForPass(this.passIndex) > 0 && this.passHasCuts) {
-      this.upAllowed = true;
+    if (this.getXForPass(this.passIndex) > 0 && this.passHasCuts) {
+      this.leftAllowed = true;
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getDepthOfCutPx(), 0)); // return right
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
       postMessage({progressMessage: `Finished pass ${this.passIndex}`});
       this.passIndex++;
       this.passHasCuts = false;
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.getYForPass(this.passIndex) - this.toolY)); // move in
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(this.passIndex) - this.toolX, 0)); // position for the next face
       return true;
     } else {
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
     }
+    console.log('done');
     return false;
   }
 
-  private getYForPass(i: number) {
-    const doc = this.latheCode.getDepth().cut * this.pxPerMm;
-    const y = Math.max(0, this.canvas.height - doc * i);
-    return y === 0 ? y - this.toolOvershootY : y;
+  private getDepthOfCutPx() {
+    return this.latheCode.getDepth().cut * this.pxPerMm;
+  }
+
+  private getXForPass(i: number) {
+    return Math.max(0, this.canvas.width - this.getDepthOfCutPx() * i);
   }
 
   private tryMove(xDelta: number, yDelta: number): boolean {
+    console.log('tryMove', xDelta, yDelta);
     const move = this.calculateMove(xDelta, yDelta);
     if (!move) return false;
     if (move.cutArea) this.passHasCuts = true;
@@ -191,7 +199,7 @@ export class PlannerWorker {
   private calculateMove(xDelta: number, yDelta: number): PixelMove | null {
     const topLeftX = this.toolX + xDelta;
     const topLeftY = this.toolY + yDelta;
-    if (topLeftX < 0 || topLeftX > this.canvas.width || topLeftY > this.canvas.height) return null;
+    if (topLeftY < -this.toolOvershootY || topLeftX < -this.toolOvershootX || topLeftX > this.canvas.width || topLeftY > this.canvas.height) return null;
     let pixels: Pixel[] = [];
     for (let p of this.toolCuttingEdges) {
       const rgb = this.getBitmap(topLeftX + p.x, topLeftY + p.y);
