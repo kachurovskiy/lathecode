@@ -59,6 +59,7 @@ start =
 comment* units?
 comment* stock?
 comment* tool?
+comment* depth?
 comment* feed?
 (comment* lathe)*
 (comment* inside (comment* lathe)+)?
@@ -76,6 +77,9 @@ toolParams =
 ("R" float)?
 ("L" float)? // length
 ("H" float)? // height
+
+depth = "DEPTH" spaces depthParams comment
+depthParams = ("CUT" float)?
 
 feed = "FEED" spaces feedParams comment
 feedParams = ("MOVE" float)? ("PASS" float)? ("PART" float)?

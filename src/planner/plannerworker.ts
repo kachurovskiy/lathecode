@@ -30,13 +30,12 @@ export class PlannerWorker {
   private toolX;
   private toolY;
   private upAllowed = true;
-  private passMaxDepth = 50;
   private passIndex = 0;
   private passHasCuts = false;
   private moves: PixelMove[] = [];
   private partBitmap: number[][] = [];
 
-  constructor(latheCode: LatheCode, pxPerMm: number) {
+  constructor(private latheCode: LatheCode, private pxPerMm: number) {
     this.painter = new Painter(latheCode, pxPerMm);
     this.canvas = this.painter.createCanvas();
     this.canvasCtx = this.canvas.getContext("2d")!;
@@ -161,7 +160,7 @@ export class PlannerWorker {
   }
 
   private getYForPass(i: number) {
-    return Math.max(0, this.canvas.height - this.passMaxDepth * i);
+    return Math.max(0, this.canvas.height - this.latheCode.getDepth().cut * this.pxPerMm * i);
   }
 
   private tryMove(xDelta: number, yDelta: number): boolean {

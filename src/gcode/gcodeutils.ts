@@ -41,7 +41,7 @@ export function moveToGCode(m: Move): string {
   if (m.yDeltaMm) parts.push(yAxisName + toNumberString(m.yDeltaMm, 3));
   if (m.cutAreaMmSq) {
     parts.push(`; cut ${toNumberString(m.cutAreaMmSq, 4)} mm2`);
-    if (m.xDeltaMm * m.yDeltaMm !== 0 && !m.isBasic()) parts.push(` at ${(Math.atan(m.xDeltaMm / m.yDeltaMm) * 180 / Math.PI).toFixed(2)}°`);
+    if (m.xDeltaMm * m.yDeltaMm !== 0 && !m.isBasic()) parts.push(`at ${(Math.atan(m.xDeltaMm / m.yDeltaMm) * 180 / Math.PI).toFixed(2)}°`);
   }
   return parts.join(' ');
 }

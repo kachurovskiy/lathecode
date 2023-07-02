@@ -64,6 +64,10 @@ export class Feed {
   constructor(readonly moveMmMin: number, readonly passMmMin: number, readonly partMmMin: number) {}
 }
 
+export class Depth {
+  constructor(readonly cut: number) {}
+}
+
 const UNITS: {
   [key: string]: number,
  } = {
@@ -87,9 +91,9 @@ export class LatheCode {
     this.data = parser.parse(text + '\n');
     this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2] as string] : 1;
     // console.log('this.data', this.data);
-    this.outside = this.getSegmentsForSide(this.data[8], 0);
+    this.outside = this.getSegmentsForSide(this.data[10], 0);
     this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
-    this.inside = this.data[9] ? this.getSegmentsForSide(this.data[9][2], this.getStockDiameter() / 2) : [];
+    this.inside = this.data[11] ? this.getSegmentsForSide(this.data[11][2], this.getStockDiameter() / 2) : [];
     this.outsideSegments = this.closeLoop(this.outside, 0);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
   }
@@ -122,11 +126,16 @@ export class LatheCode {
   }
 
   getFeed(): Feed {
-    const params = this.data[7] ? this.data[7][2] : [];
+    const params = this.data[9] ? this.data[9][2] : [];
     return new Feed(
       ((params[0] ? params[0][1] : 0) * this.unitsMultiplier) || 200,
       ((params[1] ? params[1][1] : 0) * this.unitsMultiplier) || 50,
       ((params[2] ? params[2][1] : 0) * this.unitsMultiplier) || 10);
+  }
+
+  getDepth(): Depth {
+    const params = this.data[7] ? this.data[7][2] : [];
+    return new Depth(((params[1] ?? 0) * this.unitsMultiplier) || 0.5);
   }
 
   /** Segments forming the part after outside cuts. */
