@@ -77,7 +77,7 @@ export class Planner extends EventTarget {
         this.canvas.width = data.canvas.width;
         this.canvas.height = data.canvas.height;
         this.canvasContainer!.appendChild(this.canvas);
-        this.canvasContainer!.style.transform = `scale(${Math.min(1, 500 / data.canvas.width)})`;
+        this.canvasContainer!.style.transform = `scale(${Math.min(1, 500 / data.canvas.width, 500 / data.canvas.height / 2)})`;
         const spacer = document.createElement('div');
         spacer.innerHTML = '&nbsp;';
         spacer.style.height = `${this.canvasContainer!.getBoundingClientRect().height}px`;
@@ -119,11 +119,11 @@ export class Planner extends EventTarget {
       minYMm = Math.min(move.yStartMm, move.yStartMm + move.yDeltaMm, minYMm);
       maxYMm = Math.max(move.yStartMm, move.yStartMm + move.yDeltaMm, maxYMm);
     });
-    const coeff = CANVAS_SIZE / Math.max(maxXMm - minXMm, maxYMm - minYMm);
+    const coeff = Math.min(CANVAS_SIZE / (maxXMm - minXMm), (CANVAS_SIZE / 2) / (maxYMm - minYMm));
     const canvasWidth = CANVAS_SIZE;
     const canvasHeight = Math.ceil(coeff * (maxYMm - minYMm));
-    const xToPx = (xMm: number): number => { return canvasWidth - (xMm - minXMm) * coeff; };
-    const yToPx = (yMm: number): number => { return canvasHeight - (yMm - minYMm) * coeff; };
+    const xToPx = (xMm: number): number => { return (maxXMm - xMm) * coeff; };
+    const yToPx = (yMm: number): number => { return (maxYMm - yMm) * coeff; };
 
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
