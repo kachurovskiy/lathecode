@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, optimizeMoves, isSmoothingAllowed } from './optimize';
+import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, optimizeMoves, isSmoothingAllowed, smoothMoves } from './optimize';
 import { PixelMove } from './pixel';
 
 describe('plannerworker', () => {
@@ -248,5 +248,22 @@ describe('plannerworker', () => {
     expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 8))).toBeFalsy();
 
     expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 0), PixelMove.withoutCut(1, 0, 2, 2))).toBeTruthy();
+
+    expect(isSmoothingAllowed(new PixelMove(0, 1000, 0, -1014, 270150, []), new PixelMove(0, -14, 0, 1014, 0, []))).toBeFalsy();
+    expect(isSmoothingAllowed(new PixelMove(0, 900, 0, 100, 36, []), new PixelMove(0, 1000, 0, -1014, 270150, []))).toBeFalsy();
+  });
+
+  it('smoothMoves', () => {
+    expect(smoothMoves([
+      new PixelMove(0, 900, 0, 100, 36, []),
+      new PixelMove(0, 1000, 0, -1014, 270150, []),
+      new PixelMove(0, -14, 0, 1014, 0, []),
+      new PixelMove(0, 1000, 600, 0, 0, []),
+    ])).toEqual([
+      new PixelMove(0, 900, 0, 100, 36, []),
+      new PixelMove(0, 1000, 0, -1014, 270150, []),
+      new PixelMove(0, -14, 0, 1014, 0, []),
+      new PixelMove(0, 1000, 600, 0, 0, []),
+    ]);
   });
 });

@@ -43,6 +43,7 @@ export class Planner extends EventTarget {
       };
       const toWorker: ToWorkerMessage = {latheCode: this.latheCode, pxPerMm: PX_PER_MM};
       this.worker.postMessage(toWorker);
+      this.handleMessage({progressMessage: 'Initializing worker...'});
     }
     this.container.style.display = this.latheCode ? 'block' : 'none';
   }
@@ -68,11 +69,6 @@ export class Planner extends EventTarget {
       this.canvasContainer = document.createElement('div');
       this.canvasContainer.className = 'canvasContainer';
       this.container.appendChild(this.canvasContainer);
-      const spacer = document.createElement('div');
-      spacer.innerHTML = '&nbsp;';
-      spacer.style.height = `${this.canvasContainer.getBoundingClientRect().height}px`;
-      this.container.appendChild(spacer);
-      spacer.scrollIntoView({ behavior: "smooth" });
     }
     if (data.canvas) {
       if (!this.canvas) {
@@ -85,6 +81,7 @@ export class Planner extends EventTarget {
         const spacer = document.createElement('div');
         spacer.innerHTML = '&nbsp;';
         spacer.style.height = `${this.canvasContainer!.getBoundingClientRect().height}px`;
+        spacer.scrollIntoView({ behavior: "smooth" });
         this.container.appendChild(spacer);
       }
       this.canvas.getContext('2d')!.putImageData(new ImageData(data.canvas.data, data.canvas.width), 0, 0);
@@ -104,6 +101,7 @@ export class Planner extends EventTarget {
     if (data.progressMessage) {
       if (!this.generationProgressMessage) {
         this.generationProgressMessage = document.createElement('div');
+        this.generationProgressMessage.className = 'generationProgressMessage';
         this.container.appendChild(this.generationProgressMessage);
       }
       this.generationProgressMessage.innerText = data.progressMessage;

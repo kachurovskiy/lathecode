@@ -22,7 +22,7 @@ export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
         Math.abs(toolData[i] - Colors.COLOR_TOOL.red()) <= 1 &&
         Math.abs(toolData[i + 1] - Colors.COLOR_TOOL.green()) <= 1 &&
         Math.abs(toolData[i + 2] - Colors.COLOR_TOOL.blue()) <= 1 &&
-        toolData[i + 3] > 100
+        toolData[i + 3] > 250
       ) {
         maybeAdd(x, y);
         if (++depth > CUTTING_EDGE_THICKNESS) break;
@@ -37,7 +37,7 @@ export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
         Math.abs(toolData[i] - Colors.COLOR_TOOL.red()) <= 1 &&
         Math.abs(toolData[i + 1] - Colors.COLOR_TOOL.green()) <= 1 &&
         Math.abs(toolData[i + 2] - Colors.COLOR_TOOL.blue()) <= 1 &&
-        toolData[i + 3] > 100
+        toolData[i + 3] > 250
       ) {
         maybeAdd(x, y);
         if (++depth > CUTTING_EDGE_THICKNESS) break;
@@ -53,6 +53,7 @@ const EPSILON_SMOOTH_PX = 0.7;
 export function isSmoothingAllowed(m1: PixelMove, m2: PixelMove) {
   const m = m1.merge(m2);
   const angleDegrees = m.getAngleToDegrees(m1);
+  if (angleDegrees === 180) return false;
   const mistake = Math.sin(angleDegrees / 180 * Math.PI) * m1.length();
   return mistake <= EPSILON_SMOOTH_PX;
 }

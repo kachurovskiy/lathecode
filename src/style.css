@@ -64,6 +64,10 @@ body {
   position: absolute;
 }
 
+#plannerContainer .generationProgressMessage {
+  margin-bottom: 8px;
+}
+
 #gcodeContainer textarea {
   box-sizing: border-box;
   height: 400px;

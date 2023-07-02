@@ -27,6 +27,7 @@ export class PlannerWorker {
   private canvasCtx: OffscreenCanvasRenderingContext2D;
   private tool: OffscreenCanvas;
   private toolCuttingEdges: Pixel[];
+  private toolOvershootY: number;
   private toolX;
   private toolY;
   private upAllowed = true;
@@ -41,6 +42,7 @@ export class PlannerWorker {
     this.canvasCtx = this.canvas.getContext("2d")!;
     this.tool = this.painter.createTool();
     this.toolCuttingEdges = getCuttingEdges(this.tool);
+    this.toolOvershootY = this.toolCuttingEdges.filter(e => e.x === 0)[0]?.y || 0;
     this.toolX = this.canvas.width;
     this.toolY = this.canvas.height;
     this.partBitmap = this.createPartBitmap();
@@ -160,7 +162,9 @@ export class PlannerWorker {
   }
 
   private getYForPass(i: number) {
-    return Math.max(0, this.canvas.height - this.latheCode.getDepth().cut * this.pxPerMm * i);
+    const doc = this.latheCode.getDepth().cut * this.pxPerMm;
+    const y = Math.max(0, this.canvas.height - doc * i);
+    return y === 0 ? y - this.toolOvershootY : y;
   }
 
   private tryMove(xDelta: number, yDelta: number): boolean {
@@ -187,7 +191,7 @@ export class PlannerWorker {
   private calculateMove(xDelta: number, yDelta: number): PixelMove | null {
     const topLeftX = this.toolX + xDelta;
     const topLeftY = this.toolY + yDelta;
-    if (topLeftX < 0 || topLeftX > this.canvas.width || topLeftY < 0 || topLeftY > this.canvas.height) return null;
+    if (topLeftX < 0 || topLeftX > this.canvas.width || topLeftY > this.canvas.height) return null;
     let pixels: Pixel[] = [];
     for (let p of this.toolCuttingEdges) {
       const rgb = this.getBitmap(topLeftX + p.x, topLeftY + p.y);
