@@ -34,6 +34,7 @@ export class PlannerWorker {
   private passIndex = 0;
   private moves: PixelMove[] = [];
   private partBitmap: number[][] = [];
+  private upAllowed = true;
 
   constructor(private latheCode: LatheCode, private pxPerMm: number) {
     this.painter = new Painter(latheCode, pxPerMm);
@@ -123,9 +124,10 @@ export class PlannerWorker {
     if (this.passIndex === 0) {
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(1) - this.toolX, 0));
       this.passIndex = 1;
+      this.upAllowed = true;
       return true;
     }
-    if (this.tryMove(0, -1)) {
+    if (this.upAllowed && this.tryMove(0, -1)) {
       return true;
     }
     const rightAllowed = this.toolX < this.getXForPass(this.passIndex - 1);
@@ -138,11 +140,16 @@ export class PlannerWorker {
     if (rightAllowed && this.tryMove(1, 1)) {
       return true;
     }
+    if (this.tryMove(0, 1)) {
+      this.upAllowed = false;
+      return true;
+    }
     if (this.getXForPass(this.passIndex) > 0) {
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getDepthOfCutPx(), 0)); // return right
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
       postMessage({progressMessage: `Finished pass ${this.passIndex}`});
       this.passIndex++;
+      this.upAllowed = true;
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(this.passIndex) - this.toolX, 0)); // position for the next face
       return true;
     }
