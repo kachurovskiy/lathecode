@@ -26,12 +26,22 @@ L24 DS15.733 DE14.5</code></pre>
         <h2>Editor</h2>
         <p>Early demo 🚧 of an editor that visualizes lathecode and generates GCode for it.</p>
         <div class="inputContainer">
-          <textarea class="latheCodeInput">STOCK D5
+          <textarea class="latheCodeInput">; Lines starting with ";" are comments
+
+; UNITS IN ; you can use inches
+STOCK D5
+; STOCK R2.5 ; diameter or radius can be used
+
 TOOL RECT R0.2 L3
-DEPTH CUT1
+; TOOL ROUND R8 ; round tool is also supported
+
+DEPTH CUT1 ; default depth of cut is 0.5mm
+; FEED MOVE200 PASS50 PART10 ; speeds mm/min
+
 L1 D2
 L3 D3
-L4 DS3 DE5</textarea>
+L4 DS3 DE5
+L3</textarea>
           <div class="errorContainer"></div>
         </div>
         <div class="toolbar">

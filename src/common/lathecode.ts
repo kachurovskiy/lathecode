@@ -65,7 +65,7 @@ export class Feed {
 }
 
 export class Depth {
-  constructor(readonly cut: number) {}
+  constructor(readonly cut: number, readonly finish: number) {}
 }
 
 const UNITS: {
@@ -90,7 +90,7 @@ export class LatheCode {
   constructor(private text: string) {
     this.data = parser.parse(text + '\n');
     this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2] as string] : 1;
-    // console.log('this.data', this.data);
+    console.log('this.data', this.data);
     this.outside = this.getSegmentsForSide(this.data[10], 0);
     this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
     this.inside = this.data[11] ? this.getSegmentsForSide(this.data[11][2], this.getStockDiameter() / 2) : [];
@@ -135,7 +135,12 @@ export class LatheCode {
 
   getDepth(): Depth {
     const params = this.data[7] ? this.data[7][2] : [];
-    return new Depth(((params[1] ?? 0) * this.unitsMultiplier) || 0.5);
+    const cut = params[0];
+    const finish = params[1];
+    return new Depth(
+      ((cut ? cut[1] : 0) * this.unitsMultiplier) || 0.5,
+      ((finish ? finish[1] : 0) * this.unitsMultiplier) || 0.1
+    );
   }
 
   /** Segments forming the part after outside cuts. */

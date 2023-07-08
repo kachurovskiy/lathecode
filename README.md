@@ -79,7 +79,7 @@ toolParams =
 ("H" float)? // height
 
 depth = "DEPTH" spaces depthParams comment
-depthParams = ("CUT" float)?
+depthParams = ("CUT" float)? ("FINISH" float)?
 
 feed = "FEED" spaces feedParams comment
 feedParams = ("MOVE" float)? ("PASS" float)? ("PART" float)?
