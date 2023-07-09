@@ -90,7 +90,7 @@ export class LatheCode {
   constructor(private text: string) {
     this.data = parser.parse(text + '\n');
     this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2] as string] : 1;
-    console.log('this.data', this.data);
+    // console.log('this.data', this.data);
     this.outside = this.getSegmentsForSide(this.data[10], 0);
     this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
     this.inside = this.data[11] ? this.getSegmentsForSide(this.data[11][2], this.getStockDiameter() / 2) : [];

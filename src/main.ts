@@ -2,7 +2,7 @@ import './style.css'
 import { Scene } from './scene.ts';
 import { createDownloadLink } from './stl.ts';
 import { GCode } from './gcode/gcode.ts';
-import { Editor } from './editor.ts';
+import { Editor } from './editor/editor.ts';
 import { Planner } from './planner/planner.ts';
 
 const scene = new Scene(document.getElementById('sceneContainer')!);

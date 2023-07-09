@@ -21,4 +21,11 @@ export class Move {
   isBasic() {
     return Math.abs(this.xDeltaMm) <= 0.01 && Math.abs(this.yDeltaMm) <= 0.01;
   }
+
+  toLatheCode() {
+    if (!this.xDeltaMm) return '';
+    const format = (a: number) => Math.abs(a).toFixed(3);
+    if (this.yDeltaMm) return `L${format(this.xDeltaMm)} RS${format(this.yStartMm)} RE${format(this.yStartMm + this.yDeltaMm)}`;
+    return `L${format(this.xDeltaMm)} R${format(this.yStartMm)}`;
+  }
 }
