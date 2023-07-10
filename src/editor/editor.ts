@@ -59,12 +59,17 @@ export class Editor extends EventTarget {
 
   private recognize(image: File) {
     const reader = new FileReader();
-    reader.onload = () => {
-      const image = reader.result as ArrayBuffer;
+    reader.onload = async () => {
+      let image = reader.result as ArrayBuffer;
       if (this.worker) {
         this.worker.onmessage = null;
         this.worker.terminate();
       }
+      const imageHeight = await getImageHeight(image);
+      const initialLengthMm = imageHeight / PX_PER_MM;
+      const lengthMm = Number(prompt('How long should the part be in mm?', initialLengthMm.toFixed(2)));
+      if (isNaN(lengthMm) || lengthMm <= 0) return;
+      image = await scaleImage(image, lengthMm / initialLengthMm);
       this.worker = new InlineWorker();
       this.worker.onmessage = (event: MessageEvent<any>) => {
         const m = event.data as FromEditorWorkerMessage;
@@ -77,33 +82,53 @@ export class Editor extends EventTarget {
           this.errorContainer.textContent = m.error;
         }
       };
-      const toWorker: ToEditorWorkerMessage = {image, pxPerMm: 100};
+      const smoothEpsilon = Number(prompt('How smooth should it be? Use values between 1 and 10:', '1'));
+      if (isNaN(smoothEpsilon) || smoothEpsilon < 0) return;
+      const toWorker: ToEditorWorkerMessage = {image, pxPerMm: 100, smoothEpsilon};
       this.worker.postMessage(toWorker);
     };
     reader.readAsArrayBuffer(image);
   }
 
   private setLatheCodeFromPixelMoves(moves: PixelMove[]) {
-    const maxX = getLengthPx(moves);
-    const lengthMm = Number(prompt('How long should the part be in mm?', (maxX / PX_PER_MM).toFixed(2)));
-    if (isNaN(lengthMm) || lengthMm <= 0) return;
     const lines = moves.map(m => {
-      return m.toMove(Math.round(maxX / lengthMm)).toLatheCode();
+      return m.toMove(PX_PER_MM).toLatheCode();
     }).filter(line => !!line);
     this.latheCodeInput.value = lines.join('\n');
     this.update();
   }
 }
 
-function getLengthPx(moves: PixelMove[]) {
-  let maxX = 0;
-  for (let m of moves) {
-    if (m.xStart > maxX) {
-      maxX = m.xStart;
-    }
-    if (m.xStart + m.xDelta > maxX) {
-      maxX = m.xStart + m.xDelta;
-    }
-  }
-  return maxX;
+function getImageHeight(arrayBuffer: ArrayBuffer): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const blob = new Blob([arrayBuffer]);
+    const img = new Image();
+    img.onload = () => resolve(img.height);
+    img.onerror = () => reject(new Error('Failed to load the image.'));
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+function scaleImage(arrayBuffer: ArrayBuffer, scaleFactor: number): Promise<ArrayBuffer> {
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const blob = new Blob([arrayBuffer]);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const width = img.width * scaleFactor;
+      const height = img.height * scaleFactor;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(new Error('Failed to read the scaled image data.'));
+        reader.readAsArrayBuffer(blob!);
+      }, 'image/png', 1);
+    };
+    img.onerror = () => reject(new Error('Failed to load the image.'));
+    img.src = URL.createObjectURL(blob);
+  });
 }

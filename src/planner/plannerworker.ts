@@ -35,6 +35,7 @@ export class PlannerWorker {
   private moves: PixelMove[] = [];
   private partBitmap: number[][] = [];
   private upAllowed = true;
+  private isFinishPass = false;
 
   constructor(private latheCode: LatheCode, private pxPerMm: number) {
     this.painter = new Painter(latheCode, pxPerMm);
@@ -60,7 +61,9 @@ export class PlannerWorker {
     }
     this.postProgress();
     postMessage({progressMessage: `Optimizing ${this.moves.length} moves...`});
-    postMessage({moves: optimizeMoves(this.moves, (progressMessage) => postMessage({progressMessage}))});
+    const moves = optimizeMoves(this.moves, (progressMessage) => postMessage({progressMessage}));
+    postMessage({progressMessage: `Showing ${moves.length} moves...`});
+    postMessage({moves});
   }
 
   private postProgress() {
@@ -127,10 +130,31 @@ export class PlannerWorker {
       this.upAllowed = true;
       return true;
     }
+    if (this.creep(this.toolX < this.getXForPass(this.passIndex - 1), false)) return true;
+    if (this.getXForPass(this.passIndex) > 0) {
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getDepthOfCutPx(), 0)); // return right
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+      postMessage({progressMessage: `Finished pass ${this.passIndex}`});
+      this.passIndex++;
+      this.upAllowed = true;
+      if (this.getXForPass(this.passIndex) === 0) {
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // position for the finish pass
+        this.finishPass();
+        this.upAllowed = true;
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+      }
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(this.passIndex) - this.toolX, 0)); // position for the next face
+      return true;
+    }
+    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
+    return false;
+  }
+
+  private creep(rightAllowed: boolean, leftAllowed: boolean): boolean {
     if (this.upAllowed && this.tryMove(0, -1)) {
       return true;
     }
-    const rightAllowed = this.toolX < this.getXForPass(this.passIndex - 1);
     if (rightAllowed && this.tryMove(1, -1)) {
       return true;
     }
@@ -138,25 +162,30 @@ export class PlannerWorker {
       return true;
     }
     if (rightAllowed && this.tryMove(1, 1)) {
+      this.upAllowed = true;
+      return true;
+    }
+    if (leftAllowed && this.tryMove(-1, -1)) {
+      return true;
+    }
+    if (leftAllowed && this.tryMove(-1, 0)) {
+      return true;
+    }
+    if (leftAllowed && this.tryMove(-1, 1)) {
+      this.upAllowed = true;
       return true;
     }
     if (this.tryMove(0, 1)) {
       this.upAllowed = false;
       return true;
     }
-    if (this.getXForPass(this.passIndex) > 0) {
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getDepthOfCutPx(), 0)); // return right
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
-      postMessage({progressMessage: `Finished pass ${this.passIndex}`});
-      this.passIndex++;
-      this.upAllowed = true;
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(this.passIndex) - this.toolX, 0)); // position for the next face
-      return true;
-    }
-    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
-    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
-    console.log('done');
     return false;
+  }
+
+  private finishPass() {
+    this.isFinishPass = true;
+    while (this.creep(false, this.toolX > this.toolOvershootX)) {}
+    this.isFinishPass = false;
   }
 
   private getDepthOfCutPx() {
@@ -201,7 +230,7 @@ export class PlannerWorker {
         return null;
       }
     }
-    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixels.length, pixels);
+    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, Math.max(this.isFinishPass && this.toolX < this.canvas.width ? 1 : 0, pixels.length), pixels);
   }
 }
 

@@ -9,7 +9,7 @@ export function createGCode(latheCode: LatheCode, moves: Move[]): string {
     ... latheCode.getText().trim().split('\n').map(line => line.startsWith(';') ? line : `; ${line}`),
     '',
     '; Run time $duration min, cutting $cutPercent% of time',
-    `; Working area ${area.widthMm} by ${area.heightMm} mm`,
+    `; Working area ${area.widthMm.toFixed(2)} by ${area.heightMm.toFixed(2)} mm`,
     '',
     'G21 ; metric',
     'G18 ; ZX plane',

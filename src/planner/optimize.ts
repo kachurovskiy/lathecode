@@ -48,22 +48,22 @@ export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
 }
 
 const EPSILON_DEGREES_DEFAULT = 0.05;
-const EPSILON_SMOOTH_PX = 0.7;
+const EPSILON_SMOOTH_PX = 0.9;
 
-export function isSmoothingAllowed(m1: PixelMove, m2: PixelMove) {
+export function isSmoothingAllowed(m1: PixelMove, m2: PixelMove, epsilonPx: number) {
   const m = m1.merge(m2);
   const angleDegrees = m.getAngleToDegrees(m1);
   if (angleDegrees === 180) return false;
   const mistake = Math.sin(angleDegrees / 180 * Math.PI) * m1.length();
-  return mistake <= EPSILON_SMOOTH_PX;
+  return mistake <= epsilonPx;
 }
 
-export function smoothMoves(moves: PixelMove[]): PixelMove[] {
+export function smoothMoves(moves: PixelMove[], epsilonPx: number): PixelMove[] {
   const result: PixelMove[] = [];
   let i = 0;
   while (i < moves.length) {
     let m = moves[i];
-    if (i + 1 < moves.length && isSmoothingAllowed(moves[i], moves[i + 1])) {
+    if (i + 1 < moves.length && isSmoothingAllowed(moves[i], moves[i + 1], epsilonPx)) {
       result.push(moves[i].merge(moves[i + 1]));
       i += 2;
       continue;
@@ -72,7 +72,7 @@ export function smoothMoves(moves: PixelMove[]): PixelMove[] {
     i++;
   }
   if (result.length < moves.length) {
-    return smoothMoves(result);
+    return smoothMoves(result, epsilonPx);
   } else {
     return result;
   }
@@ -132,7 +132,7 @@ export function optimizeMoves(moves: PixelMove[], progressCallback: (message: st
   if (result.length < moves.length) {
     return optimizeMoves(result, progressCallback);
   } else {
-    return smoothMoves(result);
+    return smoothMoves(result, EPSILON_SMOOTH_PX);
   }
 }
 

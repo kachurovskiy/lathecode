@@ -113,7 +113,7 @@ export class LatheCode {
   }
 
   getTool(): Tool {
-    if (!this.data[5]) return new Tool('RECT', 3, 10, 0.2);
+    if (!this.data[5]) return new Tool('RECT', 3, 10, 0.4);
     const type = this.data[5][2];
     const params = this.data[5][4];
     const radius = params[0] ? params[0][1] * this.unitsMultiplier : 0;

@@ -1,8 +1,8 @@
-import { optimizeMoves } from "../planner/optimize";
+import { optimizeMoves, smoothMoves } from "../planner/optimize";
 import { PixelMove } from "../planner/pixel";
 
 export class ToEditorWorkerMessage {
-  constructor(readonly pxPerMm: number, readonly image: ArrayBuffer) {}
+  constructor(readonly pxPerMm: number, readonly image: ArrayBuffer, readonly smoothEpsilon: number) {}
 }
 
 export class FromEditorWorkerMessage {
@@ -19,8 +19,8 @@ self.onmessage = async (event) => {
   const imageBlob = new Blob([imageArray], { type: "image/*" });
   let img = await createImageBitmap(imageBlob);
   const canvas = extractBottomHalf(rotateClockwise(img));
-  const moves = detectMoves(canvas.getContext('2d')!);
-  console.log('moves', moves);
+  let moves = detectMoves(canvas.getContext('2d')!);
+  moves = smoothMoves(moves, data.smoothEpsilon || 2);
   postMessage({moves: optimizeMoves(moves, (progressMessage) => postMessage({progressMessage}))});
 };
 
@@ -31,7 +31,7 @@ function detectMoves(ctx: OffscreenCanvasRenderingContext2D): PixelMove[] {
   let prevY = 0;
   for (let x = width - 1; x >= 0; x--) {
     let y = height - 1;
-    for (; y >= 0; y--) {
+    for (; y > 0; y--) {
       const pixelIndex = (y * width + x) * 4;
       const red = data[pixelIndex];
       const green = data[pixelIndex + 1];
@@ -41,7 +41,7 @@ function detectMoves(ctx: OffscreenCanvasRenderingContext2D): PixelMove[] {
         break;
       }
     }
-    result.push(new PixelMove(x-1, prevY, -1, y - prevY, y > 0 ? 1 : 0, []));
+    result.push(new PixelMove(x, prevY, -1, y - prevY, 1, []));
     prevY = y;
   }
   return result;

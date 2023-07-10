@@ -237,20 +237,20 @@ describe('plannerworker', () => {
   });
 
   it('isSmoothingAllowed', () => {
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 0))).toBeTruthy();
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 1))).toBeTruthy();
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 2))).toBeTruthy();
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 3))).toBeTruthy();
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 4))).toBeTruthy();
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 5))).toBeTruthy();
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 6))).toBeTruthy();
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 7))).toBeFalsy();
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 8))).toBeFalsy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 0), 0.7)).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 1), 0.7)).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 2), 0.7)).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 3), 0.7)).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 4), 0.7)).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 5), 0.7)).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 6), 0.7)).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 7), 0.7)).toBeFalsy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 8), 0.7)).toBeFalsy();
 
-    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 0), PixelMove.withoutCut(1, 0, 2, 2))).toBeTruthy();
+    expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 0), PixelMove.withoutCut(1, 0, 2, 2), 0.7)).toBeTruthy();
 
-    expect(isSmoothingAllowed(new PixelMove(0, 1000, 0, -1014, 270150, []), new PixelMove(0, -14, 0, 1014, 0, []))).toBeFalsy();
-    expect(isSmoothingAllowed(new PixelMove(0, 900, 0, 100, 36, []), new PixelMove(0, 1000, 0, -1014, 270150, []))).toBeFalsy();
+    expect(isSmoothingAllowed(new PixelMove(0, 1000, 0, -1014, 270150, []), new PixelMove(0, -14, 0, 1014, 0, []), 0.7)).toBeFalsy();
+    expect(isSmoothingAllowed(new PixelMove(0, 900, 0, 100, 36, []), new PixelMove(0, 1000, 0, -1014, 270150, []), 0.7)).toBeFalsy();
   });
 
   it('smoothMoves', () => {
@@ -259,7 +259,7 @@ describe('plannerworker', () => {
       new PixelMove(0, 1000, 0, -1014, 270150, []),
       new PixelMove(0, -14, 0, 1014, 0, []),
       new PixelMove(0, 1000, 600, 0, 0, []),
-    ])).toEqual([
+    ], 0.7)).toEqual([
       new PixelMove(0, 900, 0, 100, 36, []),
       new PixelMove(0, 1000, 0, -1014, 270150, []),
       new PixelMove(0, -14, 0, 1014, 0, []),
