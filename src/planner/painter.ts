@@ -1,5 +1,5 @@
 import * as Colors from "../common/colors";
-import { LatheCode, Segment } from "../common/lathecode";
+import { LatheCode, Point, Segment } from "../common/lathecode";
 
 export class Painter {
   constructor(private latheCode: LatheCode, private pxPerMm: number) {}
@@ -73,11 +73,38 @@ export class Painter {
     ctx.beginPath();
     ctx.moveTo(this.zToX(segments[0].start.z), this.xToY(segments[0].start.x));
     for (let s of segments) {
-      ctx.lineTo(this.zToX(s.end.z), this.xToY(s.end.x));
+      const isLineCircle = (s.type === 'CONV' || s.type === 'CONC') && s.start.x === s.end.x;
+      if (s.type === 'LINE' || isLineCircle) ctx.lineTo(this.zToX(s.end.z), this.xToY(s.end.x));
+      else if (s.type === 'CONV' || s.type === 'CONC') this.ellipse(ctx, s, s.type === 'CONV');
+      else throw new Error('Unable to paint segment of type ' + s.type);
     }
     ctx.closePath();
     ctx.fillStyle = color;
     ctx.fill();
+  }
+
+  private ellipse(ctx: OffscreenCanvasRenderingContext2D, s: Segment, convex: boolean) {
+    const asc = s.end.x > s.start.x;
+    const center = asc === convex ? new Point(s.start.x, s.end.z) : new Point(s.end.x, s.start.z);
+    let startAngle = 0;
+    let endAngle = 0;
+    let counterclockwise = false;
+    if (asc && convex) {
+      startAngle = 0;
+      endAngle = Math.PI / 2;
+    } else if (asc && !convex) {
+      startAngle = Math.PI * 3 / 2;
+      endAngle = Math.PI;
+      counterclockwise = true;
+    } else if (!asc && convex) {
+      startAngle = Math.PI / 2;
+      endAngle = Math.PI;
+    } else if (!asc && !convex) {
+      startAngle = Math.PI * 2;
+      endAngle = Math.PI * 3 / 2;
+      counterclockwise = true;
+    }
+    ctx.ellipse(this.zToX(center.z), this.xToY(center.x), Math.abs(s.end.z - s.start.z) * this.pxPerMm, Math.abs(s.end.x - s.start.x) * this.pxPerMm, 0, startAngle, endAngle, counterclockwise);
   }
 
   private xToY(x: number) {

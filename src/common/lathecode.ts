@@ -42,10 +42,10 @@ export class Stock {
 
   getSegments(): Segment[] {
     return [
-      new Segment('line', new Point(0, 0), new Point(this.diameter / 2, 0)),
-      new Segment('line', new Point(this.diameter / 2, 0), new Point(this.diameter / 2, this.length)),
-      new Segment('line', new Point(this.diameter / 2, this.length), new Point(0, this.length)),
-      new Segment('line', new Point(0, this.length), new Point(0, 0)),
+      new Segment('LINE', new Point(0, 0), new Point(this.diameter / 2, 0)),
+      new Segment('LINE', new Point(this.diameter / 2, 0), new Point(this.diameter / 2, this.length)),
+      new Segment('LINE', new Point(this.diameter / 2, this.length), new Point(0, this.length)),
+      new Segment('LINE', new Point(0, this.length), new Point(0, 0)),
     ];
   }
 }
@@ -178,10 +178,10 @@ export class LatheCode {
     const first = mainSequence.at(0)!;
     const last = mainSequence.at(-1)!;
     let result = removeEmptySegments(removeColinearSegments(removeEmptySegments([
-      new Segment('line', new Point(x, first.start.z), first.start),
+      new Segment('LINE', new Point(x, first.start.z), first.start),
       ...mainSequence,
-      new Segment('line', last.end, new Point(x, last.end.z)),
-      new Segment('line', new Point(x, last.end.z), new Point(x, first.start.z)),
+      new Segment('LINE', last.end, new Point(x, last.end.z)),
+      new Segment('LINE', new Point(x, last.end.z), new Point(x, first.start.z)),
     ])));
     if (result.length) {
       result.unshift(result.pop()!);
@@ -212,9 +212,9 @@ export class LatheCode {
       const start = new Point(startX, z);
       if (segments.length) {
         const prevEnd = segments.at(-1)!.end;
-        if (!prevEnd.isEqual(start)) segments.push(new Segment('line', prevEnd, start));
+        if (!prevEnd.isEqual(start)) segments.push(new Segment('LINE', prevEnd, start));
       }
-      segments.push(new Segment('line', start, new Point(endX, z += line[1] * this.unitsMultiplier)));
+      segments.push(new Segment(line[6] || 'LINE', start, new Point(endX, z += line[1] * this.unitsMultiplier)));
     }
     return segments;
   }

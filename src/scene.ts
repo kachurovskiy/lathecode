@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { LatheCode, Segment } from './common/lathecode';
+import { LatheCode, Point, Segment } from './common/lathecode';
 
 export class Scene extends THREE.Scene {
   private camera: THREE.OrthographicCamera;
@@ -140,9 +140,42 @@ function createMetalMaterial() {
 }
 
 function getApproxPoints(s: Segment): THREE.Vector2[] {
-  if (s.type === 'line') return [new THREE.Vector2(s.start.x, s.start.z), new THREE.Vector2(s.end.x, s.end.z)];
+  const isLineCircle = (s.type === 'CONV' || s.type === 'CONC') && s.start.x === s.end.x;
+  if (s.type === 'LINE' || isLineCircle) return [new THREE.Vector2(s.start.x, s.start.z), new THREE.Vector2(s.end.x, s.end.z)];
+  if (s.type === 'CONV' || s.type === 'CONC') return quarterEllipsePoints(s.start, s.end, s.type === 'CONV', Math.max(10, (s.end.z - s.start.z) * 10));
   throw new Error(`Approximation of segment of type ${s.type} is not implemented`);
 }
+
+function quarterEllipsePoints(point1: Point, point2: Point, convex: boolean, numPoints: number): THREE.Vector2[] {
+  const a = Math.abs(point2.x - point1.x);
+  const b = Math.abs(point2.z - point1.z);
+  const asc = point2.x > point1.x;
+  const center = asc === convex ? new Point(point1.x, point2.z) : new Point(point2.x, point1.z);
+  let sign = 1;
+  let thetaOffset = 0;
+  let reverse = false;
+  if (asc && convex) {
+    sign = 1;
+    thetaOffset = 0;
+  } else if (asc && !convex) {
+    sign = 1;
+    thetaOffset = 2;
+  } else if (!asc && convex) {
+    sign = -1;
+    thetaOffset = 0;
+  } else if (!asc && !convex) {
+    sign = -1;
+    thetaOffset = 2;
+    reverse = true;
+  }
+  const points = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const theta = (Math.PI / 2) * (sign * i / numPoints + thetaOffset);
+    points.push(new THREE.Vector2(center.x + a * Math.cos(theta), center.z - b * Math.sin(theta)));
+  }
+  return reverse ? points.reverse() : points;
+}
+
 
 export function resetRotation(object: THREE.Object3D) {
   object.rotation.set(-Math.PI / 2, 0, 0);
