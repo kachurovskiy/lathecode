@@ -19,6 +19,9 @@ export class Scene extends THREE.Scene {
     this.renderer.setSize(500, 500);
     this.addLight();
     container.appendChild(this.renderer.domElement);
+    this.renderer.domElement.addEventListener('click', () => {
+      this.controls.autoRotate = false;
+    });
     this.camera = new THREE.OrthographicCamera(-7, 7, -7, 7, 0, 1000);
     this.camera.position.z = 5;
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
