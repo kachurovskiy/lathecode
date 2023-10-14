@@ -8,12 +8,14 @@ const PX_PER_MM = 100;
 export class Editor extends EventTarget {
   private errorContainer: HTMLDivElement;
   private latheCodeInput: HTMLTextAreaElement;
+  private planButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
 
   constructor(container: HTMLElement) {
     super();
 
+    this.planButton = container.querySelector<HTMLButtonElement>('.planButton')!;
     this.errorContainer = container.querySelector('.errorContainer')!;
     this.latheCodeInput = container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!;
     this.latheCodeInput.addEventListener('input', () => this.update());
@@ -24,7 +26,7 @@ export class Editor extends EventTarget {
       this.dispatchEvent(new Event('stl'));
     });
 
-    container.querySelector<HTMLButtonElement>('.planButton')!.addEventListener('click', () => {
+    this.planButton.addEventListener('click', () => {
       this.dispatchEvent(new Event('plan'));
     });
 
@@ -49,6 +51,7 @@ export class Editor extends EventTarget {
     try {
       localStorage.setItem('latheCode', this.latheCodeInput.value);
       this.latheCode = new LatheCode(this.latheCodeInput.value + '\n');
+      this.planButton.style.display = this.latheCode.getInsideSegments().length ? 'none' : 'inline';
       this.errorContainer.textContent = '';
     } catch (error: any) {
       this.latheCode = null;
