@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>lathecode editor</title>
-    <link rel="icon" href="data:,">
-  </head>
-  <body>
-    <div class="vcont">
-      <div id="editorContainer">
-        <h2>Editor</h2>
-        <p>Visualizes lathecode and generates GCode - more on <a href="https://github.com/kachurovskiy/lathecode">GitHub</a></p>
-        <div class="inputContainer">
-          <textarea class="latheCodeInput">; Lines starting with ";" are comments
+
+<head>
+  <meta charset="UTF-8" />
+  <title>lathecode editor</title>
+  <link rel="icon" href="data:,">
+</head>
+
+<body>
+  <div class="vcont">
+    <div id="editorContainer">
+      <h2>Editor</h2>
+      <p>Visualizes lathecode and generates GCode - more on <a
+          href="https://github.com/kachurovskiy/lathecode">GitHub</a></p>
+      <div class="inputContainer">
+        <textarea class="latheCodeInput">; Lines starting with ";" are comments
 
 ; UNITS IN ; you can use inches
 STOCK D5
@@ -27,28 +30,49 @@ L1 D2
 L3 D3
 L4 DS3 DE5
 L3</textarea>
-          <div class="errorContainer"></div>
-        </div>
-        <div class="toolbar">
-          <button class="imageButton" title="Generate lathecode from a PNG image file">From image</button>
-          <button class="stlButton" title="Download STL file">To STL</button>
-          <button class="planButton" title="Generate GCode from current lathecode">To GCode</button>
-        </div>
+        <div class="errorContainer"></div>
       </div>
-      <div id="sceneContainer">
-        <h2>3D rendering</h2>
+      <div class="toolbar">
+        <button class="imageButton" title="Generate lathecode from a PNG image file">From image</button>
+        <button class="stlButton" title="Download STL file">To STL</button>
+        <button class="planButton" title="Generate GCode from current lathecode">To GCode</button>
       </div>
-      <div id="plannerContainer"></div>
-      <div id="gcodeContainer">
-        <h2>GCode</h2>
-        <textarea></textarea>
-        <div class="senderError" style="display: none;"></div>
-        <progress max="1" style="display: none;"></progress>
-        <button class="sendButton">Send to NanoEls H4</button>
-        <button class="stopButton" style="display: none;">Stop</button>
-        <a class="whatLink" href="https://github.com/kachurovskiy/nanoels/tree/main/h4" target="_blank">What is NanoEls H4?</a>
+      <hr />
+      <div class="toolbar">
+        <div class="save-group">
+          <input type="text" class="saveNameInput" placeholder="name of save"></input>
+          <button class="saveButton" title="Save to local browser storage">Save local</button>
+        </div>
+        <hr />
+        <div class="load-group">
+          <select class="loadSelect"></select>
+          <button class="loadButton" title="Load from storage">Load</button>
+          <button class="deleteButton" title="Delete from storage">Delete</button>
+        </div>
+        <hr />
+        <div class="import-export-group">
+          <button class="exportButton" title="Export all to JSON">Export</button>
+          <input type="file" id="importFile" style="display: none;" />
+          <label for="importFile" class="importButton button-like">Import</label>
+        </div>
       </div>
     </div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+    <div id="sceneContainer">
+      <h2>3D rendering</h2>
+    </div>
+    <div id="plannerContainer"></div>
+    <div id="gcodeContainer">
+      <h2>GCode</h2>
+      <textarea></textarea>
+      <div class="senderError" style="display: none;"></div>
+      <progress max="1" style="display: none;"></progress>
+      <button class="sendButton">Send to NanoEls H4</button>
+      <button class="stopButton" style="display: none;">Stop</button>
+      <a class="whatLink" href="https://github.com/kachurovskiy/nanoels/tree/main/h4" target="_blank">What is NanoEls
+        H4?</a>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
 </html>
