@@ -36,14 +36,14 @@ L3</textarea>
         <button class="imageButton" title="Generate lathecode from a PNG image file">From image</button>
         <button class="stlButton" title="Download STL file">To STL</button>
         <button class="planButton" title="Generate GCode from current lathecode">To GCode</button>
+        <button class="expandCollapseButton" title="See more options">More...</button>
       </div>
-      <hr />
-      <div class="toolbar">
+      <div id="moreOptions" class="toolbar">
+        <hr />
         <div class="save-group">
           <input type="text" class="saveNameInput" placeholder="name of save"></input>
           <button class="saveButton" title="Save to local browser storage">Save local</button>
         </div>
-        <hr />
         <div class="load-group">
           <select class="loadSelect"></select>
           <button class="loadButton" title="Load from storage">Load</button>

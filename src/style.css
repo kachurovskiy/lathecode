@@ -150,3 +150,11 @@ progress {
   cursor: pointer;
   transition: background-color 0.3s ease;
 }
+
+#moreOptions {
+  display: none;
+}
+
+#moreOptions.expanded {
+  display: block;
+}

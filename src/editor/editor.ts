@@ -9,6 +9,8 @@ export class Editor extends EventTarget {
   private errorContainer: HTMLDivElement;
   private latheCodeInput: HTMLTextAreaElement;
   private planButton: HTMLButtonElement;
+  private expandCollapseButton: HTMLButtonElement;
+  private moreOptionsSection: HTMLElement;
   private saveButton: HTMLButtonElement;
   private loadButton: HTMLButtonElement;
   private loadSelect: HTMLSelectElement;
@@ -56,6 +58,8 @@ export class Editor extends EventTarget {
     this.deleteButton = container.querySelector<HTMLButtonElement>('.deleteButton')!;
     this.exportButton = container.querySelector<HTMLButtonElement>('.exportButton')!;
     this.importInput = container.querySelector<HTMLInputElement>('#importFile')!;
+    this.expandCollapseButton = container.querySelector<HTMLButtonElement>('.expandCollapseButton')!;
+    this.moreOptionsSection = container.querySelector<HTMLElement>('#moreOptions')!;
 
     // Add event listeners for save, load, and delete buttons
     this.saveButton.addEventListener('click', () => this.saveLatheCode());
@@ -63,6 +67,7 @@ export class Editor extends EventTarget {
     this.deleteButton.addEventListener('click', () => this.deleteLatheCode());
     this.exportButton.addEventListener('click', () => this.exportLocalStorage());
     this.importInput.addEventListener('change', (event) => this.handleImportInputChange(event));
+    this.expandCollapseButton.addEventListener('click', () => this.toggleMoreOptions());
     this.updateLoadSelect();
   }
 
@@ -70,6 +75,15 @@ export class Editor extends EventTarget {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (file) {
       this.importLocalStorage(file);
+    }
+  }
+
+  private toggleMoreOptions() {
+    this.moreOptionsSection.classList.toggle('expanded');
+    if (this.moreOptionsSection.classList.contains('expanded')) {
+      this.expandCollapseButton.textContent = 'Less...';
+    } else {
+      this.expandCollapseButton.textContent = 'More...';
     }
   }
 
@@ -206,7 +220,7 @@ export class Editor extends EventTarget {
         data[key] = localStorage.getItem(key) ?? '';
       }
     }
-    const json = JSON.stringify(data);
+    const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const href = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -226,10 +240,9 @@ export class Editor extends EventTarget {
             localStorage.setItem(key, data[key]);
           }
         }
-        this.updateLoadSelect(); // Update dropdown or other UI elements
+        this.updateLoadSelect();
       } catch (e) {
         console.error('Failed to import data: ', e);
-        // Handle errors, possibly with a user notification
       }
     };
     reader.readAsText(file);
