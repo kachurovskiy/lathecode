@@ -52,12 +52,12 @@ export class Stock {
 
 export class Tool {
   constructor(
-    readonly type: string,
+    readonly type: 'RECT'|'ROUND'|'ANG',
     readonly widthMm: number,
     readonly heightMm: number,
     readonly cornerRadiusMm: number,
     readonly angleDeg?: number,
-    readonly angleCenterDeg?: number) {}
+    readonly noseAngleDeg?: number) {}
 }
 
 export class Feed {
@@ -117,10 +117,16 @@ export class LatheCode {
     const type = this.data[5][2];
     const params = this.data[5][4];
     const radius = params[0] ? params[0][1] * this.unitsMultiplier : 0;
+    const length = params[1] ? params[1][1] * this.unitsMultiplier : 0;
+    const height = params[2] ? params[2][1] * this.unitsMultiplier : 0;
+    const angle = params[3] ? params[3][1] * this.unitsMultiplier : 0;
+    const noseAngle = params[4] ? params[4][1] * this.unitsMultiplier : 0;
     if (type === 'RECT') {
-      return new Tool('RECT', params[1] ? params[1][1] * this.unitsMultiplier : 3, params[2] ? params[2][1] * this.unitsMultiplier : 10, radius);
+      return new Tool('RECT', length || 3, height || 10, radius);
     } else if (type === 'ROUND') {
       return new Tool('ROUND', radius * 2, radius * 2, radius);
+    } else if (type === 'ANG') {
+      return new Tool('ANG', length || 10, height || 10, radius, angle, noseAngle);
     }
     throw new Error('Unknown tool ' + type);
   }

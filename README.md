@@ -31,25 +31,10 @@ L2 D15.733 ; spacer
 L24 DS15.733 DE14.5
 ```
 
-Adding INSIDE line makes all the following lines describe inner material removal.
-
-Here's the full expressive power of the format, X stands for a number:
+To use a tool with a nose angle e.g. [DCGT 070202](https://www.google.com/search?tbm=isch&q=DCGT+070202), specify the tool radius, edge length, rotation and nose angle as follows:
 
 ```
-; part name / title
-; other description lines
-UNITS MM|CM|M|FT|IN ; default mm
-STOCK RX[ AX] ; radius and optional #angles for rectangular or hex stock
-TOOL RECT|ROUND RX[ LX][ HX] ; lathe cutting tool radius, width, height
-FEED[ MOVEX][ PASSX][ PARTX] ; feed in units/min
-
-LX
-LX RX|DX ; cylinder with given length and radius/diameter
-LX RSX|DSX REX|DEX ; cones and chamfers
-LX RSX|DSX REX|DEX CONV|CONC ; for concave or convex arcs (quarter-circle)
-
-INSIDE
-LX ...
+TOOL ANG R0.2 L7.75 A30 NA55
 ```
 
 ## PEG.js grammar
@@ -72,11 +57,13 @@ stock = "STOCK" spaces stockParams comment
 stockParams = ("R" / "D") float ("A" float)?
 
 tool = "TOOL" spaces toolType spaces toolParams comment
-toolType = "RECT" / "ROUND"
+toolType = "RECT" / "ROUND" / "ANG"
 toolParams =
 ("R" float)?
 ("L" float)? // length
 ("H" float)? // height
+("A" float)? // angle at which the tool is rotated CCW, default 0
+("NA" float)? // nose angle for ANG tools
 
 depth = "DEPTH" spaces depthParams comment
 depthParams = ("CUT" float)? ("FINISH" float)?
