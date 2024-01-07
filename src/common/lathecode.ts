@@ -10,6 +10,10 @@ export class Point {
   toString() {
     return `${this.x},${this.z}`;
   }
+
+  offsetBy(xDelta: number, zDelta: number = 0): Point {
+    return new Point(this.x + xDelta, this.z + zDelta);
+  }
 }
 
 export class Segment {
@@ -34,6 +38,10 @@ export class Segment {
 
   toString() {
     return `${this.type}:${this.start}-${this.end}`;
+  }
+
+  offsetBy(xDelta: number, zDelta: number): Segment {
+    return new Segment(this.type, this.start.offsetBy(xDelta, zDelta), this.end.offsetBy(xDelta, zDelta));
   }
 }
 
@@ -65,7 +73,7 @@ export class Feed {
 }
 
 export class Depth {
-  constructor(readonly cut: number, readonly finish: number) {}
+  constructor(readonly cutMm: number, readonly finishMm: number) {}
 }
 
 const UNITS: {
@@ -157,6 +165,23 @@ export class LatheCode {
   /** Segments forming the part after inside cuts. */
   getInsideSegments(): Segment[] {
     return this.insideSegments.concat();
+  }
+
+  /** Z coordinates of vertical lines where each part ends and cutoff area starts. */
+  getCutoffStarts(): number[] {
+    const result: number[] = [];
+    let seenPart = false;
+    let z = 0;
+    for (let commentsAndLine of this.data[10]) {
+      let line = commentsAndLine[1];
+      if (line.length === 3 && seenPart) {
+        result.push(z);
+      } else {
+        seenPart = true;
+      }
+      z += line[1] * this.unitsMultiplier;
+    }
+    return result;
   }
 
   private getStockLength() {

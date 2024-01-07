@@ -20,6 +20,11 @@ export class FromWorkerMessage {
 const REMOVED_RGB_NUMBER = Colors.COLOR_REMOVED.rgbNumber();
 const STOCK_RGB_NUMBER = Colors.COLOR_STOCK.rgbNumber();
 const PART_RGB_NUMBER = Colors.COLOR_PART.rgbNumber();
+const FINISH_RGB_NUMBER = Colors.COLOR_FINISH.rgbNumber();
+
+class Pass {
+  constructor(readonly x: number, readonly finishAfter: boolean) {}
+}
 
 export class PlannerWorker {
   private painter: Painter;
@@ -31,7 +36,7 @@ export class PlannerWorker {
   private toolOvershootY: number;
   private toolX;
   private toolY;
-  private passIndex = 0;
+  private previousFinishPass: Pass|null = null;
   private moves: PixelMove[] = [];
   private partBitmap: number[][] = [];
   private upAllowed = true;
@@ -49,16 +54,42 @@ export class PlannerWorker {
     this.toolY = this.canvas.height;
     this.partBitmap = this.createPartBitmap();
 
+    // Plan passes in advance so that we can finish the part fully before cutting off.
+    const cutXCoords = this.latheCode.getCutoffStarts().map(z => this.canvas.width - z * this.pxPerMm - this.toolOvershootX);
+    const passes = cutXCoords.map(x => new Pass(x, true));
+    let hasCutPasses = passes.length > 0;
+    let x = this.canvas.width;
+    while (true) {
+      x -= this.getDepthOfCutPx();
+      if (!cutXCoords.includes(x)) passes.push(new Pass(x, x === 0 && !hasCutPasses));
+      if (x === 0) break;
+    }
+    passes.sort((a, b) => b.x - a.x); // descending
+
     // Generate moves.
-    let time = Date.now();
     postMessage({progressMessage: `Starting first pass...`});
     this.postProgress();
-    while (this.step()) {
-      if (Date.now() > time + 1000) {
-        this.postProgress();
-        time = Date.now();
+    for (let passIndex = 0; passIndex < passes.length; passIndex++) {
+      const xForPass = passes[passIndex].x;
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, xForPass - this.toolX, 0)); // position for this pass
+      const maxX = passIndex === 0 ? this.canvas.width : passes[passIndex - 1].x;
+      this.postProgressWhile(() => this.creep(this.toolX < maxX, false));
+      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+      this.upAllowed = true;
+      if (passes[passIndex].finishAfter) {
+        postMessage({progressMessage: `Finishing previously cut area`});
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, (this.previousFinishPass?.x ?? this.canvas.width) - this.toolX, 0)); // position for the finish pass
+        this.isFinishPass = true;
+        this.postProgressWhile(() => this.creep(false, this.toolX > xForPass));
+        this.isFinishPass = false;
+        this.upAllowed = true;
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+        this.previousFinishPass = passes[passIndex];
       }
+      postMessage({progressMessage: `Completed pass ${passIndex}`});
     }
+    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
     this.postProgress();
     postMessage({progressMessage: `Optimizing ${this.moves.length} moves...`});
     const moves = optimizeMoves(this.moves, (progressMessage) => postMessage({progressMessage}));
@@ -83,6 +114,17 @@ export class PlannerWorker {
         y: this.toolY,
       } : undefined,
     });
+  }
+
+  private postProgressWhile(f: () => boolean) {
+    let time = Date.now();
+    this.postProgress();
+    while (f()) {
+      if (Date.now() > time + 1000) {
+        this.postProgress();
+        time = Date.now();
+      }
+    }
   }
 
   private createPartBitmap(): number[][] {
@@ -123,34 +165,6 @@ export class PlannerWorker {
     this.canvasCtx.putImageData(imageData, 0, 0);
   }
 
-  private step(): boolean {
-    if (this.passIndex === 0) {
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(1) - this.toolX, 0));
-      this.passIndex = 1;
-      this.upAllowed = true;
-      return true;
-    }
-    if (this.creep(this.toolX < this.getXForPass(this.passIndex - 1), false)) return true;
-    if (this.getXForPass(this.passIndex) > 0) {
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getDepthOfCutPx(), 0)); // return right
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
-      postMessage({progressMessage: `Finished pass ${this.passIndex}`});
-      this.passIndex++;
-      this.upAllowed = true;
-      if (this.getXForPass(this.passIndex) === 0) {
-        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // position for the finish pass
-        this.finishPass();
-        this.upAllowed = true;
-        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
-      }
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.getXForPass(this.passIndex) - this.toolX, 0)); // position for the next face
-      return true;
-    }
-    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
-    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
-    return false;
-  }
-
   private creep(rightAllowed: boolean, leftAllowed: boolean): boolean {
     if (this.upAllowed && this.tryMove(0, -1)) {
       return true;
@@ -182,18 +196,8 @@ export class PlannerWorker {
     return false;
   }
 
-  private finishPass() {
-    this.isFinishPass = true;
-    while (this.creep(false, this.toolX > this.toolOvershootX)) {}
-    this.isFinishPass = false;
-  }
-
   private getDepthOfCutPx() {
-    return this.latheCode.getDepth().cut * this.pxPerMm;
-  }
-
-  private getXForPass(i: number) {
-    return Math.max(0, this.canvas.width - this.getDepthOfCutPx() * i);
+    return this.latheCode.getDepth().cutMm * this.pxPerMm;
   }
 
   private tryMove(xDelta: number, yDelta: number): boolean {
@@ -223,14 +227,17 @@ export class PlannerWorker {
     let pixels: Pixel[] = [];
     for (let p of this.toolCuttingEdges) {
       const rgb = this.getBitmap(topLeftX + p.x, topLeftY + p.y);
-      if (rgb === STOCK_RGB_NUMBER) {
+      if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER && this.isFinishPass) {
         pixels.push(new Pixel(topLeftX + p.x, topLeftY + p.y));
       } else if (rgb === PART_RGB_NUMBER) {
         // Not allowed to place cutter onto the part.
         return null;
+      } else if (rgb === FINISH_RGB_NUMBER) {
+        // Only allow to touch finished surface during the finish pass.
+        return null;
       }
     }
-    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, Math.max(this.isFinishPass && this.toolX < this.canvas.width ? 1 : 0, pixels.length), pixels);
+    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixels.length, pixels);
   }
 }
 
@@ -240,7 +247,7 @@ self.onmessage = (event) => {
   if (latheCode) {
     Object.setPrototypeOf(latheCode, LatheCode.prototype);
     try {
-      new PlannerWorker(latheCode, data.pxPerMm || 100);
+      new PlannerWorker(new LatheCode(latheCode.getText()), data.pxPerMm || 100);
     } catch (e) {
       postMessage({error: e instanceof Error ? e.message : String(e)});
     }

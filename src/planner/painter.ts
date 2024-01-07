@@ -106,8 +106,11 @@ export class Painter {
     if (!insideSegments.length && !outsideSegments.length) throw new Error('Error: no segments');
     const canvas = new OffscreenCanvas(stock.length * this.pxPerMm, stock.diameter / 2 * this.pxPerMm);
     const ctx = canvas.getContext('2d')!;
+    const segments = insideSegments.length ? insideSegments : outsideSegments;
+    const finishDepth = this.latheCode.getDepth().finishMm * (insideSegments.length ? -1 : 1);
     this.fillSegments(ctx, stock.getSegments(), Colors.COLOR_STOCK.hex());
-    this.fillSegments(ctx, insideSegments.length ? insideSegments : outsideSegments, Colors.COLOR_PART.hex());
+    if (finishDepth !== 0) this.fillSegments(ctx, segments.map(s => s.offsetBy(finishDepth, 0)), Colors.COLOR_FINISH.hex());
+    this.fillSegments(ctx, segments, Colors.COLOR_PART.hex());
     return canvas;
   }
 
