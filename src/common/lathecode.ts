@@ -104,6 +104,7 @@ export class LatheCode {
     this.inside = this.data[11] ? this.getSegmentsForSide(this.data[11][2], this.getStockDiameter() / 2) : [];
     this.outsideSegments = this.closeLoop(this.outside, 0);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
+    this.getTool(); // validate the tool
   }
 
   getText(): string {
@@ -130,10 +131,16 @@ export class LatheCode {
     const angle = params[3] ? params[3][1] * this.unitsMultiplier : 0;
     const noseAngle = params[4] ? params[4][1] * this.unitsMultiplier : 0;
     if (type === 'RECT') {
+      if (angle) throw new Error('A not implemented for TOOL RECT');
+      if (noseAngle) throw new Error('NA not supported for TOOL RECT');
       return new Tool('RECT', length || 3, height || 10, radius);
     } else if (type === 'ROUND') {
+      if (length) throw new Error('TOOL ROUND L is already defined by R');
+      if (height) throw new Error('TOOL ROUND H is already defined by R');
       return new Tool('ROUND', radius * 2, radius * 2, radius);
     } else if (type === 'ANG') {
+      if (noseAngle <= 0) throw new Error('Specify positive tool nose angle NA');
+      if (height) throw new Error('TOOL ANG H is ignored, use L');
       return new Tool('ANG', length || 10, height || 10, radius, angle, noseAngle);
     }
     throw new Error('Unknown tool ' + type);
