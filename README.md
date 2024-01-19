@@ -4,7 +4,7 @@ Text format for lathe parts and other objects with circular symmetry. Defines st
 
 **[Try it in the online editor.](https://kachurovskiy.com/lathecode)**
 
-The shape of the object is defined in segments. Each segment can be straight, angled, or circular, and its position is relative to the segment before it. For example, in lathe code, a simple cylinder is defined in one segment. A cylinder with a length of 7mm and a diameter of 6mm is described as:
+The shape of the object is defined in segments. Each segment can be straight, angled, or circular, and its position is relative to the segment before it. For example, in lathecode, a simple cylinder is defined in one segment. A cylinder with a length of 7mm and a diameter of 6mm is described as:
 
 ```
 L7 D6
