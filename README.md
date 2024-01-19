@@ -2,7 +2,7 @@
 
 Text format for lathe parts and other objects with circular symmetry. Defines stock dimensions and substractions that should be made from it right-to-left just like a part is processed in a typical lathe. Allows to specify tools, pass depths and speeds.
 
-Supports conversion to STL. When stock size and tool is specified, supports conversion to GCode. **[Try it in the online editor.](https://kachurovskiy.com/pages/lathecode)**
+Supports conversion to STL. When stock size and tool is specified, supports conversion to GCode. **[Try it in the online editor.](https://kachurovskiy.com/lathecode)**
 
 ## Examples
 
@@ -21,21 +21,63 @@ L7 R3
 L3
 ```
 
-Tool is assumed to be zeroed on the centerline, right corner of the stock. Default pass depth is 0.5mm, cutting speed 50mm/min, parting speed 10mm/min, move speed 200mm/min. This can be adjusted with a FEED line.
+![image](https://github.com/kachurovskiy/lathecode/assets/517919/ad6959ce-9c16-4fbc-85ff-67c30d055ebc)
 
-To make a cone, specify start and end diameter or radius. MT2 to B16 arbor can be specified like:
+Default pass depth is 0.5mm, cutting speed 50mm/min, parting speed 10mm/min, move speed 200mm/min. This can be adjusted with a FEED line.
+
+### Cones
+
+Instead of specifying diameter as `D`, specify diameter-start as `DS` and diameter-end as `DE` - or use radiuses as `RS` and `RE`.
 
 ```
+; specify start and end diameter or radius
+; MT2 to B16 arbor can be specified like
+DEPTH CUT1
 L80 DS14.9 DE17.78
-L2 D15.733 ; spacer
+L2 DS17.78 DE15.733; spacer
 L24 DS15.733 DE14.5
 ```
+
+![image](https://github.com/kachurovskiy/lathecode/assets/517919/b9e57828-3540-491a-b26c-f3c4e6b78e6f)
+
+
+### Spheres and ellipses
+
+```
+; sphere with a diameter of 10mm
+L5 DS0 DE10 CONV
+L5 DS10 DE0 CONV
+```
+
+![image](https://github.com/kachurovskiy/lathecode/assets/517919/3b43998a-8419-4e48-947c-fe7a2c475fa0)
+
+```
+; whirlgig
+L1 DS0 DE2 CONV
+L14 DS2 DE20 CONC
+L0.5 DS20 DE21 CONV
+L0.5 DS21 DE20 CONV
+L8 DS20 DE2 CONC
+L3.1 D2
+```
+
+![image](https://github.com/kachurovskiy/lathecode/assets/517919/11b07d65-7ecc-411c-843d-ebd269759ca6)
+
+### Tools
+
+Tool is assumed to be zeroed on the centerline, touching the stock from the right.
+
+To use a standard cut-off tool e.g. MGMN200, specify `TOOL RECT R0.2 L2` where R stands for the corner radius and L defines the width of the tool.
+
+If you use a round insert like RPMT10, define that with `TOOL ROUND R5` where R stands for corner radius.
 
 To use a tool with a nose angle e.g. [DCGT 070202](https://www.google.com/search?tbm=isch&q=DCGT+070202), specify the tool radius, edge length, rotation and nose angle as follows:
 
 ```
 TOOL ANG R0.2 L7.75 A30 NA55
 ```
+
+[**See this tool table**](https://docs.google.com/spreadsheets/d/1Tj3v0c-DxfOColeAaKtqCuPuzpS3YvOxvTCyOrsoGRw/edit#gid=0) for common inserts and ready-to-use lathecode TOOL lines.
 
 ## PEG.js grammar
 
