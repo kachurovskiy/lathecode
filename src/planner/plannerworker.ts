@@ -61,8 +61,8 @@ export class PlannerWorker {
     let x = this.canvas.width;
     while (true) {
       x -= this.getDepthOfCutPx();
-      if (!cutXCoords.includes(x)) passes.push(new Pass(x, x === 0 && !hasCutPasses));
-      if (x === 0) break;
+      if (!cutXCoords.includes(x)) passes.push(new Pass(Math.max(0, x), x <= 0 && !hasCutPasses));
+      if (x <= 0) break;
     }
     passes.sort((a, b) => b.x - a.x); // descending
 
