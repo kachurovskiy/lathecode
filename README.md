@@ -21,17 +21,25 @@ L7 R3
 L3
 ```
 
+![image](https://github.com/kachurovskiy/lathecode/assets/517919/ad6959ce-9c16-4fbc-85ff-67c30d055ebc)
+
 Default pass depth is 0.5mm, cutting speed 50mm/min, parting speed 10mm/min, move speed 200mm/min. This can be adjusted with a FEED line.
 
 ### Cones
 
+Instead of specifying diameter as `D`, specify diameter-start as `DS` and diameter-end as `DE` - or use radiuses as `RS` and `RE`.
+
 ```
 ; specify start and end diameter or radius
 ; MT2 to B16 arbor can be specified like
+DEPTH CUT1
 L80 DS14.9 DE17.78
-L2 D15.733 ; spacer
+L2 DS17.78 DE15.733; spacer
 L24 DS15.733 DE14.5
 ```
+
+![image](https://github.com/kachurovskiy/lathecode/assets/517919/b9e57828-3540-491a-b26c-f3c4e6b78e6f)
+
 
 ### Spheres and ellipses
 
@@ -41,7 +49,7 @@ L5 DS0 DE10 CONV
 L5 DS10 DE0 CONV
 ```
 
-![image](https://github.com/kachurovskiy/lathecode/assets/517919/a0ace85f-81df-4ee5-be49-9a9481701589)
+![image](https://github.com/kachurovskiy/lathecode/assets/517919/3b43998a-8419-4e48-947c-fe7a2c475fa0)
 
 ```
 ; whirlgig
