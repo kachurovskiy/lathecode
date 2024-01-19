@@ -53,15 +53,15 @@ L5 DS10 DE0 CONV
 
 ```
 ; whirlgig
-L0.5 DS0 DE1 CONV
-L7 DS1 DE10 CONC
-L0.3 D10
-L4 DS10 DE0.5 CONC
-L0.25 DS0.5 DE0
+L1 DS0 DE2 CONV
+L14 DS2 DE20 CONC
+L0.5 DS20 DE21 CONV
+L0.5 DS21 DE20 CONV
+L8 DS20 DE2 CONC
+L3.1 D2
 ```
 
-![image](https://github.com/kachurovskiy/lathecode/assets/517919/dc3608e5-b3d2-4b6e-9a75-961dea5f71e4)
-
+![image](https://github.com/kachurovskiy/lathecode/assets/517919/11b07d65-7ecc-411c-843d-ebd269759ca6)
 
 ### Tools
 
