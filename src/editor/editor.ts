@@ -15,7 +15,6 @@ export class Editor extends EventTarget {
   private loadButton: HTMLButtonElement;
   private loadSelect: HTMLSelectElement;
   private deleteButton: HTMLButtonElement;
-  private saveNameInput: HTMLInputElement;
   private exportButton: HTMLButtonElement;
   private importInput: HTMLInputElement;
   private latheCode: LatheCode | null = null;
@@ -53,7 +52,6 @@ export class Editor extends EventTarget {
 
     this.saveButton = container.querySelector<HTMLButtonElement>('.saveButton')!;
     this.loadButton = container.querySelector<HTMLButtonElement>('.loadButton')!;
-    this.saveNameInput = container.querySelector<HTMLInputElement>('.saveNameInput')!;
     this.loadSelect = container.querySelector<HTMLSelectElement>('.loadSelect')!;
     this.deleteButton = container.querySelector<HTMLButtonElement>('.deleteButton')!;
     this.exportButton = container.querySelector<HTMLButtonElement>('.exportButton')!;
@@ -87,6 +85,12 @@ export class Editor extends EventTarget {
     }
   }
 
+  private isRelevantLocalStorageKey(key: string): boolean {
+    const value = localStorage.getItem(key);
+    if (!value) return false;
+    return value.indexOf('\n') >= 0;
+  }
+
   // Update the loadSelect dropdown
   updateLoadSelect() {
     this.loadSelect.innerHTML = '';
@@ -95,7 +99,7 @@ export class Editor extends EventTarget {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       // Exclude 'latheCode' from the dropdown options
-      if (key && key !== 'latheCode') {
+      if (key && key !== 'latheCode' && this.isRelevantLocalStorageKey(key)) {
         hasSavedItems = true;
         const option = document.createElement('option');
         option.value = key;
@@ -124,15 +128,18 @@ export class Editor extends EventTarget {
 
   // Save current LatheCode
   saveLatheCode() {
-    const saveName = this.saveNameInput.value.trim();
+    let saveValue = this.latheCodeInput.value;
+    // At least 2 lines required to be recognized in local storage.
+    if (saveValue.indexOf('\n') === -1) saveValue += '\n';
+
+    const saveName = prompt('Enter the name for this lathecode file', new Date().toLocaleString());
     if (!saveName) return; // Handle empty name case
-    localStorage.setItem(saveName, this.latheCodeInput.value);
+
+    localStorage.setItem(saveName, saveValue);
     this.updateLoadSelect();
 
     // Set the newly saved item as the selected option in the dropdown
     this.loadSelect.value = saveName;
-
-    this.saveNameInput.value = '';
   }
 
   // Load LatheCode by name
