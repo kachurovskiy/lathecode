@@ -4,11 +4,27 @@ Text format for lathe parts and other objects with circular symmetry. Defines st
 
 **[Try it in the online editor.](https://kachurovskiy.com/lathecode)**
 
-lathecode describing 7mm long ø6mm pin can be read as "Length 7mm, Diameter 6mm":
+The shape of the object is defined in segments. Each segment can be straight, angled, or circular, and its position is relative to the segment before it. For example, in lathecode, a simple cylinder is defined in one segment. A cylinder with a length of 7mm and a diameter of 6mm is described as:
 
 ```
 L7 D6
 ```
+<img width="1222" alt="L7 D6" src="https://github.com/kachurovskiy/lathecode/assets/122809499/f3feb30f-e1c1-4a81-a50c-1ae85a3fd259">
+
+
+
+
+A cylinder with a shoulder would be described in two segments, essentially defining two cylinders one after the other. For example:
+
+```
+L2 D4
+L7 D6
+```
+This description represents an object with an outer diameter of 6mm, a total length of 2 + 7 = 9mm, and a shoulder on the right side 2mm wide and 1mm deep.
+
+<img width="1551" alt="L2 D4 L7 D6" src="https://github.com/kachurovskiy/lathecode/assets/122809499/79b6ff26-613e-4489-8d78-1d7e0e6f6661">
+
+
 
 Smallest possible lathecode to cut same pin from ø10mm stock with a 3mm wide parting blade:
 
