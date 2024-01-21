@@ -237,7 +237,9 @@ export class PlannerWorker {
         return null;
       }
     }
-    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixels.length, pixels);
+    // Don't optimize away moves during the finish pass for better results.
+    const pixelCount = Math.max(this.isFinishPass && this.toolX < this.canvas.width ? 1 : 0, pixels.length);
+    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixelCount, pixels);
   }
 }
 
