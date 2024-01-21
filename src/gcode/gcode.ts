@@ -30,7 +30,14 @@ export class GCode {
     this.saveGcodeButton.addEventListener('click', () => {
       this.saveName = (prompt('Please enter a short name for this part', this.saveName) || '').trim();
       if (!this.saveName) return;
-      if (this.saveName.length < 2) alert('Name should contain at least 2 characters');
+      if (this.saveName.length < 2) {
+        alert('Name should contain at least 2 characters');
+        return;
+      }
+      if (!/^[0-9a-zA-Z +\-_]+$/.test(this.saveName)) {
+        alert('Name can only consist of English alpha-numericals, space and +-_');
+        return;
+      }
       this.send(`"${this.saveName}\n${this.runTextarea!.value}"`, 'save');
     });
 
