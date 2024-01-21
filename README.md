@@ -11,9 +11,6 @@ L7 D6
 ```
 <img width="1222" alt="L7 D6" src="https://github.com/kachurovskiy/lathecode/assets/122809499/f3feb30f-e1c1-4a81-a50c-1ae85a3fd259">
 
-
-
-
 A cylinder with a shoulder would be described in two segments, essentially defining two cylinders one after the other. For example:
 
 ```
@@ -24,18 +21,9 @@ This description represents an object with an outer diameter of 6mm, a total len
 
 <img width="1551" alt="L2 D4 L7 D6" src="https://github.com/kachurovskiy/lathecode/assets/122809499/79b6ff26-613e-4489-8d78-1d7e0e6f6661">
 
+## Stock
 
-
-Smallest possible lathecode to cut same pin from ø10mm stock with a 3mm wide parting blade:
-
-```
-STOCK R5
-TOOL RECT R0.2 L3
-L7 R3
-L3
-```
-
-![image](https://github.com/kachurovskiy/lathecode/assets/517919/ad6959ce-9c16-4fbc-85ff-67c30d055ebc)
+Stock size should be specified in the first line via radius or diameter e.g. `STOCK D10` and `STOCK R5` both declare the stock do have a diameter of 10mm. When stock is not specified, part maximum diameter is taken as stock diameter.
 
 ## Cones
 
@@ -51,7 +39,6 @@ L24 DS15.733 DE14.5
 ```
 
 ![image](https://github.com/kachurovskiy/lathecode/assets/517919/b9e57828-3540-491a-b26c-f3c4e6b78e6f)
-
 
 ## Spheres
 
