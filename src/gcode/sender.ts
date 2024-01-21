@@ -9,6 +9,8 @@ export class SenderStatus {
     readonly rpm: number) {}
 }
 
+export type SenderMode = 'save'|'run';
+
 export class Sender {
   private port: SerialPort | null = null;
   private readTimeout = 0;
@@ -20,6 +22,8 @@ export class Sender {
   private lineIndex = 0;
   private unparsedResponse = '';
   private error = '';
+  private mode: SenderMode = 'run';
+  private h4Version = 0;
   private statusReceived = false;
   private z = 0;
   private x = 0;
@@ -59,6 +63,9 @@ export class Sender {
         this.rpm = Number(coords[1]);
       }
     }
+    if (parts[3] && parts[3].startsWith('Id:H4V')) {
+      this.h4Version = Number(parts[3].substring('Id:H4V'.length)) || 0;
+    }
     this.statusChangeCallback();
   }
 
@@ -67,7 +74,7 @@ export class Sender {
     this.statusChangeCallback();
   }
 
-  async start(text: string) {
+  async start(text: string, mode: SenderMode) {
     if (!text) return;
     if (this.isOn) {
       this.stop();
@@ -81,7 +88,12 @@ export class Sender {
       this.setError('Device is not reponding, is it in GCODE mode?');
       return;
     }
-    if (!this.rpm) {
+    if (mode == 'save' && this.h4Version < 11) {
+      this.setError('Update H4 to at least version 11 to be able to save programs');
+      return;
+    }
+    this.mode = mode;
+    if (mode == 'run' && !this.rpm) {
       this.setError('Spindle is not running, turn it on first');
       return;
     }
@@ -91,13 +103,13 @@ export class Sender {
     this.setError('');
     this.waitForOkOrError = false;
     this.unparsedResponse = '';
-    this.write('~');
+    if (mode == 'run') this.write('~');
     this.writeCurrentLine();
     this.statusChangeCallback();
   }
 
   async stop() {
-    await this.write('!');
+    if (this.mode == 'run') await this.write('!');
     if (!this.isOn) return;
     this.isOn = false;
     this.askForStatus();
@@ -203,7 +215,7 @@ export class Sender {
 
   private readSoon() {
     clearTimeout(this.readTimeout);
-    this.readTimeout = window.setTimeout(() => this.readFromPort(), 200);
+    this.readTimeout = window.setTimeout(() => this.readFromPort(), 1);
   }
 
   private async readFromPort() {
@@ -268,7 +280,7 @@ function waitForTrue(checkFunction: () => boolean): Promise<boolean> {
         resolve(false);
       } else {
         iteration++;
-        setTimeout(check, 100);
+        setTimeout(check, 1);
       }
     }
 

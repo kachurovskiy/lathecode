@@ -1,16 +1,18 @@
 import { LatheCode } from '../common/lathecode';
-import { Sender } from './sender';
+import { Sender, SenderMode } from './sender';
 import { Move } from '../common/move';
 import { createGCode } from './gcodeutils';
 
 export class GCode {
   private runTextarea: HTMLTextAreaElement;
   private sendButton: HTMLButtonElement;
+  private saveGcodeButton: HTMLButtonElement;
   private stopButton: HTMLButtonElement;
   private whatLink: HTMLAnchorElement;
   private senderError: HTMLDivElement;
   private runProgress: HTMLProgressElement;
   private sender: Sender | null = null;
+  private saveName = 'Part 1';
 
   constructor(private container: HTMLElement) {
     container.style.display = 'none';
@@ -21,8 +23,15 @@ export class GCode {
 
     this.sendButton = container.querySelector<HTMLButtonElement>('.sendButton')!;
     this.sendButton.addEventListener('click', () => {
-      if (!this.sender) this.sender = new Sender(() => this.senderStatusChange());
-      this.sender.start(this.runTextarea!.value);
+      this.send(this.runTextarea!.value, 'run');
+    });
+
+    this.saveGcodeButton = container.querySelector<HTMLButtonElement>('.saveGcodeButton')!;
+    this.saveGcodeButton.addEventListener('click', () => {
+      this.saveName = (prompt('Please enter a short name for this part', this.saveName) || '').trim();
+      if (!this.saveName) return;
+      if (this.saveName.length < 2) alert('Name should contain at least 2 characters');
+      this.send(`"${this.saveName}\n${this.runTextarea!.value}"`, 'save');
     });
 
     this.stopButton = container.querySelector<HTMLButtonElement>('.stopButton')!;
@@ -30,6 +39,11 @@ export class GCode {
     this.stopButton.style.display = 'none';
 
     this.whatLink = container.querySelector<HTMLAnchorElement>('.whatLink')!;
+  }
+
+  private send(text: string, mode: SenderMode) {
+    if (!this.sender) this.sender = new Sender(() => this.senderStatusChange());
+    this.sender.start(text, mode);
   }
 
   hide() {
@@ -55,6 +69,7 @@ export class GCode {
     }
     if (this.stopButton) this.stopButton.style.display = isRun ? 'inline-block' : 'none';
     if (this.sendButton) this.sendButton.style.display = isRun ? 'none' : 'inline-block';
+    if (this.saveGcodeButton) this.saveGcodeButton.style.display = isRun ? 'none' : 'inline-block';
     if (this.senderError) {
       this.senderError.style.display = status.error ? 'block' : 'none';
       this.senderError.innerText = status.error || '';
