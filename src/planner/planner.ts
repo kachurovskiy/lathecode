@@ -58,6 +58,7 @@ export class Planner extends EventTarget {
     }
     if (data.moves) {
       this.generationProgressMessage?.remove();
+      this.generationProgressMessage = null;
       this.moves = data.moves.map(m => {
         Object.setPrototypeOf(m, PixelMove.prototype);
         return m.toMove(PX_PER_MM);
