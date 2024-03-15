@@ -104,6 +104,18 @@ describe('lathecode', () => {
   it('inside face + cylinder + cutoff', () => {
     expectPoints('STOCK R4\nINSIDE\nL1\nL2 R3\nL3', '', 'LINE:4,3-4,1 LINE:4,1-3,1 LINE:3,1-3,3 LINE:3,3-4,3');
   });
+
+  it('getCutoffStarts empty', () => {
+    expect(new LatheCode('L2 R3\n').getCutoffStarts()).toEqual([]);
+  });
+
+  it('getCutoffStarts 1', () => {
+    expect(new LatheCode('L1\nL2 R3\nL3').getCutoffStarts()).toEqual([3]);
+  });
+
+  it('getCutoffStarts with 0', () => {
+    expect(new LatheCode('L1\nL2 R3\nL3 D0').getCutoffStarts()).toEqual([3]);
+  });
 })
 
 function expectPoints(text: string, o: string, i: string) {
