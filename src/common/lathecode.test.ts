@@ -113,6 +113,10 @@ describe('lathecode', () => {
     expect(new LatheCode('L1\nL2 R3\nL3').getCutoffStarts()).toEqual([3]);
   });
 
+  it('getCutoffStarts 2', () => {
+    expect(new LatheCode('L1\nL2 R3\nL3 R4\nL2').getCutoffStarts()).toEqual([6]);
+  });
+
   it('getCutoffStarts with 0', () => {
     expect(new LatheCode('L1\nL2 R3\nL3 D0').getCutoffStarts()).toEqual([3]);
   });

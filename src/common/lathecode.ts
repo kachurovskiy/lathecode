@@ -183,7 +183,7 @@ export class LatheCode {
     let z = 0;
     for (let commentsAndLine of this.data[10]) {
       let line = commentsAndLine[1];
-      if (line.length === 3 && seenPart || line[2] === 'D' && !line[4]) {
+      if (line.length === 3 && seenPart || line[2] === 'D' && !line[3]) {
         result.push(z);
       } else {
         seenPart = true;
