@@ -183,7 +183,7 @@ export class LatheCode {
     let z = 0;
     for (let commentsAndLine of this.data[10]) {
       let line = commentsAndLine[1];
-      if (line.length === 3 && seenPart || line[2] === 'D' && !line[3]) {
+      if (isPartingLine(line) && seenPart) {
         result.push(z);
       } else {
         seenPart = true;
@@ -243,7 +243,7 @@ export class LatheCode {
       } else if (line[2] === 'DS' || line[2] === 'RS') {
         startX = line[3] / (line[2] === 'DS' ? 2 : 1) * this.unitsMultiplier;
         endX = line[5] / (line[4] === 'DE' ? 2 : 1) * this.unitsMultiplier;
-      } else if (line.length === 3) {
+      } else if (isPartingLine(line)) {
         startX = zeroX;
         endX = zeroX;
       } else {
@@ -279,4 +279,8 @@ export function removeEmptySegments(segments: Segment[]): Segment[] {
     if (!s.isEmpty()) result.push(s);
   }
   return result;
+}
+
+function isPartingLine(line: any) {
+  return line.length === 3 || line[2] === 'D' && !line[3];
 }
