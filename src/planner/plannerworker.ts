@@ -41,7 +41,6 @@ export class PlannerWorker {
   private partBitmap: number[][] = [];
   private upAllowed = true;
   private isFinishPass = false;
-  private isAllInOnePass = false;
 
   constructor(private latheCode: LatheCode, private pxPerMm: number) {
     this.painter = new Painter(latheCode, pxPerMm);
@@ -71,16 +70,13 @@ export class PlannerWorker {
     postMessage({progressMessage: `Starting first pass...`});
     this.postProgress();
     for (let passIndex = 0; passIndex < passes.length; passIndex++) {
-      const finishAfter = passes[passIndex].finishAfter;
       const xForPass = passes[passIndex].x;
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, xForPass - this.toolX, 0)); // position for this pass
       const maxX = passIndex === 0 ? this.canvas.width : passes[passIndex - 1].x;
-      this.isAllInOnePass = !finishAfter;
       this.postProgressWhile(() => this.creep(this.toolX < maxX, false));
-      this.isAllInOnePass = false;
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
       this.upAllowed = true;
-      if (finishAfter) {
+      if (passes[passIndex].finishAfter) {
         postMessage({progressMessage: `Finishing previously cut area`});
         this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, (this.previousFinishPass?.x ?? this.canvas.width) - this.toolX, 0)); // position for the finish pass
         this.isFinishPass = true;
@@ -231,8 +227,7 @@ export class PlannerWorker {
     let pixels: Pixel[] = [];
     for (let p of this.toolCuttingEdges) {
       const rgb = this.getBitmap(topLeftX + p.x, topLeftY + p.y);
-      const allowCuttingFinishColor = this.isAllInOnePass || this.isFinishPass;
-      if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER && allowCuttingFinishColor) {
+      if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER && this.isFinishPass) {
         pixels.push(new Pixel(topLeftX + p.x, topLeftY + p.y));
       } else if (rgb === PART_RGB_NUMBER) {
         // Not allowed to place cutter onto the part.
