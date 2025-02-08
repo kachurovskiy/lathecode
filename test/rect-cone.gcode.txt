@@ -1,0 +1,126 @@
+; Lines starting with ";" are comments
+;
+; UNITS IN ; you can use inches
+; STOCK D5
+; STOCK R2.5 ; diameter or radius can be used
+;
+; TOOL RECT R0.2 L3
+; TOOL ROUND R8 ; round tool is also supported
+; TOOL ANG R0.2 L7.75 A30 NA55 ; L - edge length, NA - nose angle, A - tool rotation
+;
+; DEPTH CUT1 ; default depth of cut is 0.5mm
+; FEED MOVE200 PASS50 PART10 ; speeds mm/min
+;
+; L1 D2
+; L3 D3
+; L4 DS3 DE5
+; L3
+
+; Run time 0.8 min, cutting 75% of time
+; Working area 11.00 by 2.64 mm
+
+G21 ; metric
+G18 ; ZX plane
+G90 ; absolute positioning
+F200
+X-2.5 ; zero your tool X on centerline
+Z0 ; zero your tool Z at the right edge of the stock
+G91 ; relative positioning
+Z1
+
+F50
+X1.4 ; cut 1.3929 mm2
+
+F200
+X-1.4
+Z1
+
+F50
+X0.9 ; cut 0.8929 mm2
+
+F200
+X-0.9
+Z1
+
+F50
+X0.9 ; cut 0.9 mm2
+
+F200
+X-0.9
+Z1
+
+F50
+X0.9 ; cut 0.9 mm2
+
+F200
+X-0.9
+Z1
+
+F50
+X0.69 ; cut 0.6826 mm2
+Z-0.82 X0.21 ; cut 0.0911 mm2 at -75.64°
+
+F200
+X-0.9
+Z1.82
+
+F50
+X0.44 ; cut 0.4326 mm2
+Z-0.9 X0.23 ; cut 0.0874 mm2 at -75.66°
+
+F200
+X-0.67
+Z1.9
+
+F50
+X0.19 ; cut 0.1826 mm2
+Z-0.9 X0.23 ; cut 0.0874 mm2 at -75.66°
+
+F200
+X-0.42
+Z1.65
+
+F50
+Z-0.65 X0.17 ; cut 0.0454 mm2 at -75.34°
+
+F200
+X-0.17
+Z-7.1
+X1.65
+
+F50
+Z0.02 X-0.05 ; cut 0.002 mm2 at -21.80°
+Z0.06 X-0.06 ; cut 0.0035 mm2 at -45.00°
+Z0.07 X-0.04 ; cut 0.0037 mm2 at -60.26°
+Z0.85 ; cut 0.0912 mm2
+X-0.35 ; cut 0.0035 mm2
+Z0.02 X-0.05 ; cut 0.002 mm2 at -21.80°
+Z0.06 X-0.06 ; cut 0.0035 mm2 at -45.00°
+Z0.07 X-0.04 ; cut 0.0037 mm2 at -60.26°
+Z3.03 ; cut 0.3045 mm2
+Z3.96 X-0.99 ; cut 0.33 mm2 at -75.96°
+
+F200
+X-0.01 ; cut 0.0001 mm2
+Z0.86
+
+F50
+X0.01 ; cut 0.0086 mm2
+
+F200
+X-0.01
+Z1
+
+F50
+X0.01 ; cut 0.01 mm2
+
+F200
+X-0.01
+Z1
+
+F10
+X2.64 ; cut 7.4814 mm2
+
+F200
+X-2.64
+Z-11

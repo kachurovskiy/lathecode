@@ -137,6 +137,7 @@ function createMovesCanvas(moves: Move[], width: number, height: number): HTMLCa
   const yToPx = (yMm: number): number => { return (maxYMm - yMm) * coeff; };
 
   const canvas = document.createElement('canvas');
+  canvas.className = 'moves';
   canvas.width = width;
   canvas.height = Math.ceil(coeff * (maxYMm - minYMm));
 
@@ -150,15 +151,25 @@ function createMovesCanvas(moves: Move[], width: number, height: number): HTMLCa
     context.lineTo(xToPx(move.xStartMm + move.xDeltaMm) + xOffset, yToPx(move.yStartMm + move.yDeltaMm));
     context.stroke();
   }
+  const timeMs = getMoveTimeout();
   const runDrawMoveWithDelay = (moves: Move[], index: number) => {
     if (index < moves.length) {
         drawMove(moves[index]);
-        setTimeout(() => runDrawMoveWithDelay(moves, index + 1), 50);
+        const next = () => runDrawMoveWithDelay(moves, index + 1);
+        if (timeMs) setTimeout(next, timeMs);
+        else next();
     }
   }
   runDrawMoveWithDelay(moves, 0);
 
   return canvas;
+}
+
+function getMoveTimeout() {
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get('moveTimeout');
+  if (value) return Number(value);
+  return 50;
 }
 
 function createFullScreenDialog(element: HTMLElement, title: string) {
