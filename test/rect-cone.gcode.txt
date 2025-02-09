@@ -16,7 +16,7 @@
 ; L4 DS3 DE5
 ; L3
 
-; Run time 0.8 min, cutting 75% of time
+; Run time 0.9 min, cutting 75% of time
 ; Working area 11.00 by 2.64 mm
 
 G21 ; metric
@@ -85,7 +85,14 @@ Z-0.65 X0.17 ; cut 0.0454 mm2 at -75.34°
 
 F200
 X-0.17
-Z-7.1
+Z3.89
+
+F10
+X0.15 ; cut 0.4357 mm2
+
+F200
+X-0.15
+Z-10.99
 X1.65
 
 F50
@@ -98,28 +105,22 @@ Z0.02 X-0.05 ; cut 0.002 mm2 at -21.80°
 Z0.06 X-0.06 ; cut 0.0035 mm2 at -45.00°
 Z0.07 X-0.04 ; cut 0.0037 mm2 at -60.26°
 Z3.03 ; cut 0.3045 mm2
-Z3.96 X-0.99 ; cut 0.33 mm2 at -75.96°
+Z3.93 X-0.99 ; cut 0.3297 mm2 at -75.86°
+Z2.74 ; cut 0.0274 mm2
 
 F200
-X-0.01 ; cut 0.0001 mm2
-Z0.86
+Z0.05 X0.02 ; cut 0.0005 mm2 at 68.20°
+Z0.06 X0.06 ; cut 0.0007 mm2 at 45.00°
+Z0.03 X0.06 ; cut 0.0006 mm2 at 26.57°
 
 F50
-X0.01 ; cut 0.0086 mm2
+X-0.15 ; cut 0.0015 mm2
 
 F200
-X-0.01
-Z1
-
-F50
-X0.01 ; cut 0.01 mm2
-
-F200
-X-0.01
-Z1
+Z0.01
 
 F10
-X2.64 ; cut 7.4814 mm2
+X2.64 ; cut 7.0643 mm2
 
 F200
 X-2.64

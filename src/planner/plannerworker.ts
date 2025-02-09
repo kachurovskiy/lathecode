@@ -55,7 +55,7 @@ export class PlannerWorker {
     this.partBitmap = this.createPartBitmap();
 
     // Plan passes in advance so that we can finish the part fully before cutting off.
-    const cutXCoords = this.latheCode.getCutoffStarts().map(z => this.canvas.width - z * this.pxPerMm - this.toolOvershootX);
+    const cutXCoords = this.latheCode.getCutoffStarts().map(z => this.canvas.width - z * this.pxPerMm - this.tool.width + 1);
     const passes = cutXCoords.map(x => new Pass(x, true));
     let hasCutPasses = passes.length > 0;
     let x = this.canvas.width;
