@@ -24,6 +24,7 @@ export class Segment {
   }
 
   isColinear(other: Segment) {
+    if (this.type !== 'LINE' || this.type !== other.type) return;
     const thisXDelta = this.end.x - this.start.x;
     const otherXDelta = other.end.x - other.start.x;
     const slope1 = (this.end.z - this.start.z) / thisXDelta;
