@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { readFileSync, readdirSync, write, writeFileSync } from 'fs';
+import { readFileSync, readdirSync, write, writeFileSync, rmSync } from 'fs';
 import { resolve } from 'path';
 import puppeteer from 'puppeteer';
 import { Page } from 'puppeteer';
@@ -24,8 +24,9 @@ function normalize(text: string) {
 
 async function screenshot(page: Page, name: string, selector: string) {
   const canvas = await page.$(selector);
-  if (canvas) await canvas.screenshot({path: resolve(__dirname, name + '.png')});
-  else console.error(`no ${name} canvas`);
+  const path = resolve(__dirname, name + '.png');
+  if (canvas) await canvas.screenshot({path});
+  else rmSync(path, {force: true});
 }
 
 const CASES: string[] = readdirSync(__dirname).filter(file => file.endsWith(SUFFIX)).map(name => name.substring(0, name.length - SUFFIX.length));

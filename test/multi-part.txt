@@ -1,0 +1,13 @@
+STOCK D20
+
+L5 R5
+L3 R9
+L3
+
+L5 R5
+L3 R9
+L3
+
+L5 R5
+L3 R9
+L3
