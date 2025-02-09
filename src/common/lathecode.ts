@@ -100,9 +100,9 @@ export class LatheCode {
     this.data = parser.parse(text + '\n');
     this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2] as string] : 1;
     // console.log('this.data', this.data);
-    this.outside = this.getSegmentsForSide(this.data[10], 0);
+    this.outside = this.getSegmentsForSide(this.data[this.data.length - 3], 0);
     this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
-    this.inside = this.data[11] ? this.getSegmentsForSide(this.data[11][2], this.getStockDiameter() / 2) : [];
+    this.inside = this.data[this.data.length - 2] ? this.getSegmentsForSide(this.data[this.data.length - 2][2], this.getStockDiameter() / 2) : [];
     this.outsideSegments = this.closeLoop(this.outside, 0);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
     this.getTool(); // validate the tool
@@ -182,7 +182,7 @@ export class LatheCode {
     const result: number[] = [];
     let seenPart = false;
     let z = 0;
-    for (let commentsAndLine of this.data[10]) {
+    for (let commentsAndLine of this.data[this.data.length - 3]) {
       let line = commentsAndLine[1];
       if (isPartingLine(line) && seenPart) {
         result.push(z);

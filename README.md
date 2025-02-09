@@ -124,6 +124,8 @@ If you'd like to edit the online editor code e.g. to modify the online editor, u
 
 ### PEG.js grammar
 
+Use [this parser generator](https://web.archive.org/web/20231228201451/https://pegjs.org/online) to convert the grammar below into `src/common/parser.js` file. Make sure to replace `module.exports = ` in the generated file with `export const parser = `.
+
 ```
 start =
 comment* units?
@@ -131,6 +133,8 @@ comment* stock?
 comment* tool?
 comment* depth?
 comment* feed?
+comment* mode?
+comment* axes?
 (comment* lathe)*
 (comment* inside (comment* lathe)+)?
 comment*
@@ -155,6 +159,12 @@ depthParams = ("CUT" float)? ("FINISH" float)?
 
 feed = "FEED" spaces feedParams comment
 feedParams = ("MOVE" float)? ("PASS" float)? ("PART" float)?
+
+mode = "MODE" spaces modeParams comment
+modeParams = "FACE" / "TURN"
+
+axes = "AXES" spaces axesParams comment
+axesParams = ("LEFT" / "RIGHT") spaces ("UP" / "DOWN")
 
 inside = "INSIDE" comment
 
