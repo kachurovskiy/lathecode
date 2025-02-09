@@ -128,6 +128,17 @@ AXES RIGHT DOWN
 L3 D3
 ```
 
+## Turning vs. facing
+
+If you prefer material removal by turning instead of facing, use `MODE TURN` directive:
+
+```
+STOCK D4
+MODE TURN
+AXES RIGHT DOWN
+L3 D3
+```
+
 ## For developers
 
 If you'd like to edit the online editor code e.g. to modify the online editor, use `npm run dev` for local runs, `npm test` to run tests and `npm run build` to build the `docs/index.html` all-in-one editor webpage.

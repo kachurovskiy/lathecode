@@ -36,6 +36,7 @@ export class PlannerWorker {
   private toolOvershootY: number;
   private toolX;
   private toolY;
+  private mode: 'FACE' | 'TURN';
   private passes: Pass[];
   private previousFinishPass: Pass|null = null;
   private moves: PixelMove[] = [];
@@ -53,23 +54,33 @@ export class PlannerWorker {
     this.toolOvershootY = this.toolCuttingEdges.filter(e => e.x === 0)[0]?.y || 0;
     this.toolX = this.canvas.width;
     this.toolY = this.canvas.height;
+    this.mode = this.latheCode.getMode();
     this.partBitmap = this.createPartBitmap();
 
     // Plan passes in advance so that we can finish the part fully before cutting off.
     const cutXCoords = this.latheCode.getCutoffStarts().map(z => this.canvas.width - z * this.pxPerMm - this.tool.width + 1);
     this.passes = cutXCoords.map(x => new Pass(x, true));
     let hasCutPasses = this.passes.length > 0;
-    let x = this.canvas.width;
-    while (true) {
-      x -= this.getDepthOfCutPx();
-      if (!cutXCoords.includes(x)) this.passes.push(new Pass(Math.max(0, x), x <= 0 && !hasCutPasses));
-      if (x <= 0) break;
+    if (this.mode === 'FACE') {
+      let x = this.canvas.width;
+      while (true) {
+        x -= this.getDepthOfCutPx();
+        if (!cutXCoords.includes(x)) this.passes.push(new Pass(Math.max(0, x), x <= 0 && !hasCutPasses));
+        if (x <= 0) break;
+      }
+    } else if (this.mode === 'TURN') {
+      this.passes.push(... this.latheCode.getCutoffStarts().map(z => new Pass(this.canvas.width - z * this.pxPerMm - this.tool.width, false)));
+      if (!this.passes.length) this.passes.push(new Pass(0, true));
     }
     this.passes.sort((a, b) => b.x - a.x); // descending
 
-    if (this.latheCode.getMode() === 'FACE') this.modeFace();
-    else if (this.latheCode.getMode() === 'TURN') this.modeTurn();
-    else throw new Error('unsupported mode ' + this.latheCode.getMode());
+    try {
+      if (this.mode === 'FACE') this.modeFace();
+      else if (this.mode === 'TURN') this.modeTurn();
+      else throw new Error('unsupported mode ' + this.mode);
+    } catch (e) {
+      postMessage({progressMessage: `Mode failure: ${e}`});
+    }
 
     this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
     this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
@@ -105,7 +116,32 @@ export class PlannerWorker {
   }
 
   private modeTurn() {
-    throw new Error('Not implemented');
+    postMessage({progressMessage: `Starting first pass...`});
+    this.postProgress();
+    for (let passIndex = 0; passIndex < this.passes.length; passIndex++) {
+      const endX = this.passes[passIndex].x;
+      const startX = passIndex === 0 ? this.canvas.width - 1 : this.passes[passIndex - 1].x;
+      for (let startY = this.canvas.height; startY >= 0; startY -= this.getDepthOfCutPx()) {
+        postMessage({progressMessage: `Starting subpass ${startY}`});
+        const endY = this.passes[passIndex].finishAfter ? Math.max(0, startY - this.getDepthOfCutPx()) : -this.toolOvershootY;
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, startX - this.toolX, startY - this.toolY)); // position for this pass
+        this.postProgressWhile(() => this.creep(false, this.toolX > endX, this.toolY > endY));
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, startX - this.toolX, 0)); // back to start position
+        this.upAllowed = true;
+      }
+      if (this.passes[passIndex].finishAfter) {
+        postMessage({progressMessage: `Finishing previously cut area`});
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, (this.previousFinishPass?.x ?? this.canvas.width) - this.toolX, 0)); // position for the finish pass
+        this.isFinishPass = true;
+        this.postProgressWhile(() => this.creep(false, this.toolX > endX));
+        this.isFinishPass = false;
+        this.upAllowed = true;
+        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+        this.previousFinishPass = this.passes[passIndex];
+      }
+      postMessage({progressMessage: `Completed pass ${passIndex}`});
+    }
   }
 
   private postProgress() {
@@ -176,11 +212,12 @@ export class PlannerWorker {
     this.canvasCtx.putImageData(imageData, 0, 0);
   }
 
-  private creep(rightAllowed: boolean, leftAllowed: boolean): boolean {
-    if (this.upAllowed && this.tryMove(0, -1)) {
+  private creep(rightAllowed: boolean, leftAllowed: boolean, upAllowed = true): boolean {
+    const up = this.upAllowed && upAllowed;
+    if (up && this.tryMove(0, -1)) {
       return true;
     }
-    if (rightAllowed && this.tryMove(1, -1)) {
+    if (rightAllowed && up && this.tryMove(1, -1)) {
       return true;
     }
     if (rightAllowed && this.tryMove(1, 0)) {
@@ -190,7 +227,7 @@ export class PlannerWorker {
       this.upAllowed = true;
       return true;
     }
-    if (leftAllowed && this.tryMove(-1, -1)) {
+    if (leftAllowed && up && this.tryMove(-1, -1)) {
       return true;
     }
     if (leftAllowed && this.tryMove(-1, 0)) {

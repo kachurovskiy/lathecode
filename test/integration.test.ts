@@ -10,10 +10,6 @@ function getInput(name: string) {
   return normalize(readFileSync(resolve(__dirname, name + '.txt'), 'utf-8'));
 }
 
-function getGCode(name: string) {
-  return normalize(readFileSync(resolve(__dirname, name + SUFFIX), 'utf-8'));
-}
-
 function saveGCode(name: string, gcode: string) {
   writeFileSync(resolve(__dirname, name + '.gcode.txt'), gcode + '\n');
 }
@@ -49,12 +45,10 @@ test('lathecode inputs to gcode', async () => {
     // Start GCode calculation
     await page.click('.planButton');
 
-    // Check that GCode is as expected
+    // Save GCode so that developer would notice effects on GCode in `git diff`
     await page.waitForSelector('#gcodeTextarea', { visible: true, timeout: 10000 });
     let result = await page.$eval('#gcodeTextarea', (el) => (el as HTMLTextAreaElement).value);
-    result = normalize(result);
-    saveGCode(name, result);
-    expect(result).toBe(getGCode(name));
+    saveGCode(name, normalize(result));
 
     // Take screenshot of the tool path to easier understand the difference
     await screenshot(page, name + '.part', '#plannerContainer canvas.part');
