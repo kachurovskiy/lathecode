@@ -13,6 +13,7 @@ export class GCode {
   private runProgress: HTMLProgressElement;
   private sender: Sender | null = null;
   private saveName = 'Part 1';
+  private latheCode: LatheCode | null = null;
 
   constructor(private container: HTMLElement) {
     container.style.display = 'none';
@@ -49,6 +50,10 @@ export class GCode {
   }
 
   private send(text: string, mode: SenderMode) {
+    if (!this.latheCode?.isNanoElsCompatible()) {
+      alert('This lathecode is not complatible with NanoEls due to axis direction');
+      return;
+    }
     if (!this.sender) this.sender = new Sender(() => this.senderStatusChange());
     this.sender.start(text, mode);
   }
@@ -58,6 +63,7 @@ export class GCode {
   }
 
   show(latheCode: LatheCode, moves: Move[]) {
+    this.latheCode = latheCode;
     this.runTextarea.value = createGCode(latheCode, moves);
     this.container.style.display = 'block';
     this.runTextarea.scrollIntoView({ behavior: "smooth" });

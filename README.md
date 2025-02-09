@@ -118,6 +118,16 @@ L3
 
 ![image](https://github.com/kachurovskiy/lathecode/assets/517919/103f353a-4fa6-4354-9539-c0a814f7df25)
 
+## Axis direction
+
+By default Z increments to the left and X increments up (forward). This matches NanoEls convention but a lot of industry machines use exactly the opposite. To make the generated GCode compatible with those machines, use `AXES` directive:
+
+```
+STOCK D4
+AXES RIGHT DOWN
+L3 D3
+```
+
 ## For developers
 
 If you'd like to edit the online editor code e.g. to modify the online editor, use `npm run dev` for local runs, `npm test` to run tests and `npm run build` to build the `docs/index.html` all-in-one editor webpage.

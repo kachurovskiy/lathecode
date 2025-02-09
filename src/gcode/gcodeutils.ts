@@ -27,7 +27,7 @@ export function createGCode(latheCode: LatheCode, moves: Move[]): string {
       feed = newFeed;
       lines.push('', feedToGCode(feed));
     }
-    lines.push(moveToGCode(m));
+    lines.push(moveToGCode(latheCode, m));
     const moveDuration = getDurationMin(m, feed);
     duration += moveDuration;
     if (m.cutAreaMmSq) cutDuration += moveDuration;
@@ -51,12 +51,12 @@ export function getMoveArea(moves: Move[]): {widthMm: number, heightMm: number} 
   return {widthMm: maxXMm - minXMm, heightMm: maxYMm - minYMm};
 }
 
-export function moveToGCode(m: Move): string {
+export function moveToGCode(latheCode: LatheCode, m: Move): string {
   const xAxisName = 'Z';
   const yAxisName = 'X';
   const parts = [];
-  if (m.xDeltaMm) parts.push(xAxisName + toNumberString(m.xDeltaMm, 3));
-  if (m.yDeltaMm) parts.push(yAxisName + toNumberString(m.yDeltaMm, 3));
+  if (m.xDeltaMm) parts.push(xAxisName + toNumberString(m.xDeltaMm * (latheCode.getZDirection() === 'LEFT' ? 1 : -1), 3));
+  if (m.yDeltaMm) parts.push(yAxisName + toNumberString(m.yDeltaMm * (latheCode.getXDirection() === 'UP' ? 1 : -1), 3));
   if (m.cutAreaMmSq) {
     parts.push(`; cut ${toNumberString(m.cutAreaMmSq, 4)} mm2`);
     if (m.xDeltaMm * m.yDeltaMm !== 0 && !m.isBasic()) parts.push(`at ${(Math.atan(m.xDeltaMm / m.yDeltaMm) * 180 / Math.PI).toFixed(2)}°`);

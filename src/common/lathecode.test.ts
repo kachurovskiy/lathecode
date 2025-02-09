@@ -35,6 +35,10 @@ describe('segment', () => {
     const s8 = new Segment('LINE', new Point(0, 3), new Point(0, 0));
     const s9 = new Segment('LINE', new Point(0, 0), new Point(0, 1));
     expect(s8.isColinear(s9)).toBeTruthy();
+
+    const s8c = new Segment('CONC', new Point(0, 3), new Point(0, 0));
+    const s9c = new Segment('CONC', new Point(0, 0), new Point(0, 1));
+    expect(s8c.isColinear(s9c)).toBeFalsy();
   })
 })
 
@@ -119,6 +123,24 @@ describe('lathecode', () => {
 
   it('getCutoffStarts with 0', () => {
     expect(new LatheCode('L1\nL2 R3\nL3 D0').getCutoffStarts()).toEqual([3]);
+  });
+
+  it('getMode', () => {
+    expect(new LatheCode('L1\nL2 R3\nL3 D0').getMode()).toEqual('FACE');
+    expect(new LatheCode('MODE FACE\nL1\nL2 R3\nL3 D0').getMode()).toEqual('FACE');
+    expect(new LatheCode('MODE TURN\nL1\nL2 R3\nL3 D0').getMode()).toEqual('TURN');
+  });
+
+  it('getZDirection', () => {
+    expect(new LatheCode('L1\nL2 R3\nL3 D0').getZDirection()).toEqual('LEFT');
+    expect(new LatheCode('AXES LEFT DOWN\nL1\nL2 R3\nL3 D0').getZDirection()).toEqual('LEFT');
+    expect(new LatheCode('AXES RIGHT DOWN\nL1\nL2 R3\nL3 D0').getZDirection()).toEqual('RIGHT');
+  });
+
+  it('getXDirection', () => {
+    expect(new LatheCode('L1\nL2 R3\nL3 D0').getXDirection()).toEqual('UP');
+    expect(new LatheCode('AXES LEFT UP\nL1\nL2 R3\nL3 D0').getXDirection()).toEqual('UP');
+    expect(new LatheCode('AXES RIGHT DOWN\nL1\nL2 R3\nL3 D0').getXDirection()).toEqual('DOWN');
   });
 })
 

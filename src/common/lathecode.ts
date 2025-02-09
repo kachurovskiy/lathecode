@@ -167,6 +167,25 @@ export class LatheCode {
     );
   }
 
+  getMode(): 'FACE'|'TURN' {
+    if (!this.data[11]?.length) return 'FACE';
+    return this.data[11][2];
+  }
+
+  getZDirection(): 'LEFT' | 'RIGHT' {
+    if (!this.data[13] || !this.data[13][2]) return 'LEFT';
+    return this.data[13][2][0];
+  }
+
+  getXDirection(): 'UP' | 'DOWN' {
+    if (!this.data[13] || !this.data[13][2]) return 'UP';
+    return this.data[13][2][2];
+  }
+
+  isNanoElsCompatible(): boolean {
+    return this.getZDirection() === 'LEFT' && this.getXDirection() === 'UP';
+  }
+
   /** Segments forming the part after outside cuts. */
   getOutsideSegments(): Segment[] {
     return this.outsideSegments.concat();
