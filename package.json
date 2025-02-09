@@ -1,6 +1,6 @@
 {
   "name": "lathecode",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -21,6 +21,6 @@
   },
   "dependencies": {
     "color": "^4.2.3",
-    "three": "^0.153.0"
+    "three": "^0.173.0"
   }
 }

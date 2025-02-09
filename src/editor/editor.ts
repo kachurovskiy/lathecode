@@ -1,7 +1,9 @@
 import { LatheCode } from '../common/lathecode.ts';
-import InlineWorker from './editorworker?worker&inline';
+import ImageWorker from './editorworker?worker&inline';
+import StlWorker from './stlworker?worker&inline';
 import { PixelMove } from '../planner/pixel.ts';
 import { FromEditorWorkerMessage, ToEditorWorkerMessage } from './editorworker.ts';
+import { FromStlWorkerMessage, ToStlWorkerMessage } from './stlworker.ts';
 
 const PX_PER_MM = 100;
 
@@ -42,10 +44,11 @@ export class Editor extends EventTarget {
       this.errorContainer.textContent = '';
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*';
+      input.accept = 'image/*,.stl';
       input.addEventListener('change', () => {
         const selectedFile = input.files?.[0];
-        if (selectedFile) this.recognize(selectedFile);
+        if (selectedFile?.name.endsWith('.stl')) this.importStl(selectedFile);
+        else if (selectedFile) this.recognize(selectedFile);
       });
       input.click();
     });
@@ -78,11 +81,6 @@ export class Editor extends EventTarget {
 
   private toggleMoreOptions() {
     this.moreOptionsSection.classList.toggle('expanded');
-    if (this.moreOptionsSection.classList.contains('expanded')) {
-      this.expandCollapseButton.textContent = 'Less...';
-    } else {
-      this.expandCollapseButton.textContent = 'More...';
-    }
   }
 
   private isRelevantLocalStorageKey(key: string): boolean {
@@ -191,7 +189,7 @@ export class Editor extends EventTarget {
       const lengthMm = Number(prompt('How long should the part be in mm?', initialLengthMm.toFixed(2)));
       if (isNaN(lengthMm) || lengthMm <= 0) return;
       image = await scaleImage(image, lengthMm / initialLengthMm);
-      this.worker = new InlineWorker();
+      this.worker = new ImageWorker();
       this.worker.onmessage = (event: MessageEvent<any>) => {
         const m = event.data as FromEditorWorkerMessage;
         if (m.moves && m.moves.length) {
@@ -209,6 +207,32 @@ export class Editor extends EventTarget {
       this.worker.postMessage(toWorker);
     };
     reader.readAsArrayBuffer(image);
+  }
+
+  private importStl(file: File) {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const stl = reader.result as ArrayBuffer;
+      if (this.worker) {
+        this.worker.onmessage = null;
+        this.worker.terminate();
+      }
+      this.worker = new StlWorker();
+      this.worker.onmessage = (event: MessageEvent<any>) => {
+        const m = event.data as FromStlWorkerMessage;
+        if (m.moves && m.moves.length) {
+          this.setLatheCodeFromPixelMoves(m.moves.map(m => {
+            Object.setPrototypeOf(m, PixelMove.prototype);
+            return m;
+          }));
+        } else if (m.error) {
+          this.errorContainer.textContent = m.error;
+        }
+      };
+      const toWorker: ToStlWorkerMessage = { stl, pxPerMm: 100 };
+      this.worker.postMessage(toWorker);
+    };
+    reader.readAsArrayBuffer(file);
   }
 
   private setLatheCodeFromPixelMoves(moves: PixelMove[]) {
