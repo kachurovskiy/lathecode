@@ -123,7 +123,7 @@ export class LatheCode {
   }
 
   getTool(): Tool {
-    if (!this.data[5]) return new Tool('RECT', 3, 0.8, 0.4);
+    if (!this.data[5]) return new Tool('RECT', 3, 3, 0.4);
     const type = this.data[5][2];
     const params = this.data[5][4];
     const radius = params[0] ? params[0][1] * this.unitsMultiplier : 0;
@@ -136,7 +136,7 @@ export class LatheCode {
       if (noseAngle) throw new Error('NA not supported for TOOL RECT');
       // Rectangular tools in fact have sloping sides incapable of cutting.
       // Modelling these inserts as having small height fixes right-and-back cuts.
-      return new Tool('RECT', length || 3, height || (radius * 2), radius);
+      return new Tool('RECT', length || 3, height || length || 3, radius);
     } else if (type === 'ROUND') {
       if (length) throw new Error('TOOL ROUND L is already defined by R');
       if (height) throw new Error('TOOL ROUND H is already defined by R');
