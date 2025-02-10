@@ -49,6 +49,25 @@ body {
   height: 500px;
 }
 
+.selectorContainer {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.selectorScene {
+  margin: 6px;
+  padding: 6px;
+  width: 500px;
+  height: 500px;
+  cursor: pointer;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.selectorScene:hover {
+  border: 1px solid #000;
+}
+
 #gcodeContainer {
   margin: 12px 0;
 }

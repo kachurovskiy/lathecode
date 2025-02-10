@@ -10,7 +10,7 @@ export class FromStlWorkerMessage {
   constructor(
     readonly progressMessage?: string,
     readonly error?: string,
-    readonly moves?: PixelMove[],
+    readonly moveOptions?: PixelMove[][],
   ) {}
 }
 
@@ -19,25 +19,21 @@ interface STL {
   faces: number[][];
 }
 
-interface SymmetryAxis {
-  axis: string;
-  centroid: number[];
-}
-
 self.onmessage = async (event) => {
   const data: ToStlWorkerMessage = event.data;
   try {
     postMessage({ progressMessage: "Parsing STL file..." });
     const mesh = parseSTL(data.stl);
 
-    postMessage({ progressMessage: "Finding symmetry axis..." });
-    const symmetryAxis = findSymmetryAxis(mesh);
+    postMessage({ progressMessage: "Finding centroid..." });
+    const centroid = getCentroid(mesh);
 
     postMessage({ progressMessage: "Generating movement instructions..." });
-    let moves = generateMoves(mesh, symmetryAxis, data.pxPerMm);
+    const movesX = optimizeMoves(generateMoves(mesh, 0, centroid, data.pxPerMm), () => {});
+    const movesY = optimizeMoves(generateMoves(mesh, 1, centroid, data.pxPerMm), () => {});
+    const movesZ = optimizeMoves(generateMoves(mesh, 2, centroid, data.pxPerMm), () => {});
 
-    postMessage({ progressMessage: "Optimizing moves..." });
-    postMessage({ moves: optimizeMoves(moves, (progressMessage) => postMessage({ progressMessage })) });
+    postMessage({ moveOptions: [movesX, movesY, movesZ] });
   } catch (error) {
     postMessage({ error });
   }
@@ -54,13 +50,9 @@ function parseSTL(stlBuffer: ArrayBuffer): STL {
   return { vertices, faces };
 }
 
-export function findSymmetryAxis(mesh: STL): SymmetryAxis {
+export function getCentroid(mesh: STL): number[] {
   const { vertices } = mesh;
-  const axisOptions = ["x", "y", "z"];
-  let bestAxis = "z";
-  let bestScore = 0;
   const centroid = [0, 0, 0];
-  // Compute centroid of the model
   for (let i = 0; i < vertices.length; i += 3) {
     centroid[0] += vertices[i];     // x
     centroid[1] += vertices[i + 1]; // y
@@ -69,45 +61,15 @@ export function findSymmetryAxis(mesh: STL): SymmetryAxis {
   centroid[0] /= vertices.length / 3;
   centroid[1] /= vertices.length / 3;
   centroid[2] /= vertices.length / 3;
-
-  axisOptions.forEach((currentAxis, axisIndex) => {
-    let positiveSide = 0;
-    let negativeSide = 0;
-    for (let i = axisIndex; i < vertices.length; i += 3) {
-      let value: number = 0;
-      switch (currentAxis) {
-        case "x":
-          value = vertices[i] - centroid[0];
-          break;
-        case "y":
-          value = vertices[i + 1] - centroid[1];
-          break;
-        case "z":
-          value = vertices[i + 2] - centroid[2];
-          break;
-      }
-      if (value > 0) {
-        positiveSide++;
-      } else {
-        negativeSide++;
-      }
-    }
-    const symmetryScore = Math.min(positiveSide, negativeSide) / (positiveSide + negativeSide);
-    if (symmetryScore > bestScore) {
-      bestScore = symmetryScore;
-      bestAxis = currentAxis;
-    }
-  });
-  return { axis: bestAxis, centroid };
+  return centroid;
 }
 
-export function generateMoves(mesh: STL, symmetryAxis: SymmetryAxis, pxPerMm: number) {
+export function generateMoves(mesh: STL, axisIndex: number, centroid: number[], pxPerMm: number): PixelMove[] {
   const { vertices } = mesh;
-  const axisIndex = { x: 0, y: 1, z: 2 }[symmetryAxis.axis];
 
   // Project model onto plane perpendicular to symmetry axis
   const projected = vertices.reduce((acc: number[], _, i) => {
-    if (i % 3 !== axisIndex) acc.push(Math.round((vertices[i] - symmetryAxis.centroid[i % 3]) * pxPerMm));
+    if (i % 3 !== axisIndex) acc.push(Math.round((vertices[i] - centroid[i % 3]) * pxPerMm));
     return acc;
   }, []);
 

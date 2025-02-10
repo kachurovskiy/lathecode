@@ -4,6 +4,7 @@ import StlWorker from './stlworker?worker&inline';
 import { PixelMove } from '../planner/pixel.ts';
 import { FromEditorWorkerMessage, ToEditorWorkerMessage } from './editorworker.ts';
 import { FromStlWorkerMessage, ToStlWorkerMessage } from './stlworker.ts';
+import { Selector } from './selector.ts';
 
 const PX_PER_MM = 100;
 
@@ -220,11 +221,28 @@ export class Editor extends EventTarget {
       this.worker = new StlWorker();
       this.worker.onmessage = (event: MessageEvent<any>) => {
         const m = event.data as FromStlWorkerMessage;
-        if (m.moves && m.moves.length) {
-          this.setLatheCodeFromPixelMoves(m.moves.map(m => {
-            Object.setPrototypeOf(m, PixelMove.prototype);
-            return m;
-          }));
+        if (m.moveOptions && m.moveOptions.length) {
+          new Selector().pickLatheCode(m.moveOptions.map(
+            moves => new LatheCode(moves.map(m => {
+              Object.setPrototypeOf(m, PixelMove.prototype);
+              return m.toMove(PX_PER_MM).toLatheCode();
+            }).join('\n'))
+          )).then(latheCode => {
+            if (latheCode) {
+              this.latheCodeInput.value = `; ${file.name}
+
+; Uncomment and modify lines below as needed
+; STOCK D5
+; TOOL RECT R0.2 L2
+; DEPTH CUT1 FINISH0.1
+; FEED MOVE200 PASS50 PART10 ; speeds mm/min
+; MODE TURN ; for classic style of material removal
+; AXES RIGHT DOWN ; for non-NanoEls controllers
+
+` + latheCode.getText();
+              this.update();
+            }
+          });
         } else if (m.error) {
           this.errorContainer.textContent = m.error;
         }

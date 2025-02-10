@@ -10,7 +10,7 @@ export class Scene extends THREE.Scene {
   private latheMesh: THREE.Object3D | null = null;
   private stock: THREE.Object3D | null = null;
 
-  constructor(container: HTMLElement) {
+  constructor(readonly container: HTMLElement) {
     super();
 
     this.background = new THREE.Color(0xffffff);

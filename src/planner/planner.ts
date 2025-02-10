@@ -3,6 +3,7 @@ import InlineWorker from './plannerworker?worker&inline';
 import { FromWorkerMessage, ToWorkerMessage } from './plannerworker';
 import { Move } from '../common/move';
 import { PixelMove } from './pixel';
+import { createFullScreenDialog } from '../common/dialog';
 
 const PX_PER_MM = 100;
 const CANVAS_SIZE = 500;
@@ -170,31 +171,4 @@ function getMoveTimeout() {
   const value = params.get('moveTimeout');
   if (value) return Number(value);
   return 50;
-}
-
-function createFullScreenDialog(element: HTMLElement, title: string) {
-  const dialogContainer = document.createElement('div');
-  dialogContainer.style.position = 'fixed';
-  dialogContainer.style.top = '0';
-  dialogContainer.style.left = '0';
-  dialogContainer.style.width = '100%';
-  dialogContainer.style.height = '100%';
-  dialogContainer.style.backgroundColor = 'white';
-  dialogContainer.style.padding = '12px';
-
-  const dialogTitle = document.createElement('h2');
-  dialogTitle.textContent = title;
-  dialogContainer.appendChild(dialogTitle);
-
-  dialogContainer.appendChild(element);
-  element.style.margin = '12px';
-
-  const closeButton = document.createElement('button');
-  closeButton.textContent = 'Close';
-  closeButton.style.display = 'block';
-  closeButton.addEventListener('click', () => {
-    document.body.removeChild(dialogContainer);
-  });
-  dialogContainer.appendChild(closeButton);
-  document.body.appendChild(dialogContainer);
 }
