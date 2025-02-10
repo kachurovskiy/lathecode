@@ -1,9 +1,8 @@
 import { LatheCode } from '../common/lathecode.ts';
 import ImageWorker from './editorworker?worker&inline';
-import StlWorker from './stlworker?worker&inline';
 import { PixelMove } from '../planner/pixel.ts';
 import { FromEditorWorkerMessage, ToEditorWorkerMessage } from './editorworker.ts';
-import { FromStlWorkerMessage, ToStlWorkerMessage } from './stlworker.ts';
+import { processStl } from './stlworker.ts';
 import { Selector } from './selector.ts';
 
 const PX_PER_MM = 100;
@@ -214,22 +213,27 @@ export class Editor extends EventTarget {
     const reader = new FileReader();
     reader.onload = async () => {
       const stl = reader.result as ArrayBuffer;
-      if (this.worker) {
-        this.worker.onmessage = null;
-        this.worker.terminate();
-      }
-      this.worker = new StlWorker();
-      this.worker.onmessage = (event: MessageEvent<any>) => {
-        const m = event.data as FromStlWorkerMessage;
-        if (m.moveOptions && m.moveOptions.length) {
-          new Selector().pickLatheCode(m.moveOptions.map(
-            moves => new LatheCode(moves.map(m => {
-              Object.setPrototypeOf(m, PixelMove.prototype);
-              return m.toMove(PX_PER_MM).toLatheCode();
-            }).join('\n'))
-          )).then(latheCode => {
-            if (latheCode) {
-              this.latheCodeInput.value = `; ${file.name}
+      try {
+        const result = processStl({ stl, pxPerMm: 100 });
+        if (!result.moveOptions || result.moveOptions.length === 0) {
+          this.errorContainer.textContent = 'No suitable shapes found';
+          return;
+        }
+        const latheCodes: LatheCode[] = [];
+        for (const moves of result.moveOptions) {
+          const lc = new LatheCode(moves.map(m => {
+            Object.setPrototypeOf(m, PixelMove.prototype);
+            return m.toMove(PX_PER_MM).toLatheCode().trim();
+          }).filter(line => line.length > 0).join('\n'));
+          if (lc.getStock()) latheCodes.push(lc);
+        }
+        if (latheCodes.length === 0) {
+          this.errorContainer.textContent = 'Empty models';
+          return;
+        }
+        new Selector().pickLatheCode(latheCodes).then(latheCode => {
+          if (latheCode) {
+            this.latheCodeInput.value = `; ${file.name}
 
 ; Uncomment and modify lines below as needed
 ; STOCK D5
@@ -239,16 +243,13 @@ export class Editor extends EventTarget {
 ; MODE TURN ; for classic style of material removal
 ; AXES RIGHT DOWN ; for non-NanoEls controllers
 
-` + latheCode.getText();
-              this.update();
-            }
-          });
-        } else if (m.error) {
-          this.errorContainer.textContent = m.error;
-        }
-      };
-      const toWorker: ToStlWorkerMessage = { stl, pxPerMm: 100 };
-      this.worker.postMessage(toWorker);
+` + latheCode.getText().trim();
+            this.update();
+          }
+        });
+      } catch (e) {
+        this.errorContainer.textContent = String(e);
+      }
     };
     reader.readAsArrayBuffer(file);
   }

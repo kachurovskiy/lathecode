@@ -6,6 +6,8 @@ import { Scene } from '../scene.ts';
 /** Accepts and shows several LatheCode instances in a popup allowing user to choose one. */
 export class Selector {
   async pickLatheCode(latheCodes: LatheCode[]): Promise<LatheCode|null> {
+    if (latheCodes.length === 0) return null;
+    if (latheCodes.length === 1) return latheCodes[0];
     return new Promise(resolve => {
       const container = document.createElement('div');
       container.className = 'selectorContainer';

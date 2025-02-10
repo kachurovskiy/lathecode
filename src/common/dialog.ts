@@ -7,6 +7,7 @@ export function createFullScreenDialog(element: HTMLElement, title: string, clos
   dialogContainer.style.height = '100%';
   dialogContainer.style.backgroundColor = 'white';
   dialogContainer.style.padding = '12px';
+  dialogContainer.style.overflowY = 'auto';
 
   const dialogTitle = document.createElement('h2');
   dialogTitle.textContent = title;
