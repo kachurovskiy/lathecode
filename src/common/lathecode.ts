@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import {parser} from './parser.js'
 
 export class Point {
@@ -120,6 +121,13 @@ export class LatheCode {
     const d = this.getStockDiameter();
     const l = this.getStockLength();
     return d > 0 && l > 0 ? new Stock(d, l) : null;
+  }
+
+  getBoundingBox(): THREE.Vector3 {
+    const stock = this.getStock();
+    if (!stock) return new THREE.Vector3();
+    if (stock.diameter > stock.length) return new THREE.Vector3(stock.diameter, stock.diameter, stock.length);
+    return new THREE.Vector3(stock.length, stock.diameter, stock.diameter);
   }
 
   getTool(): Tool {

@@ -1,79 +1,61 @@
 import * as THREE from "three";
 import { optimizeMoves } from "../planner/optimize";
-import { PixelMove } from "../planner/pixel";
+import { Pixel } from "../common/pixel";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { createFullScreenDialog } from "../common/dialog";
-
-export class ToStlWorkerMessage {
-  constructor(readonly pxPerMm: number, readonly stl: ArrayBuffer) {}
-}
-
-export class FromStlWorkerMessage {
-  constructor(
-    readonly progressMessage?: string,
-    readonly error?: string,
-    readonly moveOptions?: PixelMove[][],
-  ) {}
-}
+import { cutPolygonLower, deduplicatePixelMoves, getNLargestPolygons, getPolygonArea, mirrorPolygonY, moveIntoNonNegtiveX, movesToLatheCodeOrNull, polygonToTurnSegment, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
+import { LatheCode } from "../common/lathecode";
 
 interface STL {
   vertices: number[];
   faces: number[][];
+  boundingBox: THREE.Box3 | null;
 }
 
-interface Vector2D {
-  x: number;
-  y: number;
-  prev?: Vector2D;
-  next?: Vector2D;
-}
+export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number): LatheCode[] {
+  // Mesh is centered around 0
+  const mesh = parseSTL(stl);
 
-export function processStl(data: ToStlWorkerMessage): FromStlWorkerMessage {
-  const mesh = parseSTL(data.stl);
+  // We don't know how the mesh is oriented and along which axis is intended to be rotated so we try all options and let user choose.
   const projectionsX = cutMeshWithPlane(mesh, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0));
   const projectionsY = cutMeshWithPlane(mesh, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0));
   const projectionsZ = cutMeshWithPlane(mesh, new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0));
-  let allProjections = [... projectionsX, ... projectionsY, ... projectionsZ]
-    .filter(p => p.length > 0)
-    .filter(projection => {
-      let minX = projection[0].x;
-      let maxX = projection[0].x;
-      let minY = projection[0].y;
-      let maxY = projection[0].y;
-      for (let pair of projection) {
-        minX = Math.min(minX, pair.x);
-        maxX = Math.max(maxX, pair.x);
-        minY = Math.min(minY, pair.y);
-        maxY = Math.max(maxY, pair.y);
-      }
-      return maxX - minX > 1e-4 && maxY - minY > 1e-4;
-    });
 
-  const projectionsWithArea = allProjections.map(projection => {
-    let minX = projection[0].x;
-    let maxX = projection[0].x;
-    let minY = projection[0].y;
-    let maxY = projection[0].y;
-    for (let pair of projection) {
-      minX = Math.min(minX, pair.x);
-      maxX = Math.max(maxX, pair.x);
-      minY = Math.min(minY, pair.y);
-      maxY = Math.max(maxY, pair.y);
-    }
-    return { projection, area: (maxX - minX) * (maxY - minY) };
-  });
-  projectionsWithArea.sort((a, b) => b.area - a.area);
-  allProjections = projectionsWithArea.slice(0, 3).map(p => p.projection);
+  let projections = removeTinyAreaPolygons([... projectionsX, ... projectionsY, ... projectionsZ]);
 
-  // showForDebug(allProjections);
+  // With complex models there can be too many projections, WebGL doesn't allow more than a few contexts.
+  projections = getNLargestPolygons(projections, 3);
 
-  allProjections.push(... allProjections.map(projection => projection.map(pair => ({ x: pair.y, y: pair.x }))));
+  // Also include the rotated projections
+  projections.push(... projections.map(projection => projection.map(pair => new Pixel(pair.y, pair.x))));
 
-  const moveOptions = allProjections
-    .map(p => projectionToMoves(p, data.pxPerMm))
+  // Convert from STL mm to pixels
+  projections = projections.map(projection => scaleAndRoundPolygon(projection, pxPerMm));
+
+  projections = projections.map(projection => removeConsecutiveDuplicatePoints(projection));
+  projections = projections.map(projection => moveIntoNonNegtiveX(mirrorPolygonY(cutPolygonLower(projection))));
+  projections = projections.filter(projection => getPolygonArea(projection) > 0.001);
+
+  let movesList = projections
+    .map(p => polygonToTurnSegment(p))
+    .map(p => repairPointsGoingBack(p))
+    .map(p => segmentToMoves(p))
     .map(moves => optimizeMoves(moves, () => {}))
     .filter(moves => moves.length > 0);
-  return {moveOptions};
+  movesList = deduplicatePixelMoves(movesList);
+
+  let latheCodes = movesList.map(m => movesToLatheCodeOrNull(m, pxPerMm)).filter(lc => lc !== null) as LatheCode[];
+  if (mesh.boundingBox !== null) {
+    let size = new THREE.Vector3();
+    mesh.boundingBox.getSize(size);
+    const largest = Math.max(size.x, size.y, size.z);
+    const smallest = Math.min(size.x, size.y, size.z);
+    const middle = size.x + size.y + size.z - largest - smallest;
+    size = new THREE.Vector3(largest, middle, smallest);
+    latheCodes.sort((a, b) => size.distanceTo(a.getBoundingBox()) - size.distanceTo(b.getBoundingBox()));
+    latheCodes = latheCodes.slice(0, 3);
+  }
+  return latheCodes;
 }
 
 function parseSTL(stlBuffer: ArrayBuffer): STL {
@@ -84,109 +66,10 @@ function parseSTL(stlBuffer: ArrayBuffer): STL {
   for (let i = 0; i < vertices.length; i += 9) {
     faces.push([i / 3, (i + 3) / 3, (i + 6) / 3]);
   }
-  return { vertices, faces };
+  return { vertices, faces, boundingBox: geometry.boundingBox };
 }
 
-function projectionToMoves(projection: Vector2D[], pxPerMm: number): PixelMove[] {
-  // Modify projection: multiply every x and y by pxPerMm and round
-  for (let pair of projection) {
-    pair.x = Math.round(pair.x * pxPerMm);
-    pair.y = Math.round(pair.y * pxPerMm);
-  }
-
-  // Remove consequitive duplicate points.
-  const uniqueProjection = [projection[0]];
-  for (let i = 1; i < projection.length; i++) {
-    if (projection[i].x !== projection[i - 1].x || projection[i].y !== projection[i - 1].y) {
-      uniqueProjection.push(projection[i]);
-    }
-  }
-  projection = uniqueProjection;
-
-  // Convert projection to bidirectional linked list
-  for (let i = 0; i < projection.length; i++) {
-    projection[i].prev = projection[(i - 1 + projection.length) % projection.length];
-    projection[i].next = projection[(i + 1) % projection.length];
-  }
-
-  // Find the point with lowest x and among those with lowest y
-  let minXPoint = projection[0];
-  let minX = minXPoint.x;
-  for (let pair of projection) {
-    if (pair.x < minX || (pair.x === minX && pair.y < minXPoint.y)) {
-      minX = pair.x;
-      minXPoint = pair;
-    }
-  }
-
-  // Find the point with highest x and among those with lowest y
-  let maxXPoint = projection[0];
-  let maxX = maxXPoint.x;
-  for (let pair of projection) {
-    if (pair.x > maxX || (pair.x === maxX && pair.y < maxXPoint.y)) {
-      maxX = pair.x;
-      maxXPoint = pair;
-    }
-  }
-
-  if (!minXPoint || !maxXPoint || minX === maxX) return [];
-
-  // Find the first different y when going next
-  let currentPoint = minXPoint;
-  let nextYNotEqualToCurrentY = 0;
-  do {
-    currentPoint = currentPoint.next!;
-    nextYNotEqualToCurrentY = currentPoint.y;
-  } while (minXPoint.y === nextYNotEqualToCurrentY && currentPoint !== minXPoint);
-
-  // Find the first different y when going prev
-  currentPoint = minXPoint;
-  let prevYNotEqualToCurrentY = 0;
-  do {
-    currentPoint = currentPoint.prev!;
-    prevYNotEqualToCurrentY = currentPoint.y;
-  } while (minXPoint.y === prevYNotEqualToCurrentY && currentPoint !== minXPoint);
-
-  // Only keep points with negative y
-  projection = projection.filter(pair => pair.y < 0);
-
-  // Make all y values positive
-  for (let pair of projection) {
-    pair.y = Math.abs(pair.y);
-  }
-
-  // Reduce all x values by minX
-  for (let pair of projection) {
-    pair.x -= minX;
-  }
-
-  const moves = [];
-  const direction = nextYNotEqualToCurrentY < prevYNotEqualToCurrentY ? 'next' : 'prev';
-  currentPoint = minXPoint;
-  const points = [minXPoint];
-  while (currentPoint !== maxXPoint) {
-    currentPoint = currentPoint[direction]!;
-    points.push(currentPoint);
-  }
-
-  // Less deflection to have a larger base for the part
-  const maxYForMinX = points.filter(p => p.x === minX).reduce((max, p) => Math.max(max, p.y), -Infinity);
-  const maxYForMaxX = points.filter(p => p.x === maxX).reduce((max, p) => Math.max(max, p.y), -Infinity);
-  if (maxYForMaxX < maxYForMinX) points.reverse();
-
-  // Generate moves
-  for (let i = 0; i < points.length - 1; i++) {
-    const currentPoint = points[i];
-    const nextPoint = points[i + 1];
-    const dx = nextPoint.x - currentPoint.x;
-    const dy = nextPoint.y - currentPoint.y;
-    moves.push(new PixelMove(currentPoint.x, currentPoint.y, dx, dy, 1, []));
-  }
-
-  return moves;
-}
-
-function cutMeshWithPlane(mesh: STL, planeNormal: THREE.Vector3, planePoint: THREE.Vector3): Vector2D[][] {
+function cutMeshWithPlane(mesh: STL, planeNormal: THREE.Vector3, planePoint: THREE.Vector3): Pixel[][] {
   const intersectionEdges: Map<string, THREE.Vector3[]> = new Map();
   const coplanarEdges: Map<string, THREE.Vector3[]> = new Map();
 
@@ -310,17 +193,14 @@ function cutMeshWithPlane(mesh: STL, planeNormal: THREE.Vector3, planePoint: THR
 
   const [u, v] = getPlaneBasis(planeNormal);
 
-  function projectToPlane(point: THREE.Vector3): Vector2D {
-    return {
-      x: point.dot(u),
-      y: point.dot(v),
-    };
+  function projectToPlane(point: THREE.Vector3): Pixel {
+    return new Pixel(point.dot(u), point.dot(v));
   }
 
-  let projectedLoops: Vector2D[][] = loops.map(loop => loop.map(p => projectToPlane(p)));
+  let projectedLoops: Pixel[][] = loops.map(loop => loop.map(p => projectToPlane(p)));
 
   // Step 4: Remove unnecessary points
-  function simplifyLoop(loop: Vector2D[]): Vector2D[] {
+  function simplifyLoop(loop: Pixel[]): Pixel[] {
     return loop.filter((p, i, arr) => {
       const prev = arr[(i - 1 + arr.length) % arr.length];
       const next = arr[(i + 1) % arr.length];
@@ -334,8 +214,8 @@ function cutMeshWithPlane(mesh: STL, planeNormal: THREE.Vector3, planePoint: THR
   return projectedLoops.filter(loop => loop.length > 2);
 }
 
-export function showForDebug(allProjections: Vector2D[][]) {
-  const elements = allProjections.map(projection => {
+export function showForDebug(projections: Pixel[][]) {
+  const elements = projections.map(projection => {
     const canvas = document.createElement('canvas');
     canvas.className = 'selectorScene';
     const size = 500;

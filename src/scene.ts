@@ -10,13 +10,13 @@ export class Scene extends THREE.Scene {
   private latheMesh: THREE.Object3D | null = null;
   private stock: THREE.Object3D | null = null;
 
-  constructor(readonly container: HTMLElement) {
+  constructor(readonly container: HTMLElement, size = 500) {
     super();
 
     this.background = new THREE.Color(0xffffff);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.setSize(500, 500);
+    this.renderer.setSize(size, size);
     this.addLight();
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.addEventListener('click', () => {

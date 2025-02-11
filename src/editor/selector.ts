@@ -20,7 +20,7 @@ export class Selector {
           resolve(latheCode);
         });
         container.appendChild(div);
-        const scene = new Scene(div);
+        const scene = new Scene(div, 400);
         scene.setLatheCode(latheCode);
         return scene;
       });

@@ -1,5 +1,5 @@
 import * as Colors from "../common/colors";
-import { Pixel, PixelMove } from "./pixel";
+import { Pixel, PixelMove } from "../common/pixel";
 
 const CUTTING_EDGE_THICKNESS = 2;
 

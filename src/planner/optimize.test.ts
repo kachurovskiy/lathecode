@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, optimizeMoves, isSmoothingAllowed, smoothMoves } from './optimize';
-import { PixelMove } from './pixel';
+import { PixelMove } from '../common/pixel';
 
 describe('plannerworker', () => {
   it('sameMoves', () => {

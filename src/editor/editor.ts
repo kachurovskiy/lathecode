@@ -1,8 +1,8 @@
 import { LatheCode } from '../common/lathecode.ts';
 import ImageWorker from './editorworker?worker&inline';
-import { PixelMove } from '../planner/pixel.ts';
+import { PixelMove } from '../common/pixel.ts';
 import { FromEditorWorkerMessage, ToEditorWorkerMessage } from './editorworker.ts';
-import { processStl } from './stlworker.ts';
+import { stlToLatheCodes } from './stlimport.ts';
 import { Selector } from './selector.ts';
 
 const PX_PER_MM = 100;
@@ -214,19 +214,7 @@ export class Editor extends EventTarget {
     reader.onload = async () => {
       const stl = reader.result as ArrayBuffer;
       try {
-        const result = processStl({ stl, pxPerMm: 100 });
-        if (!result.moveOptions || result.moveOptions.length === 0) {
-          this.errorContainer.textContent = 'No suitable shapes found';
-          return;
-        }
-        const latheCodes: LatheCode[] = [];
-        for (const moves of result.moveOptions) {
-          const lc = new LatheCode(moves.map(m => {
-            Object.setPrototypeOf(m, PixelMove.prototype);
-            return m.toMove(PX_PER_MM).toLatheCode().trim();
-          }).filter(line => line.length > 0).join('\n'));
-          if (lc.getStock()) latheCodes.push(lc);
-        }
+        const latheCodes = stlToLatheCodes(stl, 100);
         if (latheCodes.length === 0) {
           this.errorContainer.textContent = 'Empty models';
           return;

@@ -2,7 +2,7 @@ import { LatheCode } from '../common/lathecode';
 import { getCuttingEdges, optimizeMoves } from './optimize';
 import { Painter } from './painter';
 import * as Colors from "../common/colors";
-import { Pixel, PixelMove } from "./pixel";
+import { Pixel, PixelMove } from "../common/pixel";
 
 export class ToWorkerMessage {
   constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number) {}

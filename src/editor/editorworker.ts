@@ -1,5 +1,5 @@
 import { optimizeMoves, smoothMoves } from "../planner/optimize";
-import { PixelMove } from "../planner/pixel";
+import { PixelMove } from "../common/pixel";
 
 export class ToEditorWorkerMessage {
   constructor(readonly pxPerMm: number, readonly image: ArrayBuffer, readonly smoothEpsilon: number) {}

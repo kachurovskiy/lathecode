@@ -44,6 +44,20 @@ body {
   border-radius: 0;
 }
 
+.fullScreenDialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: white;
+  padding: 8px 30px;
+}
+
+.dialogCloseButton {
+  margin-top: 12px;
+}
+
 #sceneContainer {
   width: 500px;
   height: 500px;
@@ -53,19 +67,15 @@ body {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
+  gap: 10px;
 }
 
 .selectorScene {
-  margin: 6px;
-  padding: 6px;
-  width: 500px;
-  height: 500px;
   cursor: pointer;
   overflow: hidden;
-  box-sizing: border-box;
 }
 .selectorScene:hover {
-  border: 1px solid #000;
+  filter: hue-rotate(90deg);
 }
 
 #gcodeContainer {

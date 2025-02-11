@@ -2,7 +2,7 @@ import { LatheCode } from '../common/lathecode';
 import InlineWorker from './plannerworker?worker&inline';
 import { FromWorkerMessage, ToWorkerMessage } from './plannerworker';
 import { Move } from '../common/move';
-import { PixelMove } from './pixel';
+import { PixelMove } from '../common/pixel';
 import { createFullScreenDialog } from '../common/dialog';
 
 const PX_PER_MM = 100;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Pixel, PixelMove } from './pixel';
-import { Move } from '../common/move';
+import { Move } from './move';
 
 describe('pixel', () => {
   it('isBasic', () => {

@@ -1,10 +1,14 @@
-import { Move } from "../common/move";
+import { Move } from "./move";
 
 export class Pixel {
   constructor(readonly x: number, readonly y: number) {}
 
   toString() {
     return `${this.x},${this.y}`;
+  }
+
+  equals(p: Pixel) {
+    return this.x === p.x && this.y === p.y;
   }
 }
 
