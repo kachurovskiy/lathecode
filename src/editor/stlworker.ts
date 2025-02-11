@@ -31,11 +31,8 @@ interface Vector2D {
 export function processStl(data: ToStlWorkerMessage): FromStlWorkerMessage {
   const mesh = parseSTL(data.stl);
   const projectionsX = cutMeshWithPlane(mesh, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0));
-  console.log(projectionsX);
   const projectionsY = cutMeshWithPlane(mesh, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0));
-  console.log(projectionsY);
   const projectionsZ = cutMeshWithPlane(mesh, new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0));
-  console.log(projectionsZ);
   let allProjections = [... projectionsX, ... projectionsY, ... projectionsZ]
     .filter(p => p.length > 0)
     .filter(projection => {
@@ -112,21 +109,21 @@ function projectionToMoves(projection: Vector2D[], pxPerMm: number): PixelMove[]
     projection[i].next = projection[(i + 1) % projection.length];
   }
 
-  // Find the point with lowest x
-  let minX = Infinity;
-  let minXPoint = null;
+  // Find the point with lowest x and among those with lowest y
+  let minXPoint = projection[0];
+  let minX = minXPoint.x;
   for (let pair of projection) {
-    if (pair.x < minX) {
+    if (pair.x < minX || (pair.x === minX && pair.y < minXPoint.y)) {
       minX = pair.x;
       minXPoint = pair;
     }
   }
 
-  // Find the point with highest x
-  let maxX = -Infinity;
-  let maxXPoint = null;
+  // Find the point with highest x and among those with lowest y
+  let maxXPoint = projection[0];
+  let maxX = maxXPoint.x;
   for (let pair of projection) {
-    if (pair.x > maxX) {
+    if (pair.x > maxX || (pair.x === maxX && pair.y < maxXPoint.y)) {
       maxX = pair.x;
       maxXPoint = pair;
     }
@@ -150,22 +147,26 @@ function projectionToMoves(projection: Vector2D[], pxPerMm: number): PixelMove[]
     prevYNotEqualToCurrentY = currentPoint.y;
   } while (minXPoint.y === prevYNotEqualToCurrentY && currentPoint !== minXPoint);
 
-  if (nextYNotEqualToCurrentY === prevYNotEqualToCurrentY) return [];
+  // Only keep points with negative y
+  projection = projection.filter(pair => pair.y < 0);
 
   // Make all y values positive
   for (let pair of projection) {
     pair.y = Math.abs(pair.y);
   }
 
+  // Reduce all x values by minX
+  for (let pair of projection) {
+    pair.x -= minX;
+  }
+
   const moves = [];
-  const direction = nextYNotEqualToCurrentY > prevYNotEqualToCurrentY ? 'next' : 'prev';
+  const direction = nextYNotEqualToCurrentY < prevYNotEqualToCurrentY ? 'next' : 'prev';
   currentPoint = minXPoint;
-  const points = [];
-  // Iterate from minXPoint until we reach maxXPoint and generate moves
+  const points = [minXPoint];
   while (currentPoint !== maxXPoint) {
+    currentPoint = currentPoint[direction]!;
     points.push(currentPoint);
-    const nextPoint = currentPoint[direction]!;
-    currentPoint = nextPoint;
   }
 
   // Less deflection to have a larger base for the part
@@ -179,7 +180,7 @@ function projectionToMoves(projection: Vector2D[], pxPerMm: number): PixelMove[]
     const nextPoint = points[i + 1];
     const dx = nextPoint.x - currentPoint.x;
     const dy = nextPoint.y - currentPoint.y;
-    moves.push(new PixelMove(currentPoint.x - minX, currentPoint.y, dx, dy, 1, []));
+    moves.push(new PixelMove(currentPoint.x, currentPoint.y, dx, dy, 1, []));
   }
 
   return moves;
@@ -321,9 +322,8 @@ function cutMeshWithPlane(mesh: STL, planeNormal: THREE.Vector3, planePoint: THR
   // Step 4: Remove unnecessary points
   function simplifyLoop(loop: Vector2D[]): Vector2D[] {
     return loop.filter((p, i, arr) => {
-      if (i === 0 || i === arr.length - 1) return true;
-      const prev = arr[i - 1];
-      const next = arr[i + 1];
+      const prev = arr[(i - 1 + arr.length) % arr.length];
+      const next = arr[(i + 1) % arr.length];
 
       return !((p.x === prev.x && p.x === next.x) || (p.y === prev.y && p.y === next.y));
     });
@@ -331,7 +331,7 @@ function cutMeshWithPlane(mesh: STL, planeNormal: THREE.Vector3, planePoint: THR
 
   projectedLoops = projectedLoops.map(simplifyLoop);
 
-  return projectedLoops;
+  return projectedLoops.filter(loop => loop.length > 2);
 }
 
 export function showForDebug(allProjections: Vector2D[][]) {
