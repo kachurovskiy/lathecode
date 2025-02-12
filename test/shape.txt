@@ -1,0 +1,12 @@
+; shape.stl
+
+; Uncomment and modify lines below as needed
+; STOCK D5
+; TOOL RECT R0.2 L2
+; DEPTH CUT1 FINISH0.1
+; FEED MOVE200 PASS50 PART10 ; speeds mm/min
+; MODE TURN ; for classic style of material removal
+; AXES RIGHT DOWN ; for non-NanoEls controllers
+
+L5.000 R6.000
+L5.000 R10.000

@@ -110,10 +110,19 @@ export function mirrorPolygonY(polygon: Pixel[]): Pixel[] {
 }
 
 export function mirrorPolygonX(polygon: Pixel[]): Pixel[] {
-  return polygon.map(p => new Pixel(-p.x, p.y));
+  return polygon.reverse().map(p => new Pixel(-p.x, p.y));
 }
 
-export function polygonToTurnSegment(polygon: Pixel[]): Pixel[] {
+export function polygonToTurnSegments(polygon: Pixel[]): Pixel[][] {
+  const result = [];
+  const positiveDirectionSegment = polygonToTurnSegment(polygon, 1);
+  if (positiveDirectionSegment.length > 1) result.push(positiveDirectionSegment);
+  const negativeDirectionSegment = polygonToTurnSegment(polygon, -1);
+  if (negativeDirectionSegment.length > 1) result.push(negativeDirectionSegment);
+  return result;
+}
+
+export function polygonToTurnSegment(polygon: Pixel[], direction: number): Pixel[] {
   // Find the point with lowest x and among those with highest y
   let minXPoint = polygon[0];
   for (let pair of polygon) {
@@ -131,7 +140,6 @@ export function polygonToTurnSegment(polygon: Pixel[]): Pixel[] {
   }
 
   // Take the segment reachable by the turning tool from the polygon
-  const direction = findFirstNextDifferentY(polygon, minXPoint) > findFirstPreviousDifferentY(polygon, minXPoint) ? 1 : -1;
   let segment = [minXPoint];
   let current = minXPoint;
   while (current !== maxXPoint) {
@@ -150,19 +158,32 @@ export function polygonToTurnSegment(polygon: Pixel[]): Pixel[] {
 
 export function trimSegmentEnds(segment: Pixel[]): Pixel[] {
   if (segment.length < 2) return segment;
-  while (segment.length > 1 && segment[0].y === 0 && segment[1].y === 0) {
-    segment.shift();
-  }
-  while (segment.length > 1 && segment[segment.length - 1].y === 0 && segment[segment.length - 2].y === 0) {
-    segment.pop();
-  }
+  let modified = false;
+  let attempts = 0;
+  do {
+    attempts++;
+    if (segment[0].x === segment[1].x && segment[1].y === 0) {
+      segment.shift();
+      modified = true;
+    } else if (segment[0].y === 0 && segment[1].y === 0) {
+      segment.shift();
+      modified = true;
+    } else if (segment[segment.length - 1].y === 0 && segment[segment.length - 2].y === 0) {
+      segment.pop();
+      modified = true;
+    } else if (segment[segment.length - 1].x === segment[segment.length - 2].x && segment[segment.length - 2].y === 0) {
+      segment.pop();
+      modified = true;
+    }
+  } while (modified && segment.length > 1 && attempts < 50);
   return segment;
 }
 
 export function repairPointsGoingBack(segment: Pixel[]): Pixel[] {
+  if (segment.length < 2) return segment;
   const direction = segment[0].x < segment[segment.length - 1].x ? 1 : -1;
   let modified = true;
-  for (let attempts = 0; modified && attempts < 100; attempts++) {
+  for (let attempts = 0; modified && attempts < 10; attempts++) {
     modified = false;
     for (let i = 0; i < segment.length - 1; i++) {
       const currentPoint = segment[i];

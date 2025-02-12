@@ -3,7 +3,7 @@ import { optimizeMoves } from "../planner/optimize";
 import { Pixel } from "../common/pixel";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { createFullScreenDialog } from "../common/dialog";
-import { cutPolygonLower, deduplicatePixelMoves, getNLargestPolygons, getPolygonArea, mirrorPolygonY, moveIntoNonNegtiveX, movesToLatheCodeOrNull, polygonToTurnSegment, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
+import { cutPolygonLower, deduplicatePixelMoves, getNLargestPolygons, getPolygonArea, mirrorPolygonY, moveIntoNonNegtiveX, movesToLatheCodeOrNull, polygonToTurnSegments, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
 import { LatheCode } from "../common/lathecode";
 
 interface STL {
@@ -35,10 +35,10 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number): LatheCode[] 
   projections = projections.map(projection => removeConsecutiveDuplicatePoints(projection));
   projections = projections.map(projection => moveIntoNonNegtiveX(mirrorPolygonY(cutPolygonLower(projection))));
   projections = projections.filter(projection => getPolygonArea(projection) > 0.001);
+  projections = projections.map(projection => polygonToTurnSegments(projection)).reduce((a, b) => a.concat(b), []);
+  projections = projections.map(projection => repairPointsGoingBack(projection));
 
   let movesList = projections
-    .map(p => polygonToTurnSegment(p))
-    .map(p => repairPointsGoingBack(p))
     .map(p => segmentToMoves(p))
     .map(moves => optimizeMoves(moves, () => {}))
     .filter(moves => moves.length > 0);
@@ -52,6 +52,14 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number): LatheCode[] 
     const smallest = Math.min(size.x, size.y, size.z);
     const middle = size.x + size.y + size.z - largest - smallest;
     size = new THREE.Vector3(largest, middle, smallest);
+    const wellSizedLatheCodes = latheCodes.filter(lc => {
+      const lcSize = lc.getBoundingBox();
+      const diff = Math.abs(lcSize.x - size.x) / size.x + Math.abs(lcSize.y - size.y) / size.y + Math.abs(lcSize.z - size.z) / size.z;
+      return diff < 0.2;
+    });
+    if (wellSizedLatheCodes.length) {
+      latheCodes = wellSizedLatheCodes;
+    }
     latheCodes.sort((a, b) => size.distanceTo(a.getBoundingBox()) - size.distanceTo(b.getBoundingBox()));
     latheCodes = latheCodes.slice(0, 3);
   }

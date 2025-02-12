@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cutPolygonLower, deduplicatePixelMoves, findFirstNextDifferentY, getNLargestPolygons, getPolygonArea, moveIntoNonNegtiveX, polygonToTurnSegment, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, scaleAndRoundPolygon, trimSegmentEnds } from './pixelutils';
+import { cutPolygonLower, deduplicatePixelMoves, findFirstNextDifferentY, getNLargestPolygons, getPolygonArea, moveIntoNonNegtiveX, polygonToTurnSegment, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, trimSegmentEnds } from './pixelutils';
 import { Pixel, PixelMove } from './pixel';
 
 describe('getPolygonArea', () => {
@@ -387,7 +387,7 @@ describe('polygonToTurnSegment', () => {
       new Pixel(2, 1),
       new Pixel(2, 0),
     ];
-    expect(polygonToTurnSegment(polygon).toString()).toEqual([
+    expect(polygonToTurnSegment(polygon, 1).toString()).toEqual([
       new Pixel(0, 1),
       new Pixel(1, 2),
       new Pixel(2, 1),
@@ -398,6 +398,7 @@ describe('polygonToTurnSegment', () => {
 describe('trimSegmentEnds', () => {
   it('trims the ends of a segment', () => {
     const segment: Pixel[] = [
+      new Pixel(-1, 10),
       new Pixel(-1, 0),
       new Pixel(0, 0),
       new Pixel(1, 1),
@@ -405,6 +406,7 @@ describe('trimSegmentEnds', () => {
       new Pixel(2, 2),
       new Pixel(2, 0),
       new Pixel(3, 0),
+      new Pixel(3, 5),
     ];
     expect(trimSegmentEnds(segment)).toEqual([
       new Pixel(0, 0),
@@ -426,5 +428,59 @@ describe('trimSegmentEnds', () => {
 
   it('returns an empty array if the segment is empty', () => {
     expect(trimSegmentEnds([])).toEqual([]);
+  });
+});
+
+describe('repairPointsGoingBack', () => {
+  it('repairs points going back', () => {
+    const segment: Pixel[] = [
+      new Pixel(0, 0),
+      new Pixel(2, 2),
+      new Pixel(1, 0.5),
+      new Pixel(4, 0.5),
+      new Pixel(3, 2),
+      new Pixel(5, 1),
+    ];
+    expect(repairPointsGoingBack(segment)).toEqual([
+      new Pixel(0, 0),
+      new Pixel(2, 2),
+      new Pixel(2, 0.5),
+      new Pixel(3, 0.5),
+      new Pixel(3, 2),
+      new Pixel(5, 1),
+    ]);
+  });
+
+  it('handles reverse x direction', () => {
+    const segment: Pixel[] = [
+      new Pixel(5, 1),
+      new Pixel(3, 2),
+      new Pixel(4, 0.5),
+      new Pixel(1, 0.5),
+      new Pixel(2, 2),
+      new Pixel(0, 0),
+    ];
+    expect(repairPointsGoingBack(segment)).toEqual([
+      new Pixel(5, 1),
+      new Pixel(3, 2),
+      new Pixel(3, 0.5),
+      new Pixel(2, 0.5),
+      new Pixel(2, 2),
+      new Pixel(0, 0),
+    ]);
+  });
+
+  it('returns the segment if there are no points going back', () => {
+    const segment: Pixel[] = [
+      new Pixel(0, 0),
+      new Pixel(1, 1),
+      new Pixel(2, 2),
+      new Pixel(3, 3),
+    ];
+    expect(repairPointsGoingBack(segment)).toEqual(segment);
+  });
+
+  it('returns the segment if there are no points', () => {
+    expect(repairPointsGoingBack([])).toEqual([]);
   });
 });

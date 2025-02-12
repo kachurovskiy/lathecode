@@ -10,6 +10,10 @@ export class Pixel {
   equals(p: Pixel) {
     return this.x === p.x && this.y === p.y;
   }
+
+  toConstructorString() {
+    return `new Pixel(${this.x}, ${this.y})`;
+  }
 }
 
 export class PixelMove {
