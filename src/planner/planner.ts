@@ -32,6 +32,7 @@ export class Planner extends EventTarget {
       }
       this.container.replaceChildren();
       this.canvasContainer = null;
+      this.generationProgressMessage = null;
       this.canvas = null;
       this.tool = null;
     }
