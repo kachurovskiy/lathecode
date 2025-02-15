@@ -1,4 +1,4 @@
-; cylinder.stl
+; cone.stl
 
 ; Uncomment and modify lines below as needed
 ; STOCK D5
@@ -8,4 +8,6 @@
 ; MODE TURN ; for classic style of material removal
 ; AXES RIGHT DOWN ; for non-NanoEls controllers
 
-L10.000 R2.990
+L3.820 R6.000
+L20.000 RS6.000 RE14.730
+L10.250 R14.730

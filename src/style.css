@@ -44,6 +44,19 @@ body {
   border-radius: 0;
 }
 
+.statusContainer:not(:empty) {
+  position: absolute;
+  top: 0;
+  left: 10px;
+  right: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #4c85ff;
+  color: #ffffff;
+  font-size: 14px;
+  border-radius: 0;
+}
+
 .fullScreenDialog {
   position: fixed;
   top: 0;
@@ -121,6 +134,12 @@ button {
 button:hover {
   background-color: #ffff00;
 }
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
 
 progress {
   display: block;

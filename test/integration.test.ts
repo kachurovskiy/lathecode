@@ -54,15 +54,11 @@ test('stl to lathecode', async () => {
     const [fileChooser] = await Promise.all([page.waitForFileChooser(), page.click('.imageButton')]);
     await fileChooser.accept([resolve(__dirname, name + '.stl')]);
 
-    try {
-      await page.waitForSelector('.fullScreenDialog', { visible: true, timeout: 1000 });
-      await page.click('.selectorScene');
-    } catch (e) {
-      // Dialog may not appear if there's only 1 option
-    }
+    // Wait for body to lose busy cursor
+    await page.waitForFunction(() => getComputedStyle(document.body).cursor !== 'wait', {timeout: 10000});
 
     // Ensure there's no error reported parsing lathecode
-    expect(await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText)).toBe('');
+    expect(await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText), `Error in file ${name}`).toBe('');
 
     let latheCode = await page.$eval('.latheCodeInput', el => (el as HTMLTextAreaElement).value);
     saveInput(name, normalize(latheCode));

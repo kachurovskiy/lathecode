@@ -3,28 +3,27 @@ import { optimizeMoves } from "../planner/optimize";
 import { Pixel } from "../common/pixel";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { createFullScreenDialog } from "../common/dialog";
-import { cutPolygonLower, deduplicatePixelMoves, getNLargestPolygons, getPolygonArea, mirrorPolygonY, moveIntoNonNegtiveX, movesToLatheCodeOrNull, polygonToTurnSegments, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
+import { Pair, Polygon } from "polygon-clipping";
+import * as polygonClipping from "polygon-clipping";
+import { cutPolygonLower, deduplicatePixelMoves, getPolygonArea, mirrorPolygonY, moveIntoNonNegtiveX, movesToLatheCodeOrNull, polygonToTurnSegments, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
 import { LatheCode } from "../common/lathecode";
+import { booleanValid } from '@turf/boolean-valid';
 
-interface STL {
-  vertices: number[];
-  faces: number[][];
-  boundingBox: THREE.Box3 | null;
-}
-
-export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number): LatheCode[] {
+export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (progressMessage: string) => void): LatheCode[] {
   // Mesh is centered around 0
-  const mesh = parseSTL(stl);
+  const loader = new STLLoader();
+  const geometry = loader.parse(stl).center();
 
   // We don't know how the mesh is oriented and along which axis is intended to be rotated so we try all options and let user choose.
-  const projectionsX = cutMeshWithPlane(mesh, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0));
-  const projectionsY = cutMeshWithPlane(mesh, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0));
-  const projectionsZ = cutMeshWithPlane(mesh, new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0));
+  callback("Calculating xy projection...");
+  const projectionsX = projectOrCut(geometry, "xy", new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), callback);
+  callback("Calculating yz projection...");
+  const projectionsY = projectOrCut(geometry, "yz", new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), callback);
+  callback("Calculating xz projection...");
+  const projectionsZ = projectOrCut(geometry, "xz", new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), callback);
+  callback("Post-processing projections...");
 
   let projections = removeTinyAreaPolygons([... projectionsX, ... projectionsY, ... projectionsZ]);
-
-  // With complex models there can be too many projections, WebGL doesn't allow more than a few contexts.
-  projections = getNLargestPolygons(projections, 3);
 
   // Also include the rotated projections
   projections.push(... projections.map(projection => projection.map(pair => new Pixel(pair.y, pair.x))));
@@ -45,9 +44,9 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number): LatheCode[] 
   movesList = deduplicatePixelMoves(movesList);
 
   let latheCodes = movesList.map(m => movesToLatheCodeOrNull(m, pxPerMm)).filter(lc => lc !== null) as LatheCode[];
-  if (mesh.boundingBox !== null) {
+  if (geometry.boundingBox !== null) {
     let size = new THREE.Vector3();
-    mesh.boundingBox.getSize(size);
+    geometry.boundingBox.getSize(size);
     const largest = Math.max(size.x, size.y, size.z);
     const smallest = Math.min(size.x, size.y, size.z);
     const middle = size.x + size.y + size.z - largest - smallest;
@@ -66,18 +65,71 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number): LatheCode[] 
   return latheCodes;
 }
 
-function parseSTL(stlBuffer: ArrayBuffer): STL {
-  const loader = new STLLoader();
-  let geometry = loader.parse(stlBuffer).center();
-  const vertices = Array.from(geometry.attributes.position.array);
-  const faces = [];
-  for (let i = 0; i < vertices.length; i += 9) {
-    faces.push([i / 3, (i + 3) / 3, (i + 6) / 3]);
+export function projectOrCut(
+  geometry: THREE.BufferGeometry<THREE.NormalBufferAttributes>,
+  plane: string,
+  planeNormal: THREE.Vector3,
+  planePoint: THREE.Vector3,
+  progressCallback: (progressMessage: string) => void,
+): Pixel[][] {
+  try {
+    return projectOnPlane(geometry, plane, progressCallback);
+  } catch (e) {
+    console.log(`Failed projecting on plane ${plane}: ${e}`);
+    return cutMeshWithPlane(geometry, planeNormal, planePoint)
   }
-  return { vertices, faces, boundingBox: geometry.boundingBox };
 }
 
-function cutMeshWithPlane(mesh: STL, planeNormal: THREE.Vector3, planePoint: THREE.Vector3): Pixel[][] {
+function r5(num: number): number {
+  return Math.round(num * 1e5);
+}
+
+export function projectOnPlane(
+  geometry: THREE.BufferGeometry<THREE.NormalBufferAttributes>,
+  plane: string,
+  progressCallback: (progressMessage: string) => void,
+): Pixel[][] {
+  const positions = geometry.attributes.position.array;
+  const projectedPolygons: Polygon[] = [];
+  for (let i = 0; i < positions.length; i += 9) {
+    // Directly access the coordinates from positions array
+    const x1 = r5(positions[i]), y1 = r5(positions[i + 1]), z1 = r5(positions[i + 2]);
+    const x2 = r5(positions[i + 3]), y2 = r5(positions[i + 4]), z2 = r5(positions[i + 5]);
+    const x3 = r5(positions[i + 6]), y3 = r5(positions[i + 7]), z3 = r5(positions[i + 8]);
+
+    let projectedTriangle: Pair[] = [];
+
+    if (plane === "xy" && (z1 >= 0 || z2 >= 0 || z3 >= 0)) {
+      projectedTriangle = [[x1, y1], [x2, y2], [x3, y3], [x1, y1]];
+    } else if (plane === "xz" && (y1 >= 0 || y2 >= 0 || y3 >= 0)) {
+      projectedTriangle = [[x1, z1], [x2, z2], [x3, z3], [x1, z1]];
+    } else if (plane === "yz" && (x1 >= 0 || x2 >= 0 || x3 >= 0)) {
+      projectedTriangle = [[y1, z1], [y2, z2], [y3, z3], [y1, z1]];
+    } else {
+      continue;
+    }
+
+    if (booleanValid({type: "Polygon", coordinates: [projectedTriangle]})) {
+      projectedTriangle.pop();
+      projectedPolygons.push([projectedTriangle]);
+    }
+  }
+  progressCallback(`Merging ${projectedPolygons.length} polygons for plane ${plane}, please wait ${estimatePolygonClippingTime(projectedPolygons.length)} seconds...`);
+  const result = (polygonClipping as unknown as any).default.union(projectedPolygons);
+  return result.map((polygon: Polygon) =>
+    polygon[0].map(([x, y]) => new Pixel(x / 1e5, y / 1e5))
+  );
+}
+
+function estimatePolygonClippingTime(N: number, avgEdgesPerPolygon: number = 3, baseTimePerOp: number = 0.00001): number {
+  const n = N * avgEdgesPerPolygon;
+  const k = n / 2;
+  const estimatedOps = (n + k) * Math.log2(n);
+  return Math.ceil(baseTimePerOp * estimatedOps);
+}
+
+function cutMeshWithPlane(
+  geometry: THREE.BufferGeometry<THREE.NormalBufferAttributes>, planeNormal: THREE.Vector3, planePoint: THREE.Vector3): Pixel[][] {
   const intersectionEdges: Map<string, THREE.Vector3[]> = new Map();
   const coplanarEdges: Map<string, THREE.Vector3[]> = new Map();
 
@@ -88,23 +140,11 @@ function cutMeshWithPlane(mesh: STL, planeNormal: THREE.Vector3, planePoint: THR
   }
 
   // Step 1: Find intersection edges and merge coplanar faces
-  for (const face of mesh.faces) {
-    const v0 = new THREE.Vector3(
-      mesh.vertices[face[0] * 3],
-      mesh.vertices[face[0] * 3 + 1],
-      mesh.vertices[face[0] * 3 + 2]
-    );
-    const v1 = new THREE.Vector3(
-      mesh.vertices[face[1] * 3],
-      mesh.vertices[face[1] * 3 + 1],
-      mesh.vertices[face[1] * 3 + 2]
-    );
-    const v2 = new THREE.Vector3(
-      mesh.vertices[face[2] * 3],
-      mesh.vertices[face[2] * 3 + 1],
-      mesh.vertices[face[2] * 3 + 2]
-    );
-
+  const mesh = Array.from(geometry.attributes.position.array);
+  for (let i = 0; i < mesh.length; i += 9) {
+    const v0 = new THREE.Vector3(mesh[i], mesh[i + 1], mesh[i + 2]);
+    const v1 = new THREE.Vector3(mesh[i + 3], mesh[i + 4], mesh[i + 5]);
+    const v2 = new THREE.Vector3(mesh[i + 6], mesh[i + 7], mesh[i + 8]);
     const points = [v0, v1, v2];
     const distances = points.map(p => planeNormal.dot(p.clone().sub(planePoint)));
 

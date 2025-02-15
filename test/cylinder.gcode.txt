@@ -8,7 +8,7 @@
 ; MODE TURN ; for classic style of material removal
 ; AXES RIGHT DOWN ; for non-NanoEls controllers
 ;
-; L10.000 R2.980
+; L10.000 R2.990
 
 ; Run time 0.3 min, cutting 80% of time
 ; Working area 10.00 by 0.28 mm
@@ -17,7 +17,7 @@ G21 ; metric
 G18 ; ZX plane
 G90 ; absolute positioning
 F200
-X-2.98 ; zero your tool X on centerline
+X-2.99 ; zero your tool X on centerline
 Z0 ; zero your tool Z at the right edge of the stock
 G91 ; relative positioning
 Z0.01

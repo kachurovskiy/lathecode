@@ -1,6 +1,6 @@
 {
   "name": "lathecode",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -20,7 +20,9 @@
     "vitest": "^0.31.4"
   },
   "dependencies": {
+    "@turf/boolean-valid": "^7.2.0",
     "color": "^4.2.3",
+    "polygon-clipping": "^0.15.7",
     "three": "^0.173.0"
   }
 }

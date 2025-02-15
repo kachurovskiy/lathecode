@@ -1,14 +1,15 @@
 import { LatheCode } from '../common/lathecode.ts';
 import ImageWorker from './editorworker?worker&inline';
+import StlImportWorker from './stlimportworker?worker&inline';
 import { PixelMove } from '../common/pixel.ts';
 import { FromEditorWorkerMessage, ToEditorWorkerMessage } from './editorworker.ts';
-import { stlToLatheCodes } from './stlimport.ts';
-import { Selector } from './selector.ts';
+import { FromStlWorkerMessage } from './stlimportworker.ts';
 
 const PX_PER_MM = 100;
 
 export class Editor extends EventTarget {
   private errorContainer: HTMLDivElement;
+  private statusContainer: HTMLDivElement;
   private latheCodeInput: HTMLTextAreaElement;
   private planButton: HTMLButtonElement;
   private expandCollapseButton: HTMLButtonElement;
@@ -19,6 +20,7 @@ export class Editor extends EventTarget {
   private deleteButton: HTMLButtonElement;
   private exportButton: HTMLButtonElement;
   private importInput: HTMLInputElement;
+  private imageButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
 
@@ -27,6 +29,7 @@ export class Editor extends EventTarget {
 
     this.planButton = container.querySelector<HTMLButtonElement>('.planButton')!;
     this.errorContainer = container.querySelector('.errorContainer')!;
+    this.statusContainer = container.querySelector('.statusContainer')!;
     this.latheCodeInput = container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!;
     this.latheCodeInput.addEventListener('input', () => this.update());
     this.latheCodeInput.value = localStorage.getItem('latheCode') || this.latheCodeInput.value;
@@ -40,15 +43,23 @@ export class Editor extends EventTarget {
       this.dispatchEvent(new Event('plan'));
     });
 
-    container.querySelector<HTMLButtonElement>('.imageButton')!.addEventListener('click', () => {
+    this.imageButton = container.querySelector<HTMLButtonElement>('.imageButton')!;
+    this.imageButton.addEventListener('click', () => {
       this.errorContainer.textContent = '';
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*,.stl';
-      input.addEventListener('change', () => {
+      input.addEventListener('change', async () => {
         const selectedFile = input.files?.[0];
-        if (selectedFile?.name.endsWith('.stl')) this.importStl(selectedFile);
-        else if (selectedFile) this.recognize(selectedFile);
+        if (selectedFile?.name.endsWith('.stl')) {
+          this.imageButton.disabled = true;
+          document.body.style.cursor = 'wait';
+          await this.importStl(selectedFile);
+          document.body.style.cursor = 'default';
+          this.imageButton.disabled = false;
+        } else if (selectedFile) {
+          this.recognize(selectedFile);
+        }
       });
       input.click();
     });
@@ -209,37 +220,36 @@ export class Editor extends EventTarget {
     reader.readAsArrayBuffer(image);
   }
 
-  private importStl(file: File) {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const stl = reader.result as ArrayBuffer;
-      try {
-        const latheCodes = stlToLatheCodes(stl, 100);
-        if (latheCodes.length === 0) {
-          this.errorContainer.textContent = 'Empty models';
-          return;
+  private async importStl(file: File) {
+    return new Promise<void>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const stl = reader.result as ArrayBuffer;
+        if (this.worker) {
+          this.worker.onmessage = null;
+          this.worker.terminate();
         }
-        new Selector().pickLatheCode(latheCodes).then(latheCode => {
-          if (latheCode) {
-            this.latheCodeInput.value = `; ${file.name}
-
-; Uncomment and modify lines below as needed
-; STOCK D5
-; TOOL RECT R0.2 L2
-; DEPTH CUT1 FINISH0.1
-; FEED MOVE200 PASS50 PART10 ; speeds mm/min
-; MODE TURN ; for classic style of material removal
-; AXES RIGHT DOWN ; for non-NanoEls controllers
-
-` + latheCode.getText().trim();
+        this.worker = new StlImportWorker();
+        this.worker.onmessage = (event: MessageEvent<any>) => {
+          const m = event.data as FromStlWorkerMessage;
+          if (m.error) {
+            this.errorContainer.textContent = m.error;
+            this.statusContainer.textContent = '';
+            resolve();
+          } else if (m.latheCodeText) {
+            this.latheCodeInput.value = wrapStlText(file.name, m.latheCodeText);
+            this.statusContainer.textContent = '';
             this.update();
+            resolve();
+          } else if (m.progressMessage) {
+            this.statusContainer.textContent = m.progressMessage;
           }
-        });
-      } catch (e) {
-        this.errorContainer.textContent = String(e);
-      }
-    };
-    reader.readAsArrayBuffer(file);
+        };
+        this.worker.postMessage({ stl, pxPerMm: 100 });
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
   }
 
   private setLatheCodeFromPixelMoves(moves: PixelMove[]) {
@@ -320,4 +330,18 @@ function scaleImage(arrayBuffer: ArrayBuffer, scaleFactor: number): Promise<Arra
     img.onerror = () => reject(new Error('Failed to load the image.'));
     img.src = URL.createObjectURL(blob);
   });
+}
+
+function wrapStlText(name:string, stlText: string) {
+  return `; ${name}
+
+; Uncomment and modify lines below as needed
+; STOCK D5
+; TOOL RECT R0.2 L2
+; DEPTH CUT1 FINISH0.1
+; FEED MOVE200 PASS50 PART10 ; speeds mm/min
+; MODE TURN ; for classic style of material removal
+; AXES RIGHT DOWN ; for non-NanoEls controllers
+
+` + stlText;
 }
