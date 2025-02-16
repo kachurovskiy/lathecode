@@ -1,12 +1,5 @@
-; rooks20.stl
-
-; Uncomment and modify lines below as needed
-; STOCK D5
-; TOOL RECT R0.2 L2
-; DEPTH CUT1 FINISH0.1
-; FEED MOVE200 PASS50 PART10 ; speeds mm/min
-; MODE TURN ; for classic style of material removal
-; AXES RIGHT DOWN ; for non-NanoEls controllers
+DEPTH CUT1 FINISH0.1
+MODE TURN ; for classic style of material removal
 
 L5.650 R6.340
 L0.230 RS6.340 RE5.930

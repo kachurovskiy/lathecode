@@ -3,7 +3,6 @@ import { readFileSync, readdirSync, write, writeFileSync, rmSync } from 'fs';
 import { resolve } from 'path';
 import puppeteer from 'puppeteer';
 import { Page } from 'puppeteer';
-import { get } from 'http';
 
 const SUFFIX = '.gcode.txt';
 
@@ -13,7 +12,8 @@ function getInput(name: string) {
 
 function saveInput(name: string, input: string) {
   writeFileSync(resolve(__dirname, name + '.txt'), input + '\n');
-  writeFileSync(resolve(__dirname, name + SUFFIX), '');
+  const gcodePath = resolve(__dirname, name + SUFFIX);
+  if (!readdirSync(__dirname).includes(name + SUFFIX)) writeFileSync(gcodePath, '');
 }
 
 function saveGCode(name: string, gcode: string) {

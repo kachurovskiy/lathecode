@@ -120,7 +120,7 @@ export class PlannerWorker {
     this.postProgress();
     for (let passIndex = 0; passIndex < this.passes.length; passIndex++) {
       const endX = this.passes[passIndex].x;
-      const startX = passIndex === 0 ? this.canvas.width - 1 : this.passes[passIndex - 1].x;
+      const startX = passIndex === 0 ? this.canvas.width : this.passes[passIndex - 1].x;
       for (let startY = this.canvas.height; startY >= 0; startY -= this.getDepthOfCutPx()) {
         postMessage({progressMessage: `Starting subpass ${startY}`});
         const endY = this.passes[passIndex].finishAfter ? Math.max(0, startY - this.getDepthOfCutPx()) : -this.toolOvershootY;
