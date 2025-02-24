@@ -59,6 +59,16 @@ export function isSmoothingAllowed(m1: PixelMove, m2: PixelMove, epsilonPx: numb
 }
 
 export function smoothMoves(moves: PixelMove[], epsilonPx: number): PixelMove[] {
+  let result = moves;
+  let prevLength = result.length;
+  do {
+    prevLength = result.length;
+    result = smoothMovesOnce(result, epsilonPx);
+  } while (result.length < prevLength)
+  return result;
+}
+
+export function smoothMovesOnce(moves: PixelMove[], epsilonPx: number): PixelMove[] {
   const result: PixelMove[] = [];
   let i = 0;
   while (i < moves.length) {
@@ -71,14 +81,21 @@ export function smoothMoves(moves: PixelMove[], epsilonPx: number): PixelMove[] 
     result.push(m);
     i++;
   }
-  if (result.length < moves.length) {
-    return smoothMoves(result, epsilonPx);
-  } else {
-    return result;
-  }
+  return result;
 }
 
 export function optimizeMoves(moves: PixelMove[], progressCallback: (message: string) => void): PixelMove[] {
+  let result = moves;
+  let prevLength = result.length;
+  do {
+    prevLength = result.length;
+    result = optimizeMovesOnce(result, progressCallback);
+    progressCallback(`Optimized moves to ${result.length}`);
+  } while (result.length < prevLength)
+  return smoothMoves(result, EPSILON_SMOOTH_PX);
+}
+
+function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: string) => void): PixelMove[] {
   const result: PixelMove[] = [];
   let i = 0;
   while (i < moves.length) {
@@ -93,6 +110,7 @@ export function optimizeMoves(moves: PixelMove[], progressCallback: (message: st
       if (travel.length > 1 && travel.moves.length < travel.length) {
         result.push(... travel.moves);
         i += travel.length;
+        progressCallback(`Optimized ${travel.length} travel moves to ${travel.moves.length}`);
         continue;
       }
     }
@@ -101,6 +119,7 @@ export function optimizeMoves(moves: PixelMove[], progressCallback: (message: st
     if (condirectional.length > 1) {
       result.push(condirectional.move);
       i += condirectional.length;
+      progressCallback(`Optimized ${condirectional.length} codirectional moves to 1`);
       continue;
     }
 
@@ -122,6 +141,7 @@ export function optimizeMoves(moves: PixelMove[], progressCallback: (message: st
       if (count > 1) {
         result.push(mergeMoves(moves, i, 2 * count));
         i += 2 * count;
+        progressCallback(`Optimized ${2 * count} moves to 1`);
         continue;
       }
     }
@@ -129,11 +149,7 @@ export function optimizeMoves(moves: PixelMove[], progressCallback: (message: st
     result.push(m);
     i++;
   }
-  if (result.length < moves.length) {
-    return optimizeMoves(result, progressCallback);
-  } else {
-    return smoothMoves(result, EPSILON_SMOOTH_PX);
-  }
+  return result;
 }
 
 export function detectTravel(moves: PixelMove[], i: number): {moves: PixelMove[], length: number} {
@@ -148,7 +164,7 @@ export function detectTravel(moves: PixelMove[], i: number): {moves: PixelMove[]
 export function optimizeTravel(moves: PixelMove[]): PixelMove[] {
   const result = [];
   const start = moves[0];
-  const maxY = Math.max.apply(null, moves.map(m => m.yStart + m.yDelta));
+  const maxY = moves.reduce((max, m) => Math.max(max, m.yStart + m.yDelta), -Infinity);
   const end = moves.at(-1)!;
   const endX = end.xStart + end.xDelta;
   const endY = end.yStart + end.yDelta;
