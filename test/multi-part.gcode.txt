@@ -12,7 +12,7 @@
 ; L3 R9
 ; L3
 
-; Run time 9.5 min, cutting 83% of time
+; Run time 9.8 min, cutting 84% of time
 ; Working area 33.00 by 10.31 mm
 
 G21 ; metric
@@ -171,7 +171,7 @@ F200
 X-0.9
 Z0.49
 
-F50
+F10
 X1.21 ; cut 1.3398 mm2
 
 F200
@@ -351,7 +351,7 @@ F200
 X-0.9
 Z0.49
 
-F50
+F10
 X1.21 ; cut 1.3398 mm2
 
 F200
@@ -537,7 +537,7 @@ F200
 X-0.9
 Z0.49
 
-F50
+F10
 X1.21 ; cut 1.3398 mm2
 
 F200

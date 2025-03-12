@@ -17,7 +17,7 @@ describe('pixel', () => {
   });
 
   it('toMove', () => {
-    expect(PixelMove.withoutCut(10, 20, 1, -1).toMove(100)).toEqual(new Move(-0.1, -0.2, -0.01, 0.01, 0));
+    expect(PixelMove.withoutCut(10, 20, 1, -1).toMove(100)).toEqual(new Move(-0.1, -0.2, -0.01, 0.01, 0, 0));
   });
 
   it('isEmpty', () => {

@@ -13,7 +13,7 @@
 ; L0.2 DS10.5 DE10.3
 ; L2
 
-; Run time 3.0 min, cutting 80% of time
+; Run time 3.1 min, cutting 81% of time
 ; Working area 10.60 by 6.14 mm
 
 G21 ; metric
@@ -189,15 +189,17 @@ F200
 X-0.55
 Z0.5
 
-F50
+F10
 X0.67 ; cut 0.508 mm2
+
+F50
 Z-0.23 X-0.11 ; cut 0.0037 mm2 at 64.44°
 
 F200
 X-0.56
 Z0.32
 
-F50
+F10
 X0.79 ; cut 0.2937 mm2
 
 F200

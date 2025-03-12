@@ -4,14 +4,15 @@ export class Move {
     readonly yStartMm: number,
     readonly xDeltaMm: number,
     readonly yDeltaMm: number,
-    readonly cutAreaMmSq: number) { }
+    readonly cutAreaMmSq: number,
+    readonly cutAreaMaxWidthMm: number) { }
 
   toString() {
-    return `${this.xDeltaMm},${this.yDeltaMm}:${this.cutAreaMmSq}`;
+    return `${this.xDeltaMm},${this.yDeltaMm}:${this.cutAreaMmSq},${this.cutAreaMaxWidthMm}`;
   }
 
   toConstructorString() {
-    return `new Move(${this.xStartMm}, ${this.yStartMm}, ${this.xDeltaMm}, ${this.yDeltaMm}, ${this.cutAreaMmSq})`;
+    return `new Move(${this.xStartMm}, ${this.yStartMm}, ${this.xDeltaMm}, ${this.yDeltaMm}, ${this.cutAreaMmSq}, ${this.cutAreaMaxWidthMm})`;
   }
 
   isEmpty() {

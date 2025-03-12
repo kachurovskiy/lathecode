@@ -66,7 +66,7 @@ export function moveToGCode(latheCode: LatheCode, m: Move): string {
 
 export function getFeedMmMin(m: Move, feed: Feed, tool: Tool) {
   if (m.cutAreaMmSq <= 0.001) return feed.moveMmMin;
-  if (!m.xDeltaMm && (m.cutAreaMmSq / m.yDeltaMm > tool.widthMm / 2)) return feed.partMmMin;
+  if (!m.xDeltaMm && (m.cutAreaMaxWidthMm > tool.widthMm / 2)) return feed.partMmMin;
   return feed.passMmMin;
 }
 

@@ -38,7 +38,25 @@ export class PixelMove {
   }
 
   toMove(pxPerMm: number): Move {
-    return new Move(-this.xStart / pxPerMm, -this.yStart / pxPerMm, -this.xDelta / pxPerMm, -this.yDelta / pxPerMm, this.cutArea / pxPerMm / pxPerMm);
+    return new Move(
+      -this.xStart / pxPerMm,
+      -this.yStart / pxPerMm,
+      -this.xDelta / pxPerMm,
+      -this.yDelta / pxPerMm,
+      this.cutArea / pxPerMm / pxPerMm,
+      this.getMaxCutWidth() / pxPerMm,
+    );
+  }
+
+  getMaxCutWidth() {
+    if (!this.cutPixels.length) return 0;
+    let minX = this.cutPixels[0].x;
+    let maxX = minX;
+    for (let p of this.cutPixels) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+    }
+    return maxX - minX + 1;
   }
 
   isEmpty() {

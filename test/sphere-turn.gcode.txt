@@ -6,7 +6,7 @@
 ; L5 DS10 DE0 CONV
 ; L3 D3
 
-; Run time 2.8 min, cutting 58% of time
+; Run time 3.3 min, cutting 63% of time
 ; Working area 14.00 by 5.14 mm
 
 G21 ; metric
@@ -123,8 +123,10 @@ F200
 X-2.53
 Z10.64
 
-F50
+F10
 X2.51 ; cut 0.0181 mm2
+
+F50
 Z0.25 X0.49 ; cut 0.9948 mm2 at 27.03°
 Z1.44 ; cut 0.7271 mm2
 X-3 ; cut 0.0023 mm2
@@ -142,8 +144,10 @@ F200
 X-3.02
 Z11.13
 
-F50
+F10
 X3.01 ; cut 0.0182 mm2
+
+F50
 Z0.16 X0.39 ; cut 0.7789 mm2 at 22.31°
 Z1.28 ; cut 0.5191 mm2
 X-3.4 ; cut 0.0014 mm2
