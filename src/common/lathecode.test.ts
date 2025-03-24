@@ -142,6 +142,36 @@ describe('lathecode', () => {
     expect(new LatheCode('AXES LEFT UP\nL1\nL2 R3\nL3 D0').getXDirection()).toEqual('UP');
     expect(new LatheCode('AXES RIGHT DOWN\nL1\nL2 R3\nL3 D0').getXDirection()).toEqual('DOWN');
   });
+
+  it('reverses', () => {
+    expect(new LatheCode(`UNITS MM
+STOCK D23.25
+TOOL RECT R0.2 L2
+DEPTH CUT0.5 FINISH0.2
+FEED MOVE200 PASS50 PART10
+
+L2 D9.8 ; line 1
+L3 D9.8
+L24 DS15.733 DE14.5 ; line 3
+L4 DS14.5 DE1 ; line 4
+L5 DS10 DE0 CONV
+L15 DS0 DE5 CONC ; line 6
+L1
+L1 ; line 8`).reverse()).toEqual(`UNITS MM
+STOCK D23.25
+TOOL RECT R0.2 L2
+DEPTH CUT0.5 FINISH0.2
+FEED MOVE200 PASS50 PART10
+
+L1 ; line 8
+L1
+L15 DS5 DE0 CONC ; line 6
+L5 DS0 DE10 CONV
+L4 DS1 DE14.5 ; line 4
+L24 DS14.5 DE15.733 ; line 3
+L3 D9.8
+L2 D9.8 ; line 1`);
+  });
 })
 
 function expectPoints(text: string, o: string, i: string) {

@@ -21,6 +21,7 @@ export class Editor extends EventTarget {
   private exportButton: HTMLButtonElement;
   private importInput: HTMLInputElement;
   private imageButton: HTMLButtonElement;
+  private flipButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
 
@@ -62,6 +63,13 @@ export class Editor extends EventTarget {
         }
       });
       input.click();
+    });
+
+    this.flipButton = container.querySelector<HTMLButtonElement>('.flipButton')!;
+    this.flipButton.addEventListener('click', () => {
+      if (!this.latheCode) return;
+      this.latheCodeInput.value = this.latheCode.reverse();
+      this.update();
     });
 
     this.saveButton = container.querySelector<HTMLButtonElement>('.saveButton')!;

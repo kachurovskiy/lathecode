@@ -286,6 +286,30 @@ export class LatheCode {
     }
     return segments;
   }
+
+  reverse(): string {
+    const firstLLine = this.text.indexOf('\nL');
+    if (firstLLine === -1) return this.text;
+    const preambula = this.text.substring(0, firstLLine);
+    const outside = this.data[this.data.length - 3];
+    const result = [];
+    for (const line of outside) {
+      result.push(reverseLine(line[1]));
+    }
+    return preambula + '\n' + result.reverse().join('\n');
+  }
+}
+
+function reverseLine(line: Array<string|number|null>): string {
+  if (line[0] !== 'L') throw new Error('Expected L line');
+  const second = line[2] as string;
+  if (['D', 'R'].includes(second)) {
+    return `L${line[1]} ${second}${line[3]}${line[4] ? ' ; ' + line[4] : ''}`;
+  }
+  if (['DS', 'RS'].includes(second)) {
+    return `L${line[1]} ${second}${line[5]} ${line[4]}${line[3]}${line[6] ? ' ' + line[6] : ''}${line[7] ? ' ; ' + (line[6] ? (line[7] as string).substring(1).trim() : line[7]) : ''}`;
+  }
+  return `L${line[1]}${line[2] ? ' ; ' + line[2] : ''}`;
 }
 
 export function removeColinearSegments(segments: Segment[]): Segment[] {
