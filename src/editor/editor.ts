@@ -52,7 +52,7 @@ export class Editor extends EventTarget {
       input.accept = 'image/*,.stl';
       input.addEventListener('change', async () => {
         const selectedFile = input.files?.[0];
-        if (selectedFile?.name.endsWith('.stl')) {
+        if (selectedFile?.name.toLowerCase().endsWith('.stl')) {
           this.imageButton.disabled = true;
           document.body.style.cursor = 'wait';
           await this.importStl(selectedFile);
