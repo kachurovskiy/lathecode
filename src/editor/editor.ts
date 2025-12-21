@@ -1,8 +1,5 @@
 import { LatheCode } from '../common/lathecode.ts';
-import ImageWorker from './editorworker?worker&inline';
 import StlImportWorker from './stlimportworker?worker&inline';
-import { PixelMove } from '../common/pixel.ts';
-import { FromEditorWorkerMessage, ToEditorWorkerMessage } from './editorworker.ts';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
 
 const PX_PER_MM = 100;
@@ -20,7 +17,7 @@ export class Editor extends EventTarget {
   private deleteButton: HTMLButtonElement;
   private exportButton: HTMLButtonElement;
   private importInput: HTMLInputElement;
-  private imageButton: HTMLButtonElement;
+  private importStlButton: HTMLButtonElement;
   private flipButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
@@ -44,22 +41,24 @@ export class Editor extends EventTarget {
       this.dispatchEvent(new Event('plan'));
     });
 
-    this.imageButton = container.querySelector<HTMLButtonElement>('.imageButton')!;
-    this.imageButton.addEventListener('click', () => {
+    this.importStlButton = container.querySelector<HTMLButtonElement>('.imageButton')!;
+    this.importStlButton.addEventListener('click', () => {
       this.errorContainer.textContent = '';
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*,.stl';
+      input.accept = '.stl';
       input.addEventListener('change', async () => {
         const selectedFile = input.files?.[0];
-        if (selectedFile?.name.toLowerCase().endsWith('.stl')) {
-          this.imageButton.disabled = true;
-          document.body.style.cursor = 'wait';
+        if (!selectedFile) return;
+        this.importStlButton.disabled = true;
+        document.body.style.cursor = 'wait';
+        try {
           await this.importStl(selectedFile);
+        } catch (error) {
+          this.errorContainer.textContent = error instanceof Error ? error.message : String(error);
+        } finally {
           document.body.style.cursor = 'default';
-          this.imageButton.disabled = false;
-        } else if (selectedFile) {
-          this.recognize(selectedFile);
+          this.importStlButton.disabled = false;
         }
       });
       input.click();
@@ -195,39 +194,6 @@ export class Editor extends EventTarget {
     this.dispatchEvent(new Event('change'));
   }
 
-  private recognize(image: File) {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      let image = reader.result as ArrayBuffer;
-      if (this.worker) {
-        this.worker.onmessage = null;
-        this.worker.terminate();
-      }
-      const imageHeight = await getImageHeight(image);
-      const initialLengthMm = imageHeight / PX_PER_MM;
-      const lengthMm = Number(prompt('How long should the part be in mm?', initialLengthMm.toFixed(2)));
-      if (isNaN(lengthMm) || lengthMm <= 0) return;
-      image = await scaleImage(image, lengthMm / initialLengthMm);
-      this.worker = new ImageWorker();
-      this.worker.onmessage = (event: MessageEvent<any>) => {
-        const m = event.data as FromEditorWorkerMessage;
-        if (m.moves && m.moves.length) {
-          this.setLatheCodeFromPixelMoves(m.moves.map(m => {
-            Object.setPrototypeOf(m, PixelMove.prototype);
-            return m;
-          }));
-        } else if (m.error) {
-          this.errorContainer.textContent = m.error;
-        }
-      };
-      const smoothEpsilon = Number(prompt('How smooth should it be? Use values between 1 and 10:', '1'));
-      if (isNaN(smoothEpsilon) || smoothEpsilon < 0) return;
-      const toWorker: ToEditorWorkerMessage = { image, pxPerMm: 100, smoothEpsilon };
-      this.worker.postMessage(toWorker);
-    };
-    reader.readAsArrayBuffer(image);
-  }
-
   private async importStl(file: File) {
     return new Promise<void>((resolve, reject) => {
       const reader = new FileReader();
@@ -253,19 +219,11 @@ export class Editor extends EventTarget {
             this.statusContainer.textContent = m.progressMessage;
           }
         };
-        this.worker.postMessage({ stl, pxPerMm: 100 });
+        this.worker.postMessage({ stl, pxPerMm: PX_PER_MM });
       };
       reader.onerror = reject;
       reader.readAsArrayBuffer(file);
     });
-  }
-
-  private setLatheCodeFromPixelMoves(moves: PixelMove[]) {
-    const lines = moves.map(m => {
-      return m.toMove(PX_PER_MM).toLatheCode();
-    }).filter(line => !!line);
-    this.latheCodeInput.value = lines.join('\n');
-    this.update();
   }
 
   exportLocalStorage() {
@@ -303,41 +261,6 @@ export class Editor extends EventTarget {
     };
     reader.readAsText(file);
   }
-
-}
-
-function getImageHeight(arrayBuffer: ArrayBuffer): Promise<number> {
-  return new Promise<number>((resolve, reject) => {
-    const blob = new Blob([arrayBuffer]);
-    const img = new Image();
-    img.onload = () => resolve(img.height);
-    img.onerror = () => reject(new Error('Failed to load the image.'));
-    img.src = URL.createObjectURL(blob);
-  });
-}
-
-function scaleImage(arrayBuffer: ArrayBuffer, scaleFactor: number): Promise<ArrayBuffer> {
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    const blob = new Blob([arrayBuffer]);
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const width = img.width * scaleFactor;
-      const height = img.height * scaleFactor;
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob((blob) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as ArrayBuffer);
-        reader.onerror = () => reject(new Error('Failed to read the scaled image data.'));
-        reader.readAsArrayBuffer(blob!);
-      }, 'image/png', 1);
-    };
-    img.onerror = () => reject(new Error('Failed to load the image.'));
-    img.src = URL.createObjectURL(blob);
-  });
 }
 
 function wrapStlText(name:string, stlText: string) {
