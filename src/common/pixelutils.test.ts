@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cutPolygonLower, deduplicatePixelMoves, findFirstNextDifferentY, getNLargestPolygons, getPolygonArea, moveIntoNonNegtiveX, polygonToTurnSegment, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, trimSegmentEnds } from './pixelutils';
+import { cutPolygonLower, deduplicatePixelMoves, findFirstNextDifferentY, getNLargestPolygons, getPolygonArea, moveIntoNonNegativeX, polygonToTurnSegment, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, trimSegmentEnds } from './pixelutils';
 import { Pixel, PixelMove } from './pixel';
 
 describe('getPolygonArea', () => {
@@ -340,14 +340,14 @@ describe('findFirstNextDifferentY', () => {
 });
 
 /*
-export function moveIntoNonNegtiveX(polygon: Pixel[]): Pixel[] {
+export function moveIntoNonNegativeX(polygon: Pixel[]): Pixel[] {
   if (polygon.length === 0) return polygon;
   const minX = polygon.reduce((min, p) => Math.min(min, p.x), polygon[0].x);
   return polygon.map(p => new Pixel(p.x - minX, p.y));
 }
  */
 
-describe('moveIntoNonNegtiveX', () => {
+describe('moveIntoNonNegativeX', () => {
   it('moves a polygon into the non-negative x range', () => {
     const polygon: Pixel[] = [
       new Pixel(1 - 5, 0),
@@ -355,7 +355,7 @@ describe('moveIntoNonNegtiveX', () => {
       new Pixel(3 - 5, 1),
       new Pixel(4 - 5, 1),
     ];
-    expect(moveIntoNonNegtiveX(polygon)).toEqual([
+    expect(moveIntoNonNegativeX(polygon)).toEqual([
       new Pixel(0, 0),
       new Pixel(1, 0),
       new Pixel(2, 1),
@@ -370,11 +370,11 @@ describe('moveIntoNonNegtiveX', () => {
       new Pixel(2, 1),
       new Pixel(3, 1),
     ];
-    expect(moveIntoNonNegtiveX(polygon)).toEqual(polygon);
+    expect(moveIntoNonNegativeX(polygon)).toEqual(polygon);
   });
 
   it('returns an empty array if the polygon is empty', () => {
-    expect(moveIntoNonNegtiveX([])).toEqual([]);
+    expect(moveIntoNonNegativeX([])).toEqual([]);
   });
 });
 

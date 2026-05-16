@@ -104,12 +104,12 @@ export class Scene extends THREE.Scene {
   }
 
   private createLatheMesh(): THREE.Object3D {
-    const insideSegments = this.latheCode?.getOutsideSegments() || [];
-    const outsideSegments = this.latheCode?.getInsideSegments() || [];
-    if (insideSegments.length && outsideSegments.length) {
+    const outsideSegments = this.latheCode?.getOutsideSegments() || [];
+    const insideSegments = this.latheCode?.getInsideSegments() || [];
+    if (outsideSegments.length && insideSegments.length) {
       throw new Error('editor does not support both inside and outside profiles at the same time yet');
     }
-    const segments = insideSegments.length ? insideSegments : outsideSegments;
+    const segments = outsideSegments.length ? outsideSegments : insideSegments;
     if (!segments?.length) throw new Error('Unable to build the profile');
     const vectors = segments.map(s => getApproxPoints(s)).flat();
     const latheGeometry = new THREE.LatheGeometry(vectors, 256, 0);

@@ -99,7 +99,7 @@ export function findFirstPreviousDifferentY(polygon: Pixel[], start: Pixel): num
   return start.y;
 }
 
-export function moveIntoNonNegtiveX(polygon: Pixel[]): Pixel[] {
+export function moveIntoNonNegativeX(polygon: Pixel[]): Pixel[] {
   if (polygon.length === 0) return polygon;
   const minX = polygon.reduce((min, p) => Math.min(min, p.x), polygon[0].x);
   return polygon.map(p => new Pixel(p.x - minX, p.y));
@@ -150,7 +150,7 @@ export function polygonToTurnSegment(polygon: Pixel[], direction: number): Pixel
 
   // Less deflection to have a larger base for the part
   if (maxXPoint.y < minXPoint.y) {
-    segment = moveIntoNonNegtiveX(mirrorPolygonX(segment));
+    segment = moveIntoNonNegativeX(mirrorPolygonX(segment));
   }
 
   return trimSegmentEnds(segment);

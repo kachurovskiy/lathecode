@@ -5,7 +5,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { createFullScreenDialog } from "../common/dialog";
 import { Pair, Polygon } from "polygon-clipping";
 import * as polygonClipping from "polygon-clipping";
-import { cutPolygonLower, deduplicatePixelMoves, getPolygonArea, mirrorPolygonY, moveIntoNonNegtiveX, movesToLatheCodeOrNull, polygonToTurnSegments, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
+import { cutPolygonLower, deduplicatePixelMoves, getPolygonArea, mirrorPolygonY, moveIntoNonNegativeX, movesToLatheCodeOrNull, polygonToTurnSegments, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
 import { LatheCode } from "../common/lathecode";
 import { booleanValid } from '@turf/boolean-valid';
 
@@ -32,7 +32,7 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (pr
   projections = projections.map(projection => scaleAndRoundPolygon(projection, pxPerMm));
 
   projections = projections.map(projection => removeConsecutiveDuplicatePoints(projection));
-  projections = projections.map(projection => moveIntoNonNegtiveX(mirrorPolygonY(cutPolygonLower(projection))));
+  projections = projections.map(projection => moveIntoNonNegativeX(mirrorPolygonY(cutPolygonLower(projection))));
   projections = projections.filter(projection => getPolygonArea(projection) > 0.001);
   projections = projections.map(projection => polygonToTurnSegments(projection)).reduce((a, b) => a.concat(b), []);
   projections = projections.map(projection => repairPointsGoingBack(projection));
