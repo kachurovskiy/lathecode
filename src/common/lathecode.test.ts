@@ -77,6 +77,14 @@ describe('lathecode', () => {
     expectPoints('UNITS CM\nL2 R3', 'LINE:0,20-0,0 LINE:0,0-30,0 LINE:30,0-30,20 LINE:30,20-0,20', '');
   });
 
+  it('does not scale tool angles by units', () => {
+    const tool = new LatheCode('UNITS IN\nTOOL ANG R0.2 L7.75 A30 NA55\nL1 R1').getTool();
+    expect(tool.cornerRadiusMm).toBeCloseTo(0.2 * 25.4);
+    expect(tool.widthMm).toBeCloseTo(7.75 * 25.4);
+    expect(tool.angleDeg).toBe(30);
+    expect(tool.noseAngleDeg).toBe(55);
+  });
+
   it('face + cylinder', () => {
     expectPoints('L1\nL2 D6', 'LINE:0,3-0,1 LINE:0,1-3,1 LINE:3,1-3,3 LINE:3,3-0,3', '');
   });

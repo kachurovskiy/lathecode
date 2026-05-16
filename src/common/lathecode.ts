@@ -137,8 +137,8 @@ export class LatheCode {
     const radius = params[0] ? params[0][1] * this.unitsMultiplier : 0;
     const length = params[1] ? params[1][1] * this.unitsMultiplier : 0;
     const height = params[2] ? params[2][1] * this.unitsMultiplier : 0;
-    const angle = params[3] ? params[3][1] * this.unitsMultiplier : 0;
-    const noseAngle = params[4] ? params[4][1] * this.unitsMultiplier : 0;
+    const angle = params[3] ? params[3][1] : 0;
+    const noseAngle = params[4] ? params[4][1] : 0;
     if (type === 'RECT') {
       if (angle) throw new Error('A not implemented for TOOL RECT');
       if (noseAngle) throw new Error('NA not supported for TOOL RECT');
