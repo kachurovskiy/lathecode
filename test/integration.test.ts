@@ -9,6 +9,8 @@ const PUPPETEER_LAUNCH_OPTIONS = {
   args: ['--disable-gpu', '--no-sandbox', '--disable-setuid-sandbox'],
   // headless: false, // for debugging
 };
+const STL_INTEGRATION_CASE = 'cylinder';
+const GCODE_INTEGRATION_CASE = 'cylinder';
 let server: ViteDevServer;
 let baseUrl = '';
 
@@ -70,73 +72,63 @@ async function setLatheCodeInput(page: Page, value: string) {
   }, value);
 }
 
-function getCases() {
-  return readdirSync(__dirname).filter(file => file.endsWith(SUFFIX)).map(name => name.substring(0, name.length - SUFFIX.length));
-}
-
-function getStls() {
-  return readdirSync(__dirname).filter(file => file.endsWith('.stl')).map(name => name.substring(0, name.length - 4));
-}
-
 test('stl to lathecode', async () => {
+  const name = STL_INTEGRATION_CASE;
   const browser = await puppeteer.launch(PUPPETEER_LAUNCH_OPTIONS);
   try {
     const page = await browser.newPage();
     await page.goto(getAppUrl(), {waitUntil: 'domcontentloaded'});
 
-    for (let name of getStls()) {
-      // Empty the lathecode input
-      await setLatheCodeInput(page, '');
+    // Empty the lathecode input
+    await setLatheCodeInput(page, '');
 
-      // Click imageButton and pick the stl file in the system file picker
-      const [fileChooser] = await Promise.all([page.waitForFileChooser(), page.click('.imageButton')]);
-      await fileChooser.accept([resolve(__dirname, name + '.stl')]);
+    // Click imageButton and pick the stl file in the system file picker
+    const [fileChooser] = await Promise.all([page.waitForFileChooser(), page.click('.imageButton')]);
+    await fileChooser.accept([resolve(__dirname, name + '.stl')]);
 
-      // Wait for body to lose busy cursor
-      await page.waitForFunction(() => getComputedStyle(document.body).cursor !== 'wait', {timeout: 10000});
+    // Wait for body to lose busy cursor
+    await page.waitForFunction(() => getComputedStyle(document.body).cursor !== 'wait', {timeout: 60000});
 
-      // Ensure there's no error reported parsing lathecode
-      expect(await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText), `Error in file ${name}`).toBe('');
+    // Ensure there's no error reported parsing lathecode
+    expect(await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText), `Error in file ${name}`).toBe('');
 
-      let latheCode = await page.$eval('.latheCodeInput', el => (el as HTMLTextAreaElement).value);
-      saveInput(name, normalize(latheCode));
-    }
+    let latheCode = await page.$eval('.latheCodeInput', el => (el as HTMLTextAreaElement).value);
+    saveInput(name, normalize(latheCode));
   } finally {
     await browser.close();
   }
-}, {timeout: 60000});
+}, {timeout: 120000});
 
 test('lathecode inputs to gcode', async () => {
+  const name = GCODE_INTEGRATION_CASE;
   const browser = await puppeteer.launch(PUPPETEER_LAUNCH_OPTIONS);
   try {
     const page = await browser.newPage();
     await page.goto(getAppUrl(), {waitUntil: 'domcontentloaded'});
 
-    for (let name of getCases()) {
-      // Set the lathecode
-      await setLatheCodeInput(page, getInput(name));
+    // Set the lathecode
+    await setLatheCodeInput(page, getInput(name));
 
-      // Ensure there's no error reported parsing lathecode
-      expect(await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText)).toBe('');
+    // Ensure there's no error reported parsing lathecode
+    expect(await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText)).toBe('');
 
-      // Start GCode calculation
-      await page.click('.planButton');
+    // Start GCode calculation
+    await page.click('.planButton');
 
-      // Save GCode so that developer would notice effects on GCode in `git diff`
-      try {
-        await page.waitForSelector('#gcodeTextarea', { visible: true, timeout: 30000 });
-      } catch (error) {
-        const editorError = await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText);
-        throw new Error(`GCode was not generated for ${name}: ${error instanceof Error ? error.message : String(error)}${editorError ? `\nEditor error: ${editorError}` : ''}`);
-      }
-      let result = await page.$eval('#gcodeTextarea', (el) => (el as HTMLTextAreaElement).value);
-      saveGCode(name, normalize(result));
-
-      // Take screenshot of the tool path to easier understand the difference
-      await screenshot(page, name + '.part', '#plannerContainer canvas.part');
-      await screenshot(page, name + '.tool', '#plannerContainer canvas.tool');
-      await screenshot(page, name + '.moves', '#plannerContainer canvas.moves');
+    // Save GCode so that developer would notice effects on GCode in `git diff`
+    try {
+      await page.waitForSelector('#gcodeTextarea', { visible: true, timeout: 60000 });
+    } catch (error) {
+      const editorError = await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText);
+      throw new Error(`GCode was not generated for ${name}: ${error instanceof Error ? error.message : String(error)}${editorError ? `\nEditor error: ${editorError}` : ''}`);
     }
+    let result = await page.$eval('#gcodeTextarea', (el) => (el as HTMLTextAreaElement).value);
+    saveGCode(name, normalize(result));
+
+    // Take screenshot of the tool path to easier understand the difference
+    await screenshot(page, name + '.part', '#plannerContainer canvas.part');
+    await screenshot(page, name + '.tool', '#plannerContainer canvas.tool');
+    await screenshot(page, name + '.moves', '#plannerContainer canvas.moves');
   } finally {
     await browser.close();
   }

@@ -4,6 +4,7 @@ import { Pixel, PixelMove } from "../common/pixel";
 const CUTTING_EDGE_THICKNESS = 2;
 
 export type RadialCuttingEdge = 'top' | 'bottom';
+export type TravelRetractionSide = 'minY' | 'maxY';
 
 export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCuttingEdge = 'top'): Pixel[] {
   const toolData = tool.getContext("2d")!.getImageData(0, 0, tool.width, tool.height).data;
@@ -53,7 +54,7 @@ const EPSILON_DEGREES_DEFAULT = 0.05;
 const EPSILON_SMOOTH_PX = 0.9;
 
 export function isSmoothingAllowed(m1: PixelMove, m2: PixelMove, epsilonPx: number) {
-  const m = m1.merge(m2);
+  const m = mergeGeometry(m1, m2);
   const angleDegrees = m.getAngleToDegrees(m1);
   if (angleDegrees === 180) return false;
   const mistake = Math.sin(angleDegrees / 180 * Math.PI) * m1.length();
@@ -86,18 +87,18 @@ export function smoothMovesOnce(moves: PixelMove[], epsilonPx: number): PixelMov
   return result;
 }
 
-export function optimizeMoves(moves: PixelMove[], progressCallback: (message: string) => void): PixelMove[] {
+export function optimizeMoves(moves: PixelMove[], progressCallback: (message: string) => void, travelRetractionSide: TravelRetractionSide = 'maxY'): PixelMove[] {
   let result = moves;
   let prevLength = result.length;
   do {
     prevLength = result.length;
-    result = optimizeMovesOnce(result, progressCallback);
+    result = optimizeMovesOnce(result, progressCallback, travelRetractionSide);
     progressCallback(`Optimized moves to ${result.length}`);
   } while (result.length < prevLength)
   return smoothMoves(result, EPSILON_SMOOTH_PX);
 }
 
-function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: string) => void): PixelMove[] {
+function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: string) => void, travelRetractionSide: TravelRetractionSide): PixelMove[] {
   const result: PixelMove[] = [];
   let i = 0;
   while (i < moves.length) {
@@ -108,7 +109,7 @@ function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: strin
     }
 
     if (!m.cutArea) {
-      const travel = detectTravel(moves, i);
+      const travel = detectTravel(moves, i, travelRetractionSide);
       if (travel.length > 1 && travel.moves.length < travel.length) {
         result.push(... travel.moves);
         i += travel.length;
@@ -134,7 +135,7 @@ function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: strin
         const j = i + count * 2;
         if (moves[j].isBasic() &&
             moves[j + 1].isHorizontalOrVertical() &&
-            moves[j - 2].merge(moves[j - 1]).getAngleToDegrees(moves[j].merge(moves[j + 1])) < EPSILON_DEGREES_DEFAULT) {
+            mergeGeometry(moves[j - 2], moves[j - 1]).getAngleToDegrees(mergeGeometry(moves[j], moves[j + 1])) < EPSILON_DEGREES_DEFAULT) {
           count++;
         } else {
           break;
@@ -154,37 +155,42 @@ function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: strin
   return result;
 }
 
-export function detectTravel(moves: PixelMove[], i: number): {moves: PixelMove[], length: number} {
+export function detectTravel(moves: PixelMove[], i: number, travelRetractionSide: TravelRetractionSide = 'maxY'): {moves: PixelMove[], length: number} {
   if (moves[i].cutArea) throw new Error('expecting a travel move');
   let end = i;
   while (end < moves.length - 1 && !moves[end + 1].cutArea) {
     end++;
   }
-  return {moves: optimizeTravel(moves.slice(i, end + 1)), length: end - i + 1};
+  return {moves: optimizeTravel(moves.slice(i, end + 1), travelRetractionSide), length: end - i + 1};
 }
 
-export function optimizeTravel(moves: PixelMove[]): PixelMove[] {
+export function optimizeTravel(moves: PixelMove[], travelRetractionSide: TravelRetractionSide = 'maxY'): PixelMove[] {
   const result = [];
   const start = moves[0];
-  const maxY = moves.reduce((max, m) => Math.max(max, m.yStart + m.yDelta), -Infinity);
+  const safeY = getSafeTravelY(moves, travelRetractionSide);
   const end = moves.at(-1)!;
   const endX = end.xStart + end.xDelta;
   const endY = end.yStart + end.yDelta;
   let currentY = start.yStart;
   if (endX != start.xStart) {
-    if (start.yStart !== maxY) {
+    if (start.yStart !== safeY) {
       // Move back.
-      result.push(PixelMove.withoutCut(start.xStart, start.yStart, 0, maxY - start.yStart));
-      currentY = maxY;
+      result.push(PixelMove.withoutCut(start.xStart, start.yStart, 0, safeY - start.yStart));
+      currentY = safeY;
     }
     // Move to target x.
-    result.push(PixelMove.withoutCut(start.xStart, maxY, endX - start.xStart, 0));
+    result.push(PixelMove.withoutCut(start.xStart, safeY, endX - start.xStart, 0));
   }
   if (endY != currentY) {
     // Move to target y.
     result.push(PixelMove.withoutCut(endX, currentY, 0, endY - currentY));
   }
   return result;
+}
+
+function getSafeTravelY(moves: PixelMove[], travelRetractionSide: TravelRetractionSide): number {
+  const values = moves.flatMap(m => [m.yStart, m.yStart + m.yDelta]);
+  return travelRetractionSide === 'minY' ? Math.min(...values) : Math.max(...values);
 }
 
 export function detectCodirectional(moves: PixelMove[], i: number): {move: PixelMove, length: number} {
@@ -209,6 +215,11 @@ export function mergeMoves(moves: PixelMove[], startIndex: number, length: numbe
     m = m.merge(moves[startIndex + i]);
   }
   return m;
+}
+
+function mergeGeometry(m1: PixelMove, m2: PixelMove): PixelMove {
+  if (m1.xStart + m1.xDelta !== m2.xStart || m1.yStart + m1.yDelta !== m2.yStart) throw new Error(`merge error: ${m1} + ${m2}`);
+  return new PixelMove(m1.xStart, m1.yStart, m1.xDelta + m2.xDelta, m1.yDelta + m2.yDelta, m1.cutArea + m2.cutArea, []);
 }
 
 export function countPatterns(moves: PixelMove[], startIndex: number, patternLength: number): number {

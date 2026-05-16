@@ -1,0 +1,78 @@
+; STOCK D5
+; INSIDE
+; L3 D3
+
+; Run time 0.4 min, cutting 74% of time
+; Working area 3.00 by 1.49 mm
+
+G21 ; metric
+G18 ; ZX plane
+G90 ; absolute positioning
+F200
+X0 ; zero your tool X on centerline
+Z0 ; zero your tool Z at the right edge of the stock
+G91 ; relative positioning
+Z0.5
+
+F50
+X-1.39 ; cut 0.6668 mm2
+
+F200
+Z-0.31
+X-0.06
+Z-0.05 X-0.04 ; cut 0.0005 mm2 at 51.34°
+
+F50
+Z-0.14 ; cut 0.0013 mm2
+
+F200
+X1.49
+Z1
+
+F50
+X-1.39 ; cut 0.6982 mm2
+Z-0.5 ; cut 0.0018 mm2
+
+F200
+X1.39
+Z1
+
+F50
+X-1.39 ; cut 0.6982 mm2
+Z-0.5 ; cut 0.0018 mm2
+
+F200
+X1.39
+Z1
+
+F50
+X-1.39 ; cut 0.6982 mm2
+Z-0.5 ; cut 0.0018 mm2
+
+F200
+X1.39
+Z1
+
+F50
+X-1.39 ; cut 0.6982 mm2
+Z-0.5 ; cut 0.0018 mm2
+
+F200
+X1.39
+Z1
+
+F50
+X-1.39 ; cut 0.6982 mm2
+Z-0.5 ; cut 0.0018 mm2
+
+F200
+X1.39
+Z-2.49
+X-1.49
+
+F50
+Z2.99 ; cut 0.3013 mm2
+X1.49 ; cut 0.0149 mm2
+
+F200
+Z-3

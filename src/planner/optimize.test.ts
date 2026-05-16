@@ -80,6 +80,31 @@ describe('plannerworker', () => {
     expect(Math.max(...cutPixels.map(pixel => pixel.y))).toBeLessThan(3);
   });
 
+  it('keeps inside-only cylinder toolpaths within the bore radius', () => {
+    const messages: any[] = [];
+    const stock = Colors.COLOR_STOCK.rgbNumber();
+    const finish = Colors.COLOR_FINISH.rgbNumber();
+    const part = Colors.COLOR_PART.rgbNumber();
+    const toolColor = Colors.COLOR_TOOL.rgbNumber();
+    const canvas = new FakeCanvas(30, 25, imageData(30, 25, (_x, y) => y < 14 ? stock : y === 14 ? finish : part));
+    const tool = new FakeCanvas(30, 30, imageData(30, 30, (x, y) => x === 0 || y === 29 ? toolColor : 0));
+
+    new PlannerWorker(new LatheCode('STOCK D5\nINSIDE\nL3 D3'), 10, {
+      painter: {
+        createCanvas: () => canvas as unknown as OffscreenCanvas,
+        createTool: () => tool as unknown as OffscreenCanvas,
+      },
+      postMessage: message => messages.push(message),
+    });
+
+    const moves = messages.find(message => message.moves)?.moves as PixelMove[];
+    const yCoords = moves.flatMap(move => [move.yStart, move.yStart + move.yDelta]);
+
+    expect(Math.min(...yCoords)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...yCoords)).toBeLessThanOrEqual(15);
+    expect(moves.some(move => move.cutArea)).toBeTruthy();
+  });
+
   it('sameMoves', () => {
     expect(sameMoves([
       PixelMove.withoutCut(0, 0, 1, 1),

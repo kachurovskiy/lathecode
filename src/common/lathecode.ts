@@ -369,16 +369,24 @@ export class LatheCode {
   }
 
   reverse(): string {
-    const firstLLine = this.text.startsWith('L') ? 0 : this.text.indexOf('\nL');
+    const entries = this.data[14].length ? this.data[14] : this.data[15]?.[2] || [];
+    const firstLLine = this.data[14].length
+      ? findLineStart(this.text, 'L')
+      : findLineStart(this.text, 'L', findLineStart(this.text, 'INSIDE'));
     if (firstLLine === -1) return this.text;
     const preambula = this.text.substring(0, firstLLine);
-    const outside = this.data[14];
     const result: string[] = [];
-    for (const line of outside) {
+    for (const line of entries) {
       result.push(reverseLine(line[1]));
     }
     return (preambula ? preambula + '\n' : '') + result.reverse().join('\n');
   }
+}
+
+function findLineStart(text: string, lineStart: string, fromIndex = 0): number {
+  if (fromIndex < 0) return -1;
+  if (text.startsWith(lineStart, fromIndex)) return fromIndex;
+  return text.indexOf('\n' + lineStart, fromIndex);
 }
 
 function reverseLine(line: LatheLine): string {

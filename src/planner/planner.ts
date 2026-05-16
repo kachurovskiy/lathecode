@@ -2,7 +2,6 @@ import { LatheCode } from '../common/lathecode';
 import InlineWorker from './plannerworker?worker&inline';
 import { FromWorkerMessage, ToWorkerMessage } from './plannerworker';
 import { Move } from '../common/move';
-import { PixelMove } from '../common/pixel';
 import { createFullScreenDialog } from '../common/dialog';
 
 const PX_PER_MM = 100;
@@ -62,8 +61,8 @@ export class Planner extends EventTarget {
       this.generationProgressMessage?.remove();
       this.generationProgressMessage = null;
       this.moves = data.moves.map(m => {
-        Object.setPrototypeOf(m, PixelMove.prototype);
-        return m.toMove(PX_PER_MM);
+        Object.setPrototypeOf(m, Move.prototype);
+        return m;
       });
       this.drawMoves(this.moves);
       this.dispatchEvent(new Event('change'));
@@ -123,7 +122,7 @@ export class Planner extends EventTarget {
   }
 }
 
-function createMovesCanvas(moves: Move[], width: number, height: number): HTMLCanvasElement {
+export function createMovesCanvas(moves: Move[], width: number, height: number): HTMLCanvasElement {
   let minXMm = Infinity;
   let maxXMm = -Infinity;
   let minYMm = Infinity;
@@ -162,7 +161,8 @@ function createMovesCanvas(moves: Move[], width: number, height: number): HTMLCa
         else next();
     }
   }
-  runDrawMoveWithDelay(moves, 0);
+  if (timeMs) runDrawMoveWithDelay(moves, 0);
+  else moves.forEach(drawMove);
 
   return canvas;
 }

@@ -223,6 +223,18 @@ L1 ; cutoff`).reverse()).toEqual(`L1 ; cutoff
 L3 DS6 DE4
 L2 D4 ; line 1`);
   });
+
+  it('reverses inside-only profiles', () => {
+    expect(new LatheCode(`STOCK D10
+INSIDE
+L2 R2 ; bore start
+L3 RS2 RE3
+L1 ; bore end`).reverse()).toEqual(`STOCK D10
+INSIDE
+L1 ; bore end
+L3 RS3 RE2
+L2 R2 ; bore start`);
+  });
 })
 
 function expectPoints(text: string, o: string, i: string) {

@@ -3,6 +3,7 @@ import { getCuttingEdges, optimizeMoves as optimizePlannerMoves } from './optimi
 import { Painter } from './painter';
 import * as Colors from "../common/colors";
 import { Pixel, PixelMove } from "../common/pixel";
+import { Move } from '../common/move';
 
 export class ToWorkerMessage {
   constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number) {}
@@ -12,7 +13,7 @@ export class FromWorkerMessage {
   constructor(
     readonly progressMessage?: string,
     readonly error?: string,
-    readonly moves?: PixelMove[],
+    readonly moves?: Move[],
     readonly canvas?: {width: number, height: number, data: Uint8ClampedArray},
     readonly tool?: {width: number, height: number, data: Uint8ClampedArray, x: number, y: number}) {}
 }
@@ -26,13 +27,13 @@ class Pass {
   constructor(readonly x: number, readonly finishAfter: boolean) {}
 }
 
-type PlannerWorkerPostMessage = (message: FromWorkerMessage | {progressMessage?: string, error?: string, moves?: PixelMove[]}) => void;
+type PlannerWorkerPostMessage = (message: FromWorkerMessage | {progressMessage?: string, error?: string, moves?: PixelMove[] | Move[]}) => void;
 type PlannerPainter = Pick<Painter, 'createCanvas' | 'createTool'>;
 
 type PlannerWorkerOptions = {
   painter?: PlannerPainter,
   postMessage?: PlannerWorkerPostMessage,
-  optimizeMoves?: (moves: PixelMove[], progressCallback: (message: string) => void) => PixelMove[],
+  optimizeMoves?: typeof optimizePlannerMoves,
 };
 
 export class PlannerWorker {
@@ -48,6 +49,8 @@ export class PlannerWorker {
   private profileSide: ProfileSide;
   private radialCutDirection: -1 | 1;
   private radialSafeY: number;
+  private radialMinY = 0;
+  private radialMaxY = 0;
   private mode: 'FACE' | 'TURN';
   private passes: Pass[];
   private previousFinishPass: Pass|null = null;
@@ -56,7 +59,8 @@ export class PlannerWorker {
   private radialCutAllowed = true;
   private isFinishPass = false;
   private postMessage: PlannerWorkerPostMessage;
-  private optimizeMoves: (moves: PixelMove[], progressCallback: (message: string) => void) => PixelMove[];
+  private postPixelMoves: boolean;
+  private optimizeMoves: typeof optimizePlannerMoves;
 
   constructor(private latheCode: LatheCode, private pxPerMm: number, options: PlannerWorkerOptions = {}) {
     const profile = latheCode.getSingleProfile();
@@ -67,6 +71,7 @@ export class PlannerWorker {
     this.profileSide = profile.side;
     this.radialCutDirection = this.profileSide === 'inside' ? 1 : -1;
     this.postMessage = options.postMessage || (message => postMessage(message));
+    this.postPixelMoves = !!options.postMessage;
     this.optimizeMoves = options.optimizeMoves || optimizePlannerMoves;
     this.painter = options.painter || new Painter(latheCode, pxPerMm);
     this.canvas = this.painter.createCanvas();
@@ -80,6 +85,14 @@ export class PlannerWorker {
     this.toolY = this.radialSafeY;
     this.mode = this.latheCode.getMode();
     this.partBitmap = this.createPartBitmap();
+    if (this.profileSide === 'outside') {
+      this.radialMinY = -this.toolOvershootY;
+      this.radialMaxY = this.canvas.height;
+    } else {
+      const radialCutLimitY = this.getRadialCutLimitY();
+      this.radialMinY = Math.min(this.radialSafeY, radialCutLimitY);
+      this.radialMaxY = Math.max(this.radialSafeY, radialCutLimitY);
+    }
 
     // Plan passes in advance so that we can finish the part fully before cutting off.
     const cutXCoords = this.latheCode.getCutoffStarts().map(z => this.canvas.width - z * this.pxPerMm - this.tool.width + 1);
@@ -110,9 +123,12 @@ export class PlannerWorker {
     this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
     this.postProgress();
     this.postMessage({progressMessage: `Optimizing ${this.moves.length} moves...`});
-    const moves = this.optimizeMoves(this.moves, (progressMessage) => this.postMessage({progressMessage}));
+    const moves = this.normalizeMovesForOutput(this.optimizeMoves(
+      this.moves,
+      (progressMessage) => this.postMessage({progressMessage}),
+      this.profileSide === 'inside' ? 'minY' : 'maxY'));
     this.postMessage({progressMessage: `Showing ${moves.length} moves...`});
-    this.postMessage({moves});
+    this.postMessage({moves: this.postPixelMoves ? moves : moves.map(m => m.toMove(this.pxPerMm))});
   }
 
   private modeFace() {
@@ -256,6 +272,25 @@ export class PlannerWorker {
     return this.profileSide === 'inside' ? -this.toolOvershootY : this.canvas.height;
   }
 
+  private getRadialCutLimitY(): number {
+    if (this.profileSide === 'outside') return this.canvas.height;
+    const y = this.getMaxRemovableY();
+    return y === null ? this.radialSafeY : y - this.toolOvershootY;
+  }
+
+  private getMaxRemovableY(): number | null {
+    let result: number | null = null;
+    for (let x = 0; x < this.canvas.width; x++) {
+      for (let y = 0; y < this.canvas.height; y++) {
+        const rgb = this.getBitmap(x, y);
+        if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER) {
+          result = Math.max(result ?? y, y);
+        }
+      }
+    }
+    return result;
+  }
+
   private pullBackRadially() {
     this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.radialSafeY - this.toolY));
   }
@@ -267,7 +302,7 @@ export class PlannerWorker {
         result.push(startY);
       }
     } else {
-      for (let startY = this.radialSafeY; startY <= this.canvas.height; startY += this.getDepthOfCutPx()) {
+      for (let startY = this.radialSafeY; startY <= this.radialMaxY; startY += this.getDepthOfCutPx()) {
         result.push(startY);
       }
     }
@@ -275,10 +310,10 @@ export class PlannerWorker {
   }
 
   private getTurnEndY(startY: number, finishAfter: boolean): number {
-    if (!finishAfter) return this.radialCutDirection < 0 ? -this.toolOvershootY : this.canvas.height + this.toolOvershootY;
+    if (!finishAfter) return this.radialCutDirection < 0 ? this.radialMinY : this.radialMaxY;
     return this.radialCutDirection < 0
-      ? Math.max(0, startY - this.getDepthOfCutPx())
-      : Math.min(this.canvas.height, startY + this.getDepthOfCutPx());
+      ? Math.max(this.radialMinY, startY - this.getDepthOfCutPx())
+      : Math.min(this.radialMaxY, startY + this.getDepthOfCutPx());
   }
 
   private canCutToward(endY: number): boolean {
@@ -346,7 +381,7 @@ export class PlannerWorker {
   private calculateMove(xDelta: number, yDelta: number): PixelMove | null {
     const topLeftX = this.toolX + xDelta;
     const topLeftY = this.toolY + yDelta;
-    if (topLeftY < -this.toolOvershootY || topLeftX < -this.toolOvershootX || topLeftX > this.canvas.width || topLeftY > this.canvas.height) return null;
+    if (topLeftY < this.radialMinY || topLeftX < -this.toolOvershootX || topLeftX > this.canvas.width || topLeftY > this.radialMaxY) return null;
     let pixels: Pixel[] = [];
     for (let p of this.toolCuttingEdges) {
       const rgb = this.getBitmap(topLeftX + p.x, topLeftY + p.y);
@@ -363,6 +398,11 @@ export class PlannerWorker {
     // Don't optimize away moves during the finish pass for better results.
     const pixelCount = Math.max(this.isFinishPass && this.toolX < this.canvas.width ? 1 : 0, pixels.length);
     return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixelCount, pixels);
+  }
+
+  private normalizeMovesForOutput(moves: PixelMove[]): PixelMove[] {
+    if (this.profileSide === 'outside') return moves;
+    return moves.map(m => new PixelMove(m.xStart, m.yStart + this.toolOvershootY, m.xDelta, m.yDelta, m.cutArea, m.cutPixels));
   }
 }
 

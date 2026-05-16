@@ -185,7 +185,7 @@ export class Editor extends EventTarget {
     try {
       localStorage.setItem('latheCode', this.latheCodeInput.value);
       this.latheCode = new LatheCode(this.latheCodeInput.value + '\n');
-      this.planButton.style.display = this.latheCode.getProfiles().some(profile => profile.side === 'inside') ? 'none' : 'inline';
+      this.planButton.style.display = this.latheCode.getSingleProfile() ? 'inline' : 'none';
       this.errorContainer.textContent = '';
     } catch (error: any) {
       this.latheCode = null;
