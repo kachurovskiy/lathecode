@@ -3,7 +3,9 @@ import { Pixel, PixelMove } from "../common/pixel";
 
 const CUTTING_EDGE_THICKNESS = 2;
 
-export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
+export type RadialCuttingEdge = 'top' | 'bottom';
+
+export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCuttingEdge = 'top'): Pixel[] {
   const toolData = tool.getContext("2d")!.getImageData(0, 0, tool.width, tool.height).data;
   const set: Set<string> = new Set();
   const result: Pixel[] = [];
@@ -31,7 +33,7 @@ export function getCuttingEdges(tool: OffscreenCanvas): Pixel[] {
   }
   for (let x = 0; x < tool.width; x++) {
     let depth = 0;
-    for (let y = 0; y < tool.height; y++) {
+    for (let y = radialEdge === 'top' ? 0 : tool.height - 1; y >= 0 && y < tool.height; y += radialEdge === 'top' ? 1 : -1) {
       const i = (y * tool.width + x) * 4;
       if (
         Math.abs(toolData[i] - Colors.COLOR_TOOL.red()) <= 1 &&

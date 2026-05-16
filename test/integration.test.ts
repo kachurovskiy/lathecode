@@ -53,9 +53,12 @@ function normalize(text: string) {
 }
 
 async function screenshot(page: Page, name: string, selector: string) {
-  const canvas = await page.$(selector);
   const path = resolve(__dirname, name + '.png');
-  if (canvas) await canvas.screenshot({path});
+  const dataUrl = await page.$eval(selector, el => {
+    if (!(el instanceof HTMLCanvasElement)) throw new Error('Selected element is not a canvas');
+    return el.toDataURL('image/png');
+  }).catch(() => null);
+  if (dataUrl) writeFileSync(path, Buffer.from(dataUrl.split(',')[1], 'base64'));
   else rmSync(path, {force: true});
 }
 

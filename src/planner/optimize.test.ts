@@ -1,8 +1,85 @@
 import { describe, it, expect } from 'vitest'
 import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, optimizeMoves, isSmoothingAllowed, smoothMoves } from './optimize';
 import { PixelMove } from '../common/pixel';
+import { PlannerWorker } from './plannerworker';
+import { LatheCode } from '../common/lathecode';
+import * as Colors from '../common/colors';
+
+class FakeContext {
+  constructor(private data: Uint8ClampedArray, private width: number, private height: number) {}
+
+  getImageData() {
+    return {data: this.data, width: this.width, height: this.height};
+  }
+
+  createImageData(width: number, height: number) {
+    return {data: new Uint8ClampedArray(width * height * 4), width, height};
+  }
+
+  putImageData(imageData: {data: Uint8ClampedArray}) {
+    this.data = imageData.data;
+  }
+}
+
+class FakeCanvas {
+  private context: FakeContext;
+
+  constructor(readonly width: number, readonly height: number, data: Uint8ClampedArray) {
+    this.context = new FakeContext(data, width, height);
+  }
+
+  getContext(type: string) {
+    return type === '2d' ? this.context : null;
+  }
+}
 
 describe('plannerworker', () => {
+  it('keeps outside tool overshoot when the side cutting edge reaches centerline', () => {
+    const messages: any[] = [];
+    const stock = Colors.COLOR_STOCK.rgbNumber();
+    const toolColor = Colors.COLOR_TOOL.rgbNumber();
+    const canvas = new FakeCanvas(2, 2, imageData(2, 2, () => stock));
+    const tool = new FakeCanvas(2, 2, imageData(2, 2, (x, y) => x === 1 && y === 0 || x === 0 && y === 1 ? toolColor : 0));
+
+    new PlannerWorker(new LatheCode('STOCK D4\nDEPTH CUT1 FINISH0\nMODE TURN\nL2 R1'), 1, {
+      painter: {
+        createCanvas: () => canvas as unknown as OffscreenCanvas,
+        createTool: () => tool as unknown as OffscreenCanvas,
+      },
+      postMessage: message => messages.push(message),
+      optimizeMoves: moves => moves,
+    });
+
+    const moves = messages.find(message => message.moves)?.moves as PixelMove[];
+    const minToolY = Math.min(...moves.flatMap(move => [move.yStart, move.yStart + move.yDelta]));
+
+    expect(minToolY).toBe(-1);
+  });
+
+  it('plans inside-only profiles from the centerline side', () => {
+    const messages: any[] = [];
+    const stock = Colors.COLOR_STOCK.rgbNumber();
+    const part = Colors.COLOR_PART.rgbNumber();
+    const canvas = new FakeCanvas(3, 4, imageData(3, 4, (_x, y) => y < 3 ? stock : part));
+    const tool = new FakeCanvas(1, 1, imageData(1, 1, () => Colors.COLOR_TOOL.rgbNumber()));
+
+    new PlannerWorker(new LatheCode('STOCK D8\nDEPTH CUT1 FINISH0\nINSIDE\nL3 R3'), 1, {
+      painter: {
+        createCanvas: () => canvas as unknown as OffscreenCanvas,
+        createTool: () => tool as unknown as OffscreenCanvas,
+      },
+      postMessage: message => messages.push(message),
+      optimizeMoves: moves => moves,
+    });
+
+    const moves = messages.find(message => message.moves)?.moves as PixelMove[];
+    const cutPixels = moves.flatMap(move => move.cutPixels);
+
+    expect(cutPixels.length).toBeGreaterThan(0);
+    expect(moves.some(move => move.cutArea && move.yDelta > 0)).toBeTruthy();
+    expect(Math.max(...cutPixels.map(pixel => pixel.y))).toBeLessThan(3);
+  });
+
   it('sameMoves', () => {
     expect(sameMoves([
       PixelMove.withoutCut(0, 0, 1, 1),
@@ -267,3 +344,18 @@ describe('plannerworker', () => {
     ]);
   });
 });
+
+function imageData(width: number, height: number, rgbAt: (x: number, y: number) => number): Uint8ClampedArray {
+  const result = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const rgb = rgbAt(x, y);
+      result[i] = (rgb >> 16) & 0xFF;
+      result[i + 1] = (rgb >> 8) & 0xFF;
+      result[i + 2] = rgb & 0xFF;
+      result[i + 3] = 255;
+    }
+  }
+  return result;
+}

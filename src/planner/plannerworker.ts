@@ -1,5 +1,5 @@
-import { LatheCode } from '../common/lathecode';
-import { getCuttingEdges, optimizeMoves } from './optimize';
+import { LatheCode, type ProfileSide } from '../common/lathecode';
+import { getCuttingEdges, optimizeMoves as optimizePlannerMoves } from './optimize';
 import { Painter } from './painter';
 import * as Colors from "../common/colors";
 import { Pixel, PixelMove } from "../common/pixel";
@@ -26,8 +26,17 @@ class Pass {
   constructor(readonly x: number, readonly finishAfter: boolean) {}
 }
 
+type PlannerWorkerPostMessage = (message: FromWorkerMessage | {progressMessage?: string, error?: string, moves?: PixelMove[]}) => void;
+type PlannerPainter = Pick<Painter, 'createCanvas' | 'createTool'>;
+
+type PlannerWorkerOptions = {
+  painter?: PlannerPainter,
+  postMessage?: PlannerWorkerPostMessage,
+  optimizeMoves?: (moves: PixelMove[], progressCallback: (message: string) => void) => PixelMove[],
+};
+
 export class PlannerWorker {
-  private painter: Painter;
+  private painter: PlannerPainter;
   private canvas: OffscreenCanvas;
   private canvasCtx: OffscreenCanvasRenderingContext2D;
   private tool: OffscreenCanvas;
@@ -36,24 +45,39 @@ export class PlannerWorker {
   private toolOvershootY: number;
   private toolX;
   private toolY;
+  private profileSide: ProfileSide;
+  private radialCutDirection: -1 | 1;
+  private radialSafeY: number;
   private mode: 'FACE' | 'TURN';
   private passes: Pass[];
   private previousFinishPass: Pass|null = null;
   private moves: PixelMove[] = [];
   private partBitmap: number[][] = [];
-  private upAllowed = true;
+  private radialCutAllowed = true;
   private isFinishPass = false;
+  private postMessage: PlannerWorkerPostMessage;
+  private optimizeMoves: (moves: PixelMove[], progressCallback: (message: string) => void) => PixelMove[];
 
-  constructor(private latheCode: LatheCode, private pxPerMm: number) {
-    this.painter = new Painter(latheCode, pxPerMm);
+  constructor(private latheCode: LatheCode, private pxPerMm: number, options: PlannerWorkerOptions = {}) {
+    const profile = latheCode.getSingleProfile();
+    if (!profile) {
+      if (latheCode.getProfiles().length > 1) throw new Error('Error: inside and outside not supported yet');
+      throw new Error('Error: no segments');
+    }
+    this.profileSide = profile.side;
+    this.radialCutDirection = this.profileSide === 'inside' ? 1 : -1;
+    this.postMessage = options.postMessage || (message => postMessage(message));
+    this.optimizeMoves = options.optimizeMoves || optimizePlannerMoves;
+    this.painter = options.painter || new Painter(latheCode, pxPerMm);
     this.canvas = this.painter.createCanvas();
     this.canvasCtx = this.canvas.getContext("2d")!;
     this.tool = this.painter.createTool();
-    this.toolCuttingEdges = getCuttingEdges(this.tool);
-    this.toolOvershootX = this.toolCuttingEdges.filter(e => e.y === 0)[0]?.x || 0;
-    this.toolOvershootY = this.toolCuttingEdges.filter(e => e.x === 0)[0]?.y || 0;
+    this.toolCuttingEdges = getCuttingEdges(this.tool, this.profileSide === 'inside' ? 'bottom' : 'top');
+    this.toolOvershootX = this.getToolOvershootX();
+    this.toolOvershootY = this.getToolOvershootY();
     this.toolX = this.canvas.width;
-    this.toolY = this.canvas.height;
+    this.radialSafeY = this.getRadialSafeY();
+    this.toolY = this.radialSafeY;
     this.mode = this.latheCode.getMode();
     this.partBitmap = this.createPartBitmap();
 
@@ -79,75 +103,75 @@ export class PlannerWorker {
       else if (this.mode === 'TURN') this.modeTurn();
       else throw new Error('unsupported mode ' + this.mode);
     } catch (e) {
-      postMessage({progressMessage: `Mode failure: ${e}`});
+      this.postMessage({progressMessage: `Mode failure: ${e}`});
     }
 
-    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+    this.pullBackRadially();
     this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
     this.postProgress();
-    postMessage({progressMessage: `Optimizing ${this.moves.length} moves...`});
-    const moves = optimizeMoves(this.moves, (progressMessage) => postMessage({progressMessage}));
-    postMessage({progressMessage: `Showing ${moves.length} moves...`});
-    postMessage({moves});
+    this.postMessage({progressMessage: `Optimizing ${this.moves.length} moves...`});
+    const moves = this.optimizeMoves(this.moves, (progressMessage) => this.postMessage({progressMessage}));
+    this.postMessage({progressMessage: `Showing ${moves.length} moves...`});
+    this.postMessage({moves});
   }
 
   private modeFace() {
-    postMessage({progressMessage: `Starting first pass...`});
+    this.postMessage({progressMessage: `Starting first pass...`});
     this.postProgress();
     for (let passIndex = 0; passIndex < this.passes.length; passIndex++) {
       const xForPass = this.passes[passIndex].x;
       this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, xForPass - this.toolX, 0)); // position for this pass
       const maxX = passIndex === 0 ? this.canvas.width : this.passes[passIndex - 1].x;
       this.postProgressWhile(() => this.creep(this.toolX < maxX, false));
-      this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
-      this.upAllowed = true;
+      this.pullBackRadially();
+      this.radialCutAllowed = true;
       if (this.passes[passIndex].finishAfter) {
-        postMessage({progressMessage: `Finishing previously cut area`});
+        this.postMessage({progressMessage: `Finishing previously cut area`});
         this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, (this.previousFinishPass?.x ?? this.canvas.width) - this.toolX, 0)); // position for the finish pass
         this.isFinishPass = true;
         this.postProgressWhile(() => this.creep(false, this.toolX > xForPass));
         this.isFinishPass = false;
-        this.upAllowed = true;
-        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+        this.radialCutAllowed = true;
+        this.pullBackRadially();
         this.previousFinishPass = this.passes[passIndex];
       }
-      postMessage({progressMessage: `Completed pass ${passIndex}`});
+      this.postMessage({progressMessage: `Completed pass ${passIndex}`});
     }
   }
 
   private modeTurn() {
-    postMessage({progressMessage: `Starting first pass...`});
+    this.postMessage({progressMessage: `Starting first pass...`});
     this.postProgress();
     for (let passIndex = 0; passIndex < this.passes.length; passIndex++) {
       const endX = this.passes[passIndex].x;
       const startX = passIndex === 0 ? this.canvas.width : this.passes[passIndex - 1].x;
-      for (let startY = this.canvas.height; startY >= 0; startY -= this.getDepthOfCutPx()) {
-        postMessage({progressMessage: `Starting subpass ${startY}`});
-        const endY = this.passes[passIndex].finishAfter ? Math.max(0, startY - this.getDepthOfCutPx()) : -this.toolOvershootY;
+      for (let startY of this.getTurnStartYs()) {
+        this.postMessage({progressMessage: `Starting subpass ${startY}`});
+        const endY = this.getTurnEndY(startY, this.passes[passIndex].finishAfter);
         this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, startX - this.toolX, startY - this.toolY)); // position for this pass
-        this.postProgressWhile(() => this.creep(false, this.toolX > endX, this.toolY > endY));
-        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+        this.postProgressWhile(() => this.creep(false, this.toolX > endX, this.canCutToward(endY)));
+        this.pullBackRadially();
         this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, startX - this.toolX, 0)); // back to start position
-        this.upAllowed = true;
+        this.radialCutAllowed = true;
       }
       if (this.passes[passIndex].finishAfter) {
-        postMessage({progressMessage: `Finishing previously cut area`});
+        this.postMessage({progressMessage: `Finishing previously cut area`});
         this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, (this.previousFinishPass?.x ?? this.canvas.width) - this.toolX, 0)); // position for the finish pass
         this.isFinishPass = true;
         this.postProgressWhile(() => this.creep(false, this.toolX > endX));
         this.isFinishPass = false;
-        this.upAllowed = true;
-        this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.canvas.height - this.toolY)); // pull back
+        this.radialCutAllowed = true;
+        this.pullBackRadially();
         this.previousFinishPass = this.passes[passIndex];
       }
-      postMessage({progressMessage: `Completed pass ${passIndex}`});
+      this.postMessage({progressMessage: `Completed pass ${passIndex}`});
     }
   }
 
   private postProgress() {
     const includeCanvas = this.canvas.width * this.canvas.height < 2000000;
     if (includeCanvas) this.flushBitmap();
-    postMessage({
+    this.postMessage({
       canvas: includeCanvas ? {
         width: this.canvas.width,
         height: this.canvas.height,
@@ -212,33 +236,84 @@ export class PlannerWorker {
     this.canvasCtx.putImageData(imageData, 0, 0);
   }
 
-  private creep(rightAllowed: boolean, leftAllowed: boolean, upAllowed = true): boolean {
-    const up = this.upAllowed && upAllowed;
-    if (up && this.tryMove(0, -1)) {
+  private getToolOvershootX(): number {
+    const radialEdgeY = this.profileSide === 'inside' ? this.getMaxCuttingEdgeY() : 0;
+    return this.toolCuttingEdges.filter(e => e.y === radialEdgeY)[0]?.x || 0;
+  }
+
+  private getToolOvershootY(): number {
+    if (this.profileSide === 'inside') {
+      return this.getMaxCuttingEdgeY();
+    }
+    return this.toolCuttingEdges.filter(e => e.x === 0)[0]?.y || 0;
+  }
+
+  private getMaxCuttingEdgeY(): number {
+    return this.toolCuttingEdges.length ? Math.max(...this.toolCuttingEdges.map(e => e.y)) : 0;
+  }
+
+  private getRadialSafeY(): number {
+    return this.profileSide === 'inside' ? -this.toolOvershootY : this.canvas.height;
+  }
+
+  private pullBackRadially() {
+    this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, 0, this.radialSafeY - this.toolY));
+  }
+
+  private getTurnStartYs(): number[] {
+    const result: number[] = [];
+    if (this.radialCutDirection < 0) {
+      for (let startY = this.canvas.height; startY >= 0; startY -= this.getDepthOfCutPx()) {
+        result.push(startY);
+      }
+    } else {
+      for (let startY = this.radialSafeY; startY <= this.canvas.height; startY += this.getDepthOfCutPx()) {
+        result.push(startY);
+      }
+    }
+    return result;
+  }
+
+  private getTurnEndY(startY: number, finishAfter: boolean): number {
+    if (!finishAfter) return this.radialCutDirection < 0 ? -this.toolOvershootY : this.canvas.height + this.toolOvershootY;
+    return this.radialCutDirection < 0
+      ? Math.max(0, startY - this.getDepthOfCutPx())
+      : Math.min(this.canvas.height, startY + this.getDepthOfCutPx());
+  }
+
+  private canCutToward(endY: number): boolean {
+    return this.radialCutDirection < 0 ? this.toolY > endY : this.toolY < endY;
+  }
+
+  private creep(rightAllowed: boolean, leftAllowed: boolean, radialAllowed = true): boolean {
+    const towardAllowed = this.radialCutAllowed && radialAllowed;
+    const towardY = this.radialCutDirection;
+    const awayY = -this.radialCutDirection;
+    if (towardAllowed && this.tryMove(0, towardY)) {
       return true;
     }
-    if (rightAllowed && up && this.tryMove(1, -1)) {
+    if (rightAllowed && towardAllowed && this.tryMove(1, towardY)) {
       return true;
     }
     if (rightAllowed && this.tryMove(1, 0)) {
       return true;
     }
-    if (rightAllowed && this.tryMove(1, 1)) {
-      this.upAllowed = true;
+    if (rightAllowed && this.tryMove(1, awayY)) {
+      this.radialCutAllowed = true;
       return true;
     }
-    if (leftAllowed && up && this.tryMove(-1, -1)) {
+    if (leftAllowed && towardAllowed && this.tryMove(-1, towardY)) {
       return true;
     }
     if (leftAllowed && this.tryMove(-1, 0)) {
       return true;
     }
-    if (leftAllowed && this.tryMove(-1, 1)) {
-      this.upAllowed = true;
+    if (leftAllowed && this.tryMove(-1, awayY)) {
+      this.radialCutAllowed = true;
       return true;
     }
-    if (this.tryMove(0, 1)) {
-      this.upAllowed = false;
+    if (this.tryMove(0, awayY)) {
+      this.radialCutAllowed = false;
       return true;
     }
     return false;
