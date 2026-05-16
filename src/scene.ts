@@ -118,8 +118,9 @@ export class Scene extends THREE.Scene {
   private createStock() {
     const stock = this.latheCode!.getStock();
     if (!stock) throw new Error('stock is required');
-    const geometry = new THREE.CylinderGeometry(stock.diameter / 2, stock.diameter / 2, stock.length, 256);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3 });
+    const geometry = new THREE.LatheGeometry(stock.getSegments().map(s => getApproxPoints(s)).flat(), 256, 0);
+    geometry.translate(0, -stock.length / 2, 0);
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
     return new THREE.Mesh(geometry, material);
   }
 }

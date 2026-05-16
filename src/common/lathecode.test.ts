@@ -119,9 +119,31 @@ describe('lathecode', () => {
 
   it('inside stepped profile uses stock as the outer boundary', () => {
     const latheCode = new LatheCode('STOCK D10\nINSIDE\nL2 R2\nL3 R3');
-    expect(latheCode.getStock()).toEqual({diameter: 10, length: 5});
+    expect(latheCode.getStock()).toEqual({diameter: 10, length: 5, innerDiameter: 0});
     expect(latheCode.getOutsideSegments()).toEqual([]);
     expect(pointsToString(latheCode.getInsideSegments())).toBe('LINE:5,5-5,0 LINE:5,0-2,0 LINE:2,0-2,2 LINE:2,2-3,2 LINE:3,2-3,5 LINE:3,5-5,5');
+  });
+
+  it('supports stock with an internal diameter', () => {
+    const latheCode = new LatheCode('STOCK D10 ID4\nL5 R4');
+
+    expect(latheCode.getStock()).toEqual({diameter: 10, length: 5, innerDiameter: 4});
+    expect(pointsToString(latheCode.getStock()!.getSegments())).toBe('LINE:2,0-5,0 LINE:5,0-5,5 LINE:5,5-2,5 LINE:2,5-2,0');
+    expect(pointsToString(latheCode.getOutsideSegments())).toBe('LINE:2,5-2,0 LINE:2,0-4,0 LINE:4,0-4,5 LINE:4,5-2,5');
+  });
+
+  it('supports stock with an internal radius', () => {
+    const latheCode = new LatheCode('STOCK R5 IR2\nL5 R4');
+
+    expect(latheCode.getStock()).toEqual({diameter: 10, length: 5, innerDiameter: 4});
+  });
+
+  it('keeps legacy stock allowance parsing', () => {
+    expect(new LatheCode('STOCK D10 A1\nL5 R4').getStock()).toEqual({diameter: 10, length: 5, innerDiameter: 0});
+  });
+
+  it('rejects stock holes that are not smaller than the stock diameter', () => {
+    expect(() => new LatheCode('STOCK D10 ID10\nL5 R4')).toThrow('stock internal hole must be smaller');
   });
 
   it('returns outside-only profiles explicitly', () => {

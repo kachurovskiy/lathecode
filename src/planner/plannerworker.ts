@@ -81,10 +81,10 @@ export class PlannerWorker {
     this.toolOvershootX = this.getToolOvershootX();
     this.toolOvershootY = this.getToolOvershootY();
     this.toolX = this.canvas.width;
+    this.partBitmap = this.createPartBitmap();
     this.radialSafeY = this.getRadialSafeY();
     this.toolY = this.radialSafeY;
     this.mode = this.latheCode.getMode();
-    this.partBitmap = this.createPartBitmap();
     if (this.profileSide === 'outside') {
       this.radialMinY = -this.toolOvershootY;
       this.radialMaxY = this.canvas.height;
@@ -269,7 +269,9 @@ export class PlannerWorker {
   }
 
   private getRadialSafeY(): number {
-    return this.profileSide === 'inside' ? -this.toolOvershootY : this.canvas.height;
+    if (this.profileSide === 'outside') return this.canvas.height;
+    const y = this.getMinRemovableY();
+    return (y === null ? 0 : y) - this.toolOvershootY;
   }
 
   private getRadialCutLimitY(): number {
@@ -285,6 +287,19 @@ export class PlannerWorker {
         const rgb = this.getBitmap(x, y);
         if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER) {
           result = Math.max(result ?? y, y);
+        }
+      }
+    }
+    return result;
+  }
+
+  private getMinRemovableY(): number | null {
+    let result: number | null = null;
+    for (let x = 0; x < this.canvas.width; x++) {
+      for (let y = 0; y < this.canvas.height; y++) {
+        const rgb = this.getBitmap(x, y);
+        if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER) {
+          result = Math.min(result ?? y, y);
         }
       }
     }

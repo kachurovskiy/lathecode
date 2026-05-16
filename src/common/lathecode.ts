@@ -54,14 +54,28 @@ export class Profile {
 }
 
 export class Stock {
-  constructor(readonly diameter: number, readonly length: number) {}
+  readonly innerDiameter: number;
+
+  constructor(readonly diameter: number, readonly length: number, innerDiameter = 0) {
+    if (innerDiameter < 0) throw new Error('Error: stock internal hole must not be negative');
+    if (innerDiameter >= diameter) throw new Error('Error: stock internal hole must be smaller than stock diameter');
+    this.innerDiameter = innerDiameter;
+  }
+
+  get radius(): number {
+    return this.diameter / 2;
+  }
+
+  get innerRadius(): number {
+    return this.innerDiameter / 2;
+  }
 
   getSegments(): Segment[] {
     return [
-      new Segment('LINE', new Point(0, 0), new Point(this.diameter / 2, 0)),
-      new Segment('LINE', new Point(this.diameter / 2, 0), new Point(this.diameter / 2, this.length)),
-      new Segment('LINE', new Point(this.diameter / 2, this.length), new Point(0, this.length)),
-      new Segment('LINE', new Point(0, this.length), new Point(0, 0)),
+      new Segment('LINE', new Point(this.innerRadius, 0), new Point(this.radius, 0)),
+      new Segment('LINE', new Point(this.radius, 0), new Point(this.radius, this.length)),
+      new Segment('LINE', new Point(this.radius, this.length), new Point(this.innerRadius, this.length)),
+      new Segment('LINE', new Point(this.innerRadius, this.length), new Point(this.innerRadius, 0)),
     ];
   }
 }
@@ -100,6 +114,7 @@ type ModeType = 'FACE'|'TURN';
 type ZDirection = 'LEFT'|'RIGHT';
 type XDirection = 'UP'|'DOWN';
 type RadiusDiameterType = 'R'|'D';
+type StockHoleType = 'IR'|'ID';
 type SegmentStartType = 'DS'|'RS';
 type SegmentEndType = 'DE'|'RE';
 type CurveType = 'CONV'|'CONC';
@@ -107,7 +122,7 @@ type CommentList = string[];
 type NumericParam<Name extends string> = [Name, number];
 
 type UnitsDirective = ['UNITS', null, UnitType, string];
-type StockDirective = ['STOCK', null, [RadiusDiameterType, number, NumericParam<'A'> | null], string];
+type StockDirective = ['STOCK', null, [RadiusDiameterType, number, NumericParam<StockHoleType> | null, NumericParam<'A'> | null], string];
 type ToolDirective = ['TOOL', null, ToolType, null, [
   NumericParam<'R'> | null,
   NumericParam<'L'> | null,
@@ -169,11 +184,13 @@ export class LatheCode {
     this.data = typedParser.parse(text + '\n');
     this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2]] : 1;
     // console.log('this.data', this.data);
-    this.outside = this.getSegmentsForSide(this.data[14], 0);
+    const stockInnerRadius = this.getStockInnerDiameter() / 2;
+    this.outside = this.getSegmentsForSide(this.data[14], stockInnerRadius);
     this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
     this.inside = this.data[15] ? this.getSegmentsForSide(this.data[15][2], this.getStockDiameter() / 2) : [];
-    this.outsideSegments = this.closeLoop(this.outside, 0);
+    this.outsideSegments = this.closeLoop(this.outside, stockInnerRadius);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
+    this.getStock(); // validate the stock
     this.getTool(); // validate the tool
   }
 
@@ -188,7 +205,8 @@ export class LatheCode {
   getStock(): Stock|null {
     const d = this.getStockDiameter();
     const l = this.getStockLength();
-    return d > 0 && l > 0 ? new Stock(d, l) : null;
+    const id = this.getStockInnerDiameter();
+    return d > 0 && l > 0 ? new Stock(d, l, id) : null;
   }
 
   getBoundingBox(): THREE.Vector3 {
@@ -319,6 +337,13 @@ export class LatheCode {
     if (!this.data[3]) return this.outsideMaxRadius * 2;
     const stockParams = this.data[3][2];
     return stockParams[1] * (stockParams[0] == 'D' ? 1 : 2) * this.unitsMultiplier;
+  }
+
+  private getStockInnerDiameter(): number {
+    if (!this.data[3]) return 0;
+    const stockHole = this.data[3][2][2];
+    if (!stockHole) return 0;
+    return stockHole[1] * (stockHole[0] == 'ID' ? 1 : 2) * this.unitsMultiplier;
   }
 
   private closeLoop(mainSequence: Segment[], x: number): Segment[] {

@@ -27,6 +27,9 @@ beforeAll(async () => {
     server: {
       host: '127.0.0.1',
       port: 0,
+      watch: {
+        ignored: ['**/test/**'],
+      },
     },
     logLevel: 'error',
   });

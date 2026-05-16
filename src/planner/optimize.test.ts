@@ -80,6 +80,32 @@ describe('plannerworker', () => {
     expect(Math.max(...cutPixels.map(pixel => pixel.y))).toBeLessThan(3);
   });
 
+  it('plans inside-only profiles from an existing stock hole radius', () => {
+    const messages: any[] = [];
+    const stock = Colors.COLOR_STOCK.rgbNumber();
+    const part = Colors.COLOR_PART.rgbNumber();
+    const canvas = new FakeCanvas(3, 5, imageData(3, 5, (_x, y) => y < 2 ? 0 : y < 3 ? stock : part));
+    const tool = new FakeCanvas(1, 1, imageData(1, 1, () => Colors.COLOR_TOOL.rgbNumber()));
+
+    new PlannerWorker(new LatheCode('STOCK D10 ID4\nDEPTH CUT1 FINISH0\nINSIDE\nL3 R3'), 1, {
+      painter: {
+        createCanvas: () => canvas as unknown as OffscreenCanvas,
+        createTool: () => tool as unknown as OffscreenCanvas,
+      },
+      postMessage: message => messages.push(message),
+      optimizeMoves: moves => moves,
+    });
+
+    const moves = messages.find(message => message.moves)?.moves as PixelMove[];
+    const cutPixels = moves.flatMap(move => move.cutPixels);
+    const yCoords = moves.flatMap(move => [move.yStart, move.yStart + move.yDelta]);
+
+    expect(Math.min(...yCoords)).toBe(2);
+    expect(cutPixels.length).toBeGreaterThan(0);
+    expect(Math.min(...cutPixels.map(pixel => pixel.y))).toBe(2);
+    expect(Math.max(...cutPixels.map(pixel => pixel.y))).toBe(2);
+  });
+
   it('keeps inside-only cylinder toolpaths within the bore radius', () => {
     const messages: any[] = [];
     const stock = Colors.COLOR_STOCK.rgbNumber();

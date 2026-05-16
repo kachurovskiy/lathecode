@@ -23,7 +23,9 @@ This description represents an object with an outer diameter of 6mm, a total len
 
 ## Stock
 
-Stock size should be specified in the first line via radius or diameter e.g. `STOCK D10` and `STOCK R5` both declare the stock do have a diameter of 10mm. When stock is not specified, part maximum diameter is taken as stock diameter.
+Stock size should be specified in the first line via radius or diameter e.g. `STOCK D10` and `STOCK R5` both declare the stock to have a diameter of 10mm. When stock is not specified, part maximum diameter is taken as stock diameter.
+
+Stock can also specify an existing internal through-hole with `ID` or `IR`. For example, `STOCK D10 ID4` and `STOCK R5 IR2` both declare 10mm stock with a 4mm internal hole.
 
 ## Cones
 
@@ -164,7 +166,7 @@ units = "UNITS" spaces unitType comment
 unitType = "MM" / "CM" / "M" / "FT" / "IN"
 
 stock = "STOCK" spaces stockParams comment
-stockParams = ("R" / "D") float ("A" float)?
+stockParams = ("R" / "D") float (("ID" / "IR") float)? ("A" float)?
 
 tool = "TOOL" spaces toolType spaces toolParams comment
 toolType = "RECT" / "ROUND" / "ANG"
