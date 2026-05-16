@@ -1,6 +1,6 @@
 # lathecode
 
-Text format for lathe parts and other objects with circular symmetry. Defines stock dimensions and substractions that should be made from it right-to-left just like a part is processed in a typical lathe. Allows to specify tools, pass depths and speeds. Supports conversion to GCode and STL.
+Text format for lathe parts and other objects with circular symmetry. Defines stock dimensions and subtractions that should be made from it right-to-left just like a part is processed in a typical lathe. Allows to specify tools, pass depths and speeds. Supports conversion to GCode and STL.
 
 **[Try it in the online editor.](https://kachurovskiy.com/lathecode)**
 
@@ -27,7 +27,7 @@ Stock size should be specified in the first line via radius or diameter e.g. `ST
 
 ## Cones
 
-Instead of specifying diameter as `D`, specify diameter-start as `DS` and diameter-end as `DE` - or use radiuses as `RS` and `RE`.
+Instead of specifying diameter as `D`, specify diameter-start as `DS` and diameter-end as `DE` - or use radii as `RS` and `RE`.
 
 ```
 ; specify start and end diameter or radius

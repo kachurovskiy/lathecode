@@ -51,7 +51,7 @@ export class GCode {
 
   private send(text: string, mode: SenderMode) {
     if (!this.latheCode?.isNanoElsCompatible()) {
-      alert('This lathecode is not complatible with NanoEls due to axis direction');
+      alert('This lathecode is not compatible with NanoEls due to axis direction');
       return;
     }
     if (!this.sender) this.sender = new Sender(() => this.senderStatusChange());

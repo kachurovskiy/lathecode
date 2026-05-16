@@ -85,7 +85,7 @@ export class Sender {
     }
     await this.askForStatus();
     if (!(await waitForTrue(() => this.statusReceived))) {
-      this.setError('Device is not reponding, is it in GCODE mode?');
+      this.setError('Device is not responding, is it in GCODE mode?');
       return;
     }
     if (mode == 'save' && this.h4Version < 11) {
