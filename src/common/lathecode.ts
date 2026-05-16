@@ -47,6 +47,12 @@ export class Segment {
   }
 }
 
+export type ProfileSide = 'outside' | 'inside';
+
+export class Profile {
+  constructor(readonly side: ProfileSide, readonly segments: Segment[]) {}
+}
+
 export class Stock {
   constructor(readonly diameter: number, readonly length: number) {}
 
@@ -264,6 +270,20 @@ export class LatheCode {
   /** Segments forming the part after inside cuts. */
   getInsideSegments(): Segment[] {
     return this.insideSegments.concat();
+  }
+
+  /** Explicitly named profiles present in this lathe code. */
+  getProfiles(): Profile[] {
+    const profiles: Profile[] = [];
+    if (this.outsideSegments.length) profiles.push(new Profile('outside', this.getOutsideSegments()));
+    if (this.insideSegments.length) profiles.push(new Profile('inside', this.getInsideSegments()));
+    return profiles;
+  }
+
+  /** Single active profile, or null when there are none or both inside and outside profiles. */
+  getSingleProfile(): Profile | null {
+    const profiles = this.getProfiles();
+    return profiles.length === 1 ? profiles[0] : null;
   }
 
   /** Z coordinates of vertical lines where each part ends and cutoff area starts. */

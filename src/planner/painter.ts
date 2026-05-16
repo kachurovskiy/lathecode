@@ -100,17 +100,16 @@ export class Painter {
     if (!stock) throw new Error('Error: specify stock');
     if (stock.diameter == 0) throw new Error('Error: stock diameter is 0');
     if (stock.length == 0) throw new Error('Error: stock length is 0');
-    const insideSegments = this.latheCode.getInsideSegments();
-    const outsideSegments = this.latheCode.getOutsideSegments();
-    if (insideSegments.length && outsideSegments.length) throw new Error('Error: inside and outside not supported yet');
-    if (!insideSegments.length && !outsideSegments.length) throw new Error('Error: no segments');
+    const profiles = this.latheCode.getProfiles();
+    if (profiles.length > 1) throw new Error('Error: inside and outside not supported yet');
+    const profile = profiles[0];
+    if (!profile) throw new Error('Error: no segments');
     const canvas = new OffscreenCanvas(stock.length * this.pxPerMm, stock.diameter / 2 * this.pxPerMm);
     const ctx = canvas.getContext('2d')!;
-    const segments = insideSegments.length ? insideSegments : outsideSegments;
-    const finishDepth = this.latheCode.getDepth().finishMm * (insideSegments.length ? -1 : 1);
+    const finishDepth = this.latheCode.getDepth().finishMm * (profile.side === 'inside' ? -1 : 1);
     this.fillSegments(ctx, stock.getSegments(), Colors.COLOR_STOCK.hex());
-    if (finishDepth !== 0) this.fillSegments(ctx, segments.map(s => s.offsetBy(finishDepth, 0)), Colors.COLOR_FINISH.hex());
-    this.fillSegments(ctx, segments, Colors.COLOR_PART.hex());
+    if (finishDepth !== 0) this.fillSegments(ctx, profile.segments.map(s => s.offsetBy(finishDepth, 0)), Colors.COLOR_FINISH.hex());
+    this.fillSegments(ctx, profile.segments, Colors.COLOR_PART.hex());
     return canvas;
   }
 

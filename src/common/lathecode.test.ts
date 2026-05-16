@@ -124,6 +124,34 @@ describe('lathecode', () => {
     expect(pointsToString(latheCode.getInsideSegments())).toBe('LINE:5,5-5,0 LINE:5,0-2,0 LINE:2,0-2,2 LINE:2,2-3,2 LINE:3,2-3,5 LINE:3,5-5,5');
   });
 
+  it('returns outside-only profiles explicitly', () => {
+    const latheCode = new LatheCode('L2 R3');
+    const profiles = latheCode.getProfiles();
+
+    expect(profiles.map(profile => profile.side)).toEqual(['outside']);
+    expect(pointsToString(profiles[0].segments)).toBe(pointsToString(latheCode.getOutsideSegments()));
+    expect(latheCode.getSingleProfile()).toEqual(profiles[0]);
+  });
+
+  it('returns inside-only profiles explicitly', () => {
+    const latheCode = new LatheCode('STOCK D10\nINSIDE\nL2 R3');
+    const profiles = latheCode.getProfiles();
+
+    expect(profiles.map(profile => profile.side)).toEqual(['inside']);
+    expect(pointsToString(profiles[0].segments)).toBe(pointsToString(latheCode.getInsideSegments()));
+    expect(latheCode.getSingleProfile()).toEqual(profiles[0]);
+  });
+
+  it('keeps mixed profiles explicit instead of selecting implicitly', () => {
+    const latheCode = new LatheCode('STOCK D10\nL2 R4\nINSIDE\nL2 R2');
+    const profiles = latheCode.getProfiles();
+
+    expect(profiles.map(profile => profile.side)).toEqual(['outside', 'inside']);
+    expect(pointsToString(profiles[0].segments)).toBe(pointsToString(latheCode.getOutsideSegments()));
+    expect(pointsToString(profiles[1].segments)).toBe(pointsToString(latheCode.getInsideSegments()));
+    expect(latheCode.getSingleProfile()).toBeNull();
+  });
+
   it('getCutoffStarts empty', () => {
     expect(new LatheCode('L2 R3\n').getCutoffStarts()).toEqual([]);
   });
