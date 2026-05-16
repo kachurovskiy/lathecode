@@ -10,7 +10,7 @@
 ;
 ; L10.000 R2.990
 
-; Run time 0.3 min, cutting 80% of time
+; Run time 0.2 min, cutting 80% of time
 ; Working area 10.00 by 0.28 mm
 
 G21 ; metric
@@ -22,10 +22,11 @@ Z0 ; zero your tool Z at the right edge of the stock
 G91 ; relative positioning
 Z0.01
 X0.28 ; cut 0.0003 mm2
+Z0.03 X-0.07 ; cut 0.0007 mm2 at -23.20°
+Z0.06 X-0.08 ; cut 0.0008 mm2 at -36.87°
+Z0.09 X-0.07 ; cut 0.0009 mm2 at -52.13°
 
 F50
-Z0.07 X-0.13 ; cut 0.0013 mm2 at -28.30°
-Z0.11 X-0.09 ; cut 0.0011 mm2 at -50.71°
 Z0.13 X-0.06 ; cut 0.0013 mm2 at -65.22°
 Z9.68 ; cut 0.0968 mm2
 
