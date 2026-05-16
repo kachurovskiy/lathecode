@@ -288,7 +288,7 @@ export class LatheCode {
   }
 
   reverse(): string {
-    const firstLLine = this.text.indexOf('\nL');
+    const firstLLine = this.text.startsWith('L') ? 0 : this.text.indexOf('\nL');
     if (firstLLine === -1) return this.text;
     const preambula = this.text.substring(0, firstLLine);
     const outside = this.data[this.data.length - 3];
@@ -296,7 +296,7 @@ export class LatheCode {
     for (const line of outside) {
       result.push(reverseLine(line[1]));
     }
-    return preambula + '\n' + result.reverse().join('\n');
+    return (preambula ? preambula + '\n' : '') + result.reverse().join('\n');
   }
 }
 

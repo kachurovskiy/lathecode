@@ -180,6 +180,14 @@ L24 DS14.5 DE15.733 ; line 3
 L3 D9.8
 L2 D9.8 ; line 1`);
   });
+
+  it('reverses when the first line is a segment', () => {
+    expect(new LatheCode(`L2 D4 ; line 1
+L3 DS4 DE6
+L1 ; cutoff`).reverse()).toEqual(`L1 ; cutoff
+L3 DS6 DE4
+L2 D4 ; line 1`);
+  });
 })
 
 function expectPoints(text: string, o: string, i: string) {
