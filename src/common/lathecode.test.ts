@@ -174,6 +174,18 @@ describe('lathecode', () => {
     expect(latheCode.getSingleProfile()).toBeNull();
   });
 
+  it('creates outside-only lathecode from a mixed profile', () => {
+    const latheCode = new LatheCode('STOCK D10\nTOOL RECT R0.2 L2\nL2 R4\nINSIDE\nL2 R2');
+
+    expect(latheCode.getLatheCodeForProfile('outside')?.getText()).toBe('STOCK D10\nTOOL RECT R0.2 L2\nL2 R4');
+  });
+
+  it('creates inside-only lathecode from a mixed profile', () => {
+    const latheCode = new LatheCode('STOCK D10\nTOOL RECT R0.2 L2\nL2 R4\nINSIDE\nL2 R2');
+
+    expect(latheCode.getLatheCodeForProfile('inside')?.getText()).toBe('STOCK D10\nTOOL RECT R0.2 L2\nINSIDE\nL2 R2');
+  });
+
   it('getCutoffStarts empty', () => {
     expect(new LatheCode('L2 R3\n').getCutoffStarts()).toEqual([]);
   });

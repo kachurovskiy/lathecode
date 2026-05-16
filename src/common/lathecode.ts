@@ -314,6 +314,20 @@ export class LatheCode {
     return profiles.length === 1 ? profiles[0] : null;
   }
 
+  /** LatheCode containing only the selected profile and shared setup directives. */
+  getLatheCodeForProfile(side: ProfileSide): LatheCode | null {
+    const entries = side === 'outside' ? this.data[14] : this.data[15]?.[2] || [];
+    if (!entries.length) return null;
+
+    const lines = this.getSetupLines(side);
+    if (side === 'inside') {
+      const insideBlock = this.data[15];
+      lines.push(`INSIDE${formatComment(insideBlock?.[1][1] || '')}`);
+    }
+    lines.push(...entries.map(entry => latheLineToString(entry[1])));
+    return new LatheCode(lines.join('\n'));
+  }
+
   /** Z coordinates of vertical lines where each part ends and cutoff area starts. */
   getCutoffStarts(): number[] {
     const result: number[] = [];
@@ -354,6 +368,31 @@ export class LatheCode {
     const stockHole = this.data[3][2][2];
     if (!stockHole) return 0;
     return stockHole[1] * (stockHole[0] == 'ID' ? 1 : 2) * this.unitsMultiplier;
+  }
+
+  private getSetupLines(side: ProfileSide): string[] {
+    const lines: string[] = [];
+    const pushComments = (comments: CommentList) => lines.push(...comments.map(commentToString));
+    pushComments(this.data[0]);
+    if (this.data[1]) lines.push(unitsDirectiveToString(this.data[1]));
+    pushComments(this.data[2]);
+    if (this.data[3]) {
+      lines.push(stockDirectiveToString(this.data[3]));
+    } else if (side === 'inside') {
+      const stock = this.getStock();
+      if (stock) lines.push(`STOCK D${numberToString(stock.diameter)}`);
+    }
+    pushComments(this.data[4]);
+    if (this.data[5]) lines.push(toolDirectiveToString(this.data[5]));
+    pushComments(this.data[6]);
+    if (this.data[7]) lines.push(depthDirectiveToString(this.data[7]));
+    pushComments(this.data[8]);
+    if (this.data[9]) lines.push(feedDirectiveToString(this.data[9]));
+    pushComments(this.data[10]);
+    if (this.data[11]) lines.push(modeDirectiveToString(this.data[11]));
+    pushComments(this.data[12]);
+    if (this.data[13]) lines.push(axesDirectiveToString(this.data[13]));
+    return lines;
   }
 
   private closeLoop(mainSequence: Segment[], x: number): Segment[] {
@@ -434,6 +473,67 @@ function reverseLine(line: LatheLine): string {
     return `L${line[1]} ${second}${line[5]} ${line[4]}${line[3]}${line[6] ? ' ' + line[6] : ''}${line[7] ? ' ; ' + (line[6] ? (line[7] as string).substring(1).trim() : line[7]) : ''}`;
   }
   return `L${line[1]}${line[2] ? ' ; ' + line[2] : ''}`;
+}
+
+function commentToString(comment: string): string {
+  return comment ? `; ${comment}` : '';
+}
+
+function formatComment(comment: string): string {
+  if (!comment) return '';
+  return comment.startsWith(';') ? ` ${comment}` : ` ; ${comment}`;
+}
+
+function unitsDirectiveToString(directive: UnitsDirective): string {
+  return `UNITS ${directive[2]}${formatComment(directive[3])}`;
+}
+
+function stockDirectiveToString(directive: StockDirective): string {
+  const stock = directive[2];
+  const stockHole = stock[2] ? ` ${stock[2][0]}${numberToString(stock[2][1])}` : '';
+  const allowance = stock[3] ? ` ${stock[3][0]}${numberToString(stock[3][1])}` : '';
+  return `STOCK ${stock[0]}${numberToString(stock[1])}${stockHole}${allowance}${formatComment(directive[3])}`;
+}
+
+function toolDirectiveToString(directive: ToolDirective): string {
+  const params = numericParamsToString(directive[4]);
+  return `TOOL ${directive[2]}${params.length ? ' ' + params.join(' ') : ''}${formatComment(directive[5])}`;
+}
+
+function depthDirectiveToString(directive: DepthDirective): string {
+  const params = numericParamsToString(directive[2]);
+  return `DEPTH ${params.join(' ')}${formatComment(directive[3])}`;
+}
+
+function feedDirectiveToString(directive: FeedDirective): string {
+  const params = numericParamsToString(directive[2]);
+  return `FEED ${params.join(' ')}${formatComment(directive[3])}`;
+}
+
+function numericParamsToString(params: readonly (NumericParam<string> | null)[]): string[] {
+  return params.flatMap(param => param ? [`${param[0]}${numberToString(param[1])}`] : []);
+}
+
+function modeDirectiveToString(directive: ModeDirective): string {
+  return `MODE ${directive[2]}${formatComment(directive[3])}`;
+}
+
+function axesDirectiveToString(directive: AxesDirective): string {
+  return `AXES ${directive[2][0]} ${directive[2][2]}${formatComment(directive[3])}`;
+}
+
+function latheLineToString(line: LatheLine): string {
+  if (isCurvedLine(line)) {
+    return `L${numberToString(line[1])} ${line[2]}${numberToString(line[3])} ${line[4]}${numberToString(line[5])}${line[6] ? ' ' + line[6] : ''}${formatComment(line[7])}`;
+  }
+  if (isStraightLine(line)) {
+    return `L${numberToString(line[1])} ${line[2]}${numberToString(line[3])}${formatComment(line[4])}`;
+  }
+  return `L${numberToString(line[1])}${formatComment(line[2])}`;
+}
+
+function numberToString(value: number): string {
+  return Number.isInteger(value) ? value.toFixed(0) : String(value);
 }
 
 export function removeColinearSegments(segments: Segment[]): Segment[] {

@@ -1,8 +1,15 @@
-import { LatheCode } from '../common/lathecode.ts';
+import { LatheCode, ProfileSide } from '../common/lathecode.ts';
+import { createFullScreenDialog } from '../common/dialog.ts';
 import StlImportWorker from './stlimportworker?worker&inline';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
 
 const PX_PER_MM = 100;
+
+export class PlanEvent extends Event {
+  constructor(readonly latheCode: LatheCode) {
+    super('plan');
+  }
+}
 
 export class Editor extends EventTarget {
   private errorContainer: HTMLDivElement;
@@ -37,8 +44,9 @@ export class Editor extends EventTarget {
       this.dispatchEvent(new Event('stl'));
     });
 
-    this.planButton.addEventListener('click', () => {
-      this.dispatchEvent(new Event('plan'));
+    this.planButton.addEventListener('click', async () => {
+      const latheCode = await this.getLatheCodeForPlanning();
+      if (latheCode) this.dispatchEvent(new PlanEvent(latheCode));
     });
 
     this.importStlButton = container.querySelector<HTMLButtonElement>('.imageButton')!;
@@ -185,13 +193,43 @@ export class Editor extends EventTarget {
     try {
       localStorage.setItem('latheCode', this.latheCodeInput.value);
       this.latheCode = new LatheCode(this.latheCodeInput.value + '\n');
-      this.planButton.style.display = this.latheCode.getSingleProfile() ? 'inline' : 'none';
+      this.planButton.style.display = this.latheCode.getProfiles().length ? 'inline' : 'none';
       this.errorContainer.textContent = '';
     } catch (error: any) {
       this.latheCode = null;
       this.errorContainer.textContent = error.message;
     }
     this.dispatchEvent(new Event('change'));
+  }
+
+  private async getLatheCodeForPlanning(): Promise<LatheCode | null> {
+    if (!this.latheCode) return null;
+    const profiles = this.latheCode.getProfiles();
+    if (profiles.length <= 1) return this.latheCode;
+    const side = await this.pickProfileSide();
+    return side ? this.latheCode.getLatheCodeForProfile(side) : null;
+  }
+
+  private pickProfileSide(): Promise<ProfileSide | null> {
+    return new Promise(resolve => {
+      const container = document.createElement('div');
+      const choose = (side: ProfileSide) => {
+        dialog.remove();
+        resolve(side);
+      };
+
+      const outsideButton = document.createElement('button');
+      outsideButton.textContent = 'Cut outside';
+      outsideButton.addEventListener('click', () => choose('outside'));
+      container.appendChild(outsideButton);
+
+      const insideButton = document.createElement('button');
+      insideButton.textContent = 'Cut inside';
+      insideButton.addEventListener('click', () => choose('inside'));
+      container.appendChild(insideButton);
+
+      const dialog = createFullScreenDialog(container, 'Select profile', () => resolve(null));
+    });
   }
 
   private async importStl(file: File) {

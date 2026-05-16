@@ -2,15 +2,18 @@ import './style.css'
 import { Scene } from './scene.ts';
 import { createDownloadLink } from './stl.ts';
 import { GCode } from './gcode/gcode.ts';
-import { Editor } from './editor/editor.ts';
+import { Editor, PlanEvent } from './editor/editor.ts';
 import { Planner } from './planner/planner.ts';
+import { LatheCode } from './common/lathecode.ts';
 
 const scene = new Scene(document.getElementById('sceneContainer')!);
 const editor = new Editor(document.getElementById('editorContainer')!);
 const planner = new Planner(document.getElementById('plannerContainer')!);
 const gcode = new GCode(document.getElementById('gcodeContainer')!);
+let plannedLatheCode: LatheCode | null = null;
 
 function setLatheCode() {
+  plannedLatheCode = null;
   scene.setLatheCode(editor.getLatheCode());
   planner.setLatheCode(null);
   gcode.hide();
@@ -27,15 +30,15 @@ editor.addEventListener('stl', () => {
   URL.revokeObjectURL(link.href);
 });
 
-editor.addEventListener('plan', () => {
-  planner.setLatheCode(editor.getLatheCode());
+editor.addEventListener('plan', (event) => {
+  plannedLatheCode = (event as PlanEvent).latheCode;
+  planner.setLatheCode(plannedLatheCode);
 });
 
 planner.addEventListener('change', () => {
-  const latheCode = editor.getLatheCode();
   const moves = planner.getMoves();
-  if (latheCode && moves && moves.length) {
-    gcode.show(latheCode, moves);
+  if (plannedLatheCode && moves && moves.length) {
+    gcode.show(plannedLatheCode, moves);
   } else {
     gcode.hide();
   }
