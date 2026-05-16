@@ -285,9 +285,19 @@ export class LatheCode {
     return this.outsideSegments.concat();
   }
 
+  /** Open outside profile path before it is closed to the stock inner radius or centerline. */
+  getOutsideProfileSegments(): Segment[] {
+    return this.outside.concat();
+  }
+
   /** Segments forming the part after inside cuts. */
   getInsideSegments(): Segment[] {
     return this.insideSegments.concat();
+  }
+
+  /** Open inside profile path before it is closed to the stock outer radius. */
+  getInsideProfileSegments(): Segment[] {
+    return this.inside.concat();
   }
 
   /** Explicitly named profiles present in this lathe code. */

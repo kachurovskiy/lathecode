@@ -106,12 +106,29 @@ export class Scene extends THREE.Scene {
   private createLatheMesh(): THREE.Object3D {
     const profiles = this.latheCode?.getProfiles() || [];
     if (profiles.length > 1) {
-      throw new Error('editor does not support both inside and outside profiles at the same time yet');
+      return this.createCombinedLatheMesh();
     }
     const profile = profiles[0];
     if (!profile) throw new Error('Unable to build the profile');
     const vectors = profile.segments.map(s => getApproxPoints(s)).flat();
     const latheGeometry = new THREE.LatheGeometry(vectors, 256, 0);
+    return new THREE.Mesh(latheGeometry, createMetalMaterial());
+  }
+
+  private createCombinedLatheMesh(): THREE.Object3D {
+    const outside = segmentsToVectors(this.latheCode!.getOutsideProfileSegments());
+    const inside = segmentsToVectors(this.latheCode!.getInsideProfileSegments());
+    if (outside.length < 2 || inside.length < 2) throw new Error('Unable to build combined inside/outside profile');
+
+    const profile = removeConsecutiveVectorDuplicates([
+      inside[0],
+      outside[0],
+      ...outside.slice(1),
+      inside.at(-1)!,
+      ...inside.slice(0, -1).reverse(),
+      inside[0],
+    ]);
+    const latheGeometry = new THREE.LatheGeometry(profile, 256, 0);
     return new THREE.Mesh(latheGeometry, createMetalMaterial());
   }
 
@@ -140,6 +157,18 @@ function createMetalMaterial() {
     transparent: false,
     opacity: 0.8,
   });
+}
+
+function segmentsToVectors(segments: Segment[]): THREE.Vector2[] {
+  return removeConsecutiveVectorDuplicates(segments.map(s => getApproxPoints(s)).flat());
+}
+
+function removeConsecutiveVectorDuplicates(points: THREE.Vector2[]): THREE.Vector2[] {
+  const result: THREE.Vector2[] = [];
+  for (const point of points) {
+    if (!result.length || !result.at(-1)!.equals(point)) result.push(point);
+  }
+  return result;
 }
 
 function getApproxPoints(s: Segment): THREE.Vector2[] {

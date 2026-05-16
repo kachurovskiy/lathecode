@@ -8,4 +8,4 @@
 ; MODE TURN ; for classic style of material removal
 ; AXES RIGHT DOWN ; for non-NanoEls controllers
 
-L10.000 R2.990
+L10.000 R2.980

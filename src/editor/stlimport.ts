@@ -5,9 +5,11 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { createFullScreenDialog } from "../common/dialog";
 import { Pair, Polygon } from "polygon-clipping";
 import * as polygonClipping from "polygon-clipping";
-import { cutPolygonLower, deduplicatePixelMoves, getPolygonArea, mirrorPolygonY, moveIntoNonNegativeX, movesToLatheCodeOrNull, polygonToTurnSegments, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
+import { cutPolygonLower, getPolygonArea, mirrorPolygonY, moveIntoNonNegativeX, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
 import { LatheCode } from "../common/lathecode";
 import { booleanValid } from '@turf/boolean-valid';
+
+type CoordinatePlane = "xy" | "xz" | "yz";
 
 export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (progressMessage: string) => void): LatheCode[] {
   // Mesh is centered around 0
@@ -15,35 +17,23 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (pr
   const geometry = loader.parse(stl).center();
 
   // We don't know how the mesh is oriented and along which axis is intended to be rotated so we try all options and let user choose.
-  callback("Calculating xy projection...");
-  const projectionsX = projectOrCut(geometry, "xy", new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), callback);
-  callback("Calculating yz projection...");
-  const projectionsY = projectOrCut(geometry, "yz", new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), callback);
-  callback("Calculating xz projection...");
-  const projectionsZ = projectOrCut(geometry, "xz", new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), callback);
-  callback("Post-processing projections...");
+  callback("Calculating xy section...");
+  const projectionsX = projectOrCut(geometry, "xy", new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), callback);
+  callback("Calculating yz section...");
+  const projectionsY = projectOrCut(geometry, "yz", new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), callback);
+  callback("Calculating xz section...");
+  const projectionsZ = projectOrCut(geometry, "xz", new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), callback);
+  callback("Post-processing sections...");
 
-  let projections = removeTinyAreaPolygons([... projectionsX, ... projectionsY, ... projectionsZ]);
-
-  // Also include the rotated projections
-  projections.push(... projections.map(projection => projection.map(pair => new Pixel(pair.y, pair.x))));
-
-  // Convert from STL mm to pixels
-  projections = projections.map(projection => scaleAndRoundPolygon(projection, pxPerMm));
-
-  projections = projections.map(projection => removeConsecutiveDuplicatePoints(projection));
-  projections = projections.map(projection => moveIntoNonNegativeX(mirrorPolygonY(cutPolygonLower(projection))));
-  projections = projections.filter(projection => getPolygonArea(projection) > 0.001);
-  projections = projections.map(projection => polygonToTurnSegments(projection)).reduce((a, b) => a.concat(b), []);
-  projections = projections.map(projection => repairPointsGoingBack(projection));
-
-  let movesList = projections
-    .map(p => segmentToMoves(p))
-    .map(moves => optimizeMoves(moves, () => {}))
-    .filter(moves => moves.length > 0);
-  movesList = deduplicatePixelMoves(movesList);
-
-  let latheCodes = movesList.map(m => movesToLatheCodeOrNull(m, pxPerMm)).filter(lc => lc !== null) as LatheCode[];
+  let latheCodes = [
+    ...sectionLoopsToLatheCodes(projectionsX, pxPerMm),
+    ...sectionLoopsToLatheCodes(projectionsY, pxPerMm),
+    ...sectionLoopsToLatheCodes(projectionsZ, pxPerMm),
+    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsX), pxPerMm),
+    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsY), pxPerMm),
+    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsZ), pxPerMm),
+  ];
+  latheCodes = deduplicateLatheCodes(latheCodes);
   if (geometry.boundingBox !== null) {
     let size = new THREE.Vector3();
     geometry.boundingBox.getSize(size);
@@ -67,17 +57,146 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (pr
 
 export function projectOrCut(
   geometry: THREE.BufferGeometry<THREE.NormalBufferAttributes>,
-  plane: string,
+  plane: CoordinatePlane,
   planeNormal: THREE.Vector3,
   planePoint: THREE.Vector3,
   progressCallback: (progressMessage: string) => void,
 ): Pixel[][] {
+  const cutLoops = cutMeshWithPlane(geometry, plane, planeNormal, planePoint);
+  if (cutLoops.length > 0) return cutLoops;
+
   try {
     return projectOnPlane(geometry, plane, progressCallback);
   } catch (e) {
     console.log(`Failed projecting on plane ${plane}: ${e}`);
-    return cutMeshWithPlane(geometry, planeNormal, planePoint)
+    return [];
   }
+}
+
+function sectionLoopsToLatheCodes(sectionLoops: Pixel[][], pxPerMm: number): LatheCode[] {
+  let projections = removeTinyAreaPolygons(sectionLoops);
+  projections = projections.map(projection => scaleAndRoundPolygon(projection, pxPerMm));
+  projections = projections.map(projection => removeConsecutiveDuplicatePoints(projection));
+  projections = projections.map(projection => moveIntoNonNegativeX(mirrorPolygonY(cutPolygonLower(projection))));
+  projections = projections.filter(projection => projection.length > 2 && getPolygonArea(projection) > 0.001);
+  return projections.map(projection => materialPolygonToLatheCodeOrNull(projection, pxPerMm)).filter(lc => lc !== null) as LatheCode[];
+}
+
+function swapSectionLoops(sectionLoops: Pixel[][]): Pixel[][] {
+  return sectionLoops.map(loop => loop.map(pair => new Pixel(pair.y, pair.x)));
+}
+
+function materialPolygonToLatheCodeOrNull(polygon: Pixel[], pxPerMm: number): LatheCode | null {
+  const outer = normalizeProfileChain(extractBoundaryChain(polygon, "outer"));
+  const inner = normalizeProfileChain(extractBoundaryChain(polygon, "inner"));
+  if (outer.length < 2) return null;
+
+  const outerText = profileChainToLatheText(outer, pxPerMm);
+  if (!outerText) return null;
+
+  const maxOuterRadiusPx = Math.max(...outer.map(p => p.y));
+  const maxInnerRadiusPx = inner.length ? Math.max(...inner.map(p => p.y)) : 0;
+  const hasInnerProfile = maxInnerRadiusPx > 0;
+  const constantInnerRadiusPx = hasInnerProfile ? getConstantRadiusPx(inner) : null;
+  let text = outerText;
+
+  if (constantInnerRadiusPx !== null && constantInnerRadiusPx > 0) {
+    text = `STOCK D${formatMm(maxOuterRadiusPx * 2 / pxPerMm)} ID${formatMm(constantInnerRadiusPx * 2 / pxPerMm)}\n${outerText}`;
+  } else if (hasInnerProfile) {
+    const innerText = profileChainToLatheText(inner, pxPerMm);
+    if (!innerText) return null;
+    text = `STOCK D${formatMm(maxOuterRadiusPx * 2 / pxPerMm)}\n${outerText}\nINSIDE\n${innerText}`;
+  }
+
+  try {
+    return new LatheCode(text);
+  } catch {
+    return null;
+  }
+}
+
+function extractBoundaryChain(polygon: Pixel[], boundary: "outer" | "inner"): Pixel[] {
+  const minX = Math.min(...polygon.map(p => p.x));
+  const maxX = Math.max(...polygon.map(p => p.x));
+  if (minX === maxX) return [];
+
+  const leftIndex = findExtremePointIndex(polygon, minX, boundary === "outer" ? "maxY" : "minY");
+  const rightIndex = findExtremePointIndex(polygon, maxX, boundary === "outer" ? "maxY" : "minY");
+  const positiveDirectionPath = pathBetween(polygon, leftIndex, rightIndex, 1);
+  const negativeDirectionPath = pathBetween(polygon, leftIndex, rightIndex, -1);
+  const positiveMeanY = meanY(positiveDirectionPath);
+  const negativeMeanY = meanY(negativeDirectionPath);
+  const result = boundary === "outer"
+    ? positiveMeanY >= negativeMeanY ? positiveDirectionPath : negativeDirectionPath
+    : positiveMeanY <= negativeMeanY ? positiveDirectionPath : negativeDirectionPath;
+  return result[0].x <= result.at(-1)!.x ? result : result.concat().reverse();
+}
+
+function findExtremePointIndex(polygon: Pixel[], x: number, yMode: "minY" | "maxY"): number {
+  let result = -1;
+  for (let i = 0; i < polygon.length; i++) {
+    const point = polygon[i];
+    if (point.x !== x) continue;
+    if (result === -1) {
+      result = i;
+    } else if (yMode === "minY" && point.y < polygon[result].y) {
+      result = i;
+    } else if (yMode === "maxY" && point.y > polygon[result].y) {
+      result = i;
+    }
+  }
+  if (result === -1) throw new Error("Expected polygon point not found");
+  return result;
+}
+
+function pathBetween(polygon: Pixel[], startIndex: number, endIndex: number, direction: 1 | -1): Pixel[] {
+  const result = [polygon[startIndex]];
+  let index = startIndex;
+  while (index !== endIndex) {
+    index = (index + direction + polygon.length) % polygon.length;
+    result.push(polygon[index]);
+    if (result.length > polygon.length + 1) throw new Error("Unable to find polygon path");
+  }
+  return result;
+}
+
+function meanY(path: Pixel[]): number {
+  return path.reduce((sum, point) => sum + point.y, 0) / path.length;
+}
+
+function normalizeProfileChain(chain: Pixel[]): Pixel[] {
+  if (chain.length < 2) return chain;
+  return removeConsecutiveDuplicatePoints(repairPointsGoingBack(removeConsecutiveDuplicatePoints(chain.concat())));
+}
+
+function profileChainToLatheText(chain: Pixel[], pxPerMm: number): string {
+  const moves = optimizeMoves(segmentToMoves(chain), () => {});
+  return moves
+    .map(m => m.toMove(pxPerMm).toLatheCode().trim())
+    .filter(line => line.length > 0)
+    .join('\n');
+}
+
+function getConstantRadiusPx(chain: Pixel[]): number | null {
+  const minY = Math.min(...chain.map(p => p.y));
+  const maxY = Math.max(...chain.map(p => p.y));
+  return maxY - minY <= 1 ? Math.round((minY + maxY) / 2) : null;
+}
+
+function formatMm(num: number): string {
+  return Math.abs(num).toFixed(3);
+}
+
+function deduplicateLatheCodes(latheCodes: LatheCode[]): LatheCode[] {
+  const seen = new Set<string>();
+  const result: LatheCode[] = [];
+  for (const latheCode of latheCodes) {
+    const key = latheCode.getText();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(latheCode);
+  }
+  return result;
 }
 
 function r5(num: number): number {
@@ -86,7 +205,7 @@ function r5(num: number): number {
 
 export function projectOnPlane(
   geometry: THREE.BufferGeometry<THREE.NormalBufferAttributes>,
-  plane: string,
+  plane: CoordinatePlane,
   progressCallback: (progressMessage: string) => void,
 ): Pixel[][] {
   const positions = geometry.attributes.position.array;
@@ -129,14 +248,39 @@ function estimatePolygonClippingTime(N: number, avgEdgesPerPolygon: number = 3, 
 }
 
 function cutMeshWithPlane(
-  geometry: THREE.BufferGeometry<THREE.NormalBufferAttributes>, planeNormal: THREE.Vector3, planePoint: THREE.Vector3): Pixel[][] {
+  geometry: THREE.BufferGeometry<THREE.NormalBufferAttributes>,
+  plane: CoordinatePlane,
+  planeNormal: THREE.Vector3,
+  planePoint: THREE.Vector3,
+): Pixel[][] {
   const intersectionEdges: Map<string, THREE.Vector3[]> = new Map();
   const coplanarEdges: Map<string, THREE.Vector3[]> = new Map();
+  const EPS = 1e-6;
 
   function edgeKey(a: THREE.Vector3, b: THREE.Vector3): string {
-    return a.x < b.x || (a.x === b.x && a.y < b.y) || (a.x === b.x && a.y === b.y && a.z < b.z)
-      ? `${a.x},${a.y},${a.z}-${b.x},${b.y},${b.z}`
-      : `${b.x},${b.y},${b.z}-${a.x},${a.y},${a.z}`;
+    const aKey = pointKey(a);
+    const bKey = pointKey(b);
+    return aKey < bKey ? `${aKey}-${bKey}` : `${bKey}-${aKey}`;
+  }
+
+  function pointKey(p: THREE.Vector3): string {
+    return `${Math.round(p.x / EPS)},${Math.round(p.y / EPS)},${Math.round(p.z / EPS)}`;
+  }
+
+  function samePoint(a: THREE.Vector3, b: THREE.Vector3): boolean {
+    return a.distanceTo(b) < EPS;
+  }
+
+  function addEdge(edges: Map<string, THREE.Vector3[]>, a: THREE.Vector3, b: THREE.Vector3) {
+    if (samePoint(a, b)) return;
+    edges.set(edgeKey(a, b), [a, b]);
+  }
+
+  function toggleEdge(edges: Map<string, THREE.Vector3[]>, a: THREE.Vector3, b: THREE.Vector3) {
+    if (samePoint(a, b)) return;
+    const key = edgeKey(a, b);
+    if (edges.has(key)) edges.delete(key);
+    else edges.set(key, [a, b]);
   }
 
   // Step 1: Find intersection edges and merge coplanar faces
@@ -148,39 +292,38 @@ function cutMeshWithPlane(
     const points = [v0, v1, v2];
     const distances = points.map(p => planeNormal.dot(p.clone().sub(planePoint)));
 
-    let intersectionPoints: THREE.Vector3[] = [];
-
-    if (Math.abs(distances[0]) < 1e-6 && Math.abs(distances[1]) < 1e-6 && Math.abs(distances[2]) < 1e-6) {
+    if (distances.every(distance => Math.abs(distance) < EPS)) {
       // Face is coplanar
       const edges = [[v0, v1], [v1, v2], [v2, v0]];
       for (const [p1, p2] of edges) {
-        const key = edgeKey(p1, p2);
-        if (coplanarEdges.has(key)) {
-          coplanarEdges.delete(key); // Shared edge cancels out
-        } else {
-          coplanarEdges.set(key, [p1, p2]);
-        }
+        toggleEdge(coplanarEdges, p1, p2);
       }
       continue;
     }
 
-    // Detect intersection points between edges
-    for (let i = 0; i < 3; i++) {
-      const j = (i + 1) % 3;
-      if (distances[i] * distances[j] < 0) {
-        const t = distances[i] / (distances[i] - distances[j]);
-        const intersection = points[i].clone().lerp(points[j], t);
-        intersectionPoints.push(intersection);
+    const intersectionPoints: THREE.Vector3[] = [];
+    for (let edgeIndex = 0; edgeIndex < 3; edgeIndex++) {
+      const nextIndex = (edgeIndex + 1) % 3;
+      const distance = distances[edgeIndex];
+      const nextDistance = distances[nextIndex];
+      if (Math.abs(distance) < EPS) {
+        intersectionPoints.push(points[edgeIndex]);
+      }
+      if (distance * nextDistance < 0) {
+        const t = distance / (distance - nextDistance);
+        intersectionPoints.push(points[edgeIndex].clone().lerp(points[nextIndex], t));
       }
     }
 
-    if (intersectionPoints.length === 2) {
-      const key = edgeKey(intersectionPoints[0], intersectionPoints[1]);
-      if (intersectionEdges.has(key)) {
-        intersectionEdges.delete(key); // Remove duplicate edges
-      } else {
-        intersectionEdges.set(key, [intersectionPoints[0], intersectionPoints[1]]);
+    const uniqueIntersectionPoints: THREE.Vector3[] = [];
+    for (const point of intersectionPoints) {
+      if (!uniqueIntersectionPoints.some(existingPoint => samePoint(existingPoint, point))) {
+        uniqueIntersectionPoints.push(point);
       }
+    }
+
+    if (uniqueIntersectionPoints.length === 2) {
+      addEdge(intersectionEdges, uniqueIntersectionPoints[0], uniqueIntersectionPoints[1]);
     }
   }
 
@@ -201,13 +344,13 @@ function cutMeshWithPlane(
       for (let i = 0; i < allEdges.length; i++) {
         const [p1, p2] = allEdges[i];
 
-        if (p1.distanceTo(currentPoint) < 1e-6) {
+        if (p1.distanceTo(currentPoint) < EPS) {
           currentLoop.push(p1);
           currentPoint = p2;
           allEdges.splice(i, 1);
           foundNext = true;
           break;
-        } else if (p2.distanceTo(currentPoint) < 1e-6) {
+        } else if (p2.distanceTo(currentPoint) < EPS) {
           currentLoop.push(p2);
           currentPoint = p1;
           allEdges.splice(i, 1);
@@ -224,25 +367,10 @@ function cutMeshWithPlane(
     }
   }
 
-  // Step 3: Compute 2D projection
-  function getPlaneBasis(normal: THREE.Vector3): [THREE.Vector3, THREE.Vector3] {
-    let u = new THREE.Vector3();
-    let v = new THREE.Vector3();
-
-    if (Math.abs(normal.x) > Math.abs(normal.z)) {
-      u.set(-normal.y, normal.x, 0).normalize();
-    } else {
-      u.set(0, -normal.z, normal.y).normalize();
-    }
-
-    v.crossVectors(normal, u).normalize();
-    return [u, v];
-  }
-
-  const [u, v] = getPlaneBasis(planeNormal);
-
   function projectToPlane(point: THREE.Vector3): Pixel {
-    return new Pixel(point.dot(u), point.dot(v));
+    if (plane === "xy") return new Pixel(point.x, point.y);
+    if (plane === "xz") return new Pixel(point.x, point.z);
+    return new Pixel(point.y, point.z);
   }
 
   let projectedLoops: Pixel[][] = loops.map(loop => loop.map(p => projectToPlane(p)));
