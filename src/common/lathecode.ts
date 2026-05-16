@@ -88,8 +88,70 @@ const UNITS: {
   "IN": 25.4,
 };
 
+type UnitType = keyof typeof UNITS;
+type ToolType = 'RECT'|'ROUND'|'ANG';
+type ModeType = 'FACE'|'TURN';
+type ZDirection = 'LEFT'|'RIGHT';
+type XDirection = 'UP'|'DOWN';
+type RadiusDiameterType = 'R'|'D';
+type SegmentStartType = 'DS'|'RS';
+type SegmentEndType = 'DE'|'RE';
+type CurveType = 'CONV'|'CONC';
+type CommentList = string[];
+type NumericParam<Name extends string> = [Name, number];
+
+type UnitsDirective = ['UNITS', null, UnitType, string];
+type StockDirective = ['STOCK', null, [RadiusDiameterType, number, NumericParam<'A'> | null], string];
+type ToolDirective = ['TOOL', null, ToolType, null, [
+  NumericParam<'R'> | null,
+  NumericParam<'L'> | null,
+  NumericParam<'H'> | null,
+  NumericParam<'A'> | null,
+  NumericParam<'NA'> | null,
+], string];
+type DepthDirective = ['DEPTH', null, [
+  NumericParam<'CUT'> | null,
+  NumericParam<'FINISH'> | null,
+], string];
+type FeedDirective = ['FEED', null, [
+  NumericParam<'MOVE'> | null,
+  NumericParam<'PASS'> | null,
+  NumericParam<'PART'> | null,
+], string];
+type ModeDirective = ['MODE', null, ModeType, string];
+type AxesDirective = ['AXES', null, [ZDirection, null, XDirection], string];
+
+type PartingLine = ['L', number, string];
+type StraightLine = ['L', number, RadiusDiameterType, number, string];
+type CurvedLine = ['L', number, SegmentStartType, number, SegmentEndType, number, CurveType | null, string];
+type LatheLine = PartingLine | StraightLine | CurvedLine;
+type LatheEntry = [CommentList, LatheLine];
+type InsideBlock = [CommentList, ['INSIDE', string], LatheEntry[]];
+
+type ParserData = [
+  CommentList,
+  UnitsDirective | null,
+  CommentList,
+  StockDirective | null,
+  CommentList,
+  ToolDirective | null,
+  CommentList,
+  DepthDirective | null,
+  CommentList,
+  FeedDirective | null,
+  CommentList,
+  ModeDirective | null,
+  CommentList,
+  AxesDirective | null,
+  LatheEntry[],
+  InsideBlock | null,
+  CommentList,
+];
+
+const typedParser = parser as unknown as { parse(input: string): ParserData };
+
 export class LatheCode {
-  private data: any;
+  private data: ParserData;
   private unitsMultiplier = 1;
   private outsideMaxRadius = 0;
   private outside: Segment[];
@@ -98,12 +160,12 @@ export class LatheCode {
   private insideSegments: Segment[];
 
   constructor(private text: string) {
-    this.data = parser.parse(text + '\n');
-    this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2] as string] : 1;
+    this.data = typedParser.parse(text + '\n');
+    this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2]] : 1;
     // console.log('this.data', this.data);
-    this.outside = this.getSegmentsForSide(this.data[this.data.length - 3], 0);
+    this.outside = this.getSegmentsForSide(this.data[14], 0);
     this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
-    this.inside = this.data[this.data.length - 2] ? this.getSegmentsForSide(this.data[this.data.length - 2][2], this.getStockDiameter() / 2) : [];
+    this.inside = this.data[15] ? this.getSegmentsForSide(this.data[15][2], this.getStockDiameter() / 2) : [];
     this.outsideSegments = this.closeLoop(this.outside, 0);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
     this.getTool(); // validate the tool
@@ -175,18 +237,18 @@ export class LatheCode {
     );
   }
 
-  getMode(): 'FACE'|'TURN' {
-    if (!this.data[11]?.length) return 'FACE';
+  getMode(): ModeType {
+    if (!this.data[11]) return 'FACE';
     return this.data[11][2];
   }
 
-  getZDirection(): 'LEFT' | 'RIGHT' {
-    if (!this.data[13] || !this.data[13][2]) return 'LEFT';
+  getZDirection(): ZDirection {
+    if (!this.data[13]) return 'LEFT';
     return this.data[13][2][0];
   }
 
-  getXDirection(): 'UP' | 'DOWN' {
-    if (!this.data[13] || !this.data[13][2]) return 'UP';
+  getXDirection(): XDirection {
+    if (!this.data[13]) return 'UP';
     return this.data[13][2][2];
   }
 
@@ -209,7 +271,7 @@ export class LatheCode {
     const result: number[] = [];
     let seenPart = false;
     let z = 0;
-    for (let commentsAndLine of this.data[this.data.length - 3]) {
+    for (let commentsAndLine of this.data[14]) {
       let line = commentsAndLine[1];
       if (isPartingLine(line) && seenPart) {
         result.push(z);
@@ -234,7 +296,7 @@ export class LatheCode {
   }
 
   private getStockDiameter(): number {
-    if (!this.data || !this.data[3]) return this.outsideMaxRadius * 2;
+    if (!this.data[3]) return this.outsideMaxRadius * 2;
     const stockParams = this.data[3][2];
     return stockParams[1] * (stockParams[0] == 'D' ? 1 : 2) * this.unitsMultiplier;
   }
@@ -258,17 +320,16 @@ export class LatheCode {
     return result.length < 3 ? [] : result;
   }
 
-  private getSegmentsForSide(side: any, zeroX: number): Segment[] {
+  private getSegmentsForSide(side: LatheEntry[], zeroX: number): Segment[] {
     const segments: Segment[] = [];
     let z = 0;
     for (let commentsAndLine of side) {
       let line = commentsAndLine[1];
-      let startX, endX;
-      if (line[2] === 'R') {
-        startX = endX = line[3] * this.unitsMultiplier;
-      } else if (line[2] === 'D') {
-        startX = endX = line[3] / 2 * this.unitsMultiplier;
-      } else if (line[2] === 'DS' || line[2] === 'RS') {
+      let startX: number;
+      let endX: number;
+      if (isStraightLine(line)) {
+        startX = endX = line[3] / (line[2] === 'D' ? 2 : 1) * this.unitsMultiplier;
+      } else if (isCurvedLine(line)) {
         startX = line[3] / (line[2] === 'DS' ? 2 : 1) * this.unitsMultiplier;
         endX = line[5] / (line[4] === 'DE' ? 2 : 1) * this.unitsMultiplier;
       } else if (isPartingLine(line)) {
@@ -291,8 +352,8 @@ export class LatheCode {
     const firstLLine = this.text.startsWith('L') ? 0 : this.text.indexOf('\nL');
     if (firstLLine === -1) return this.text;
     const preambula = this.text.substring(0, firstLLine);
-    const outside = this.data[this.data.length - 3];
-    const result = [];
+    const outside = this.data[14];
+    const result: string[] = [];
     for (const line of outside) {
       result.push(reverseLine(line[1]));
     }
@@ -300,13 +361,13 @@ export class LatheCode {
   }
 }
 
-function reverseLine(line: Array<string|number|null>): string {
+function reverseLine(line: LatheLine): string {
   if (line[0] !== 'L') throw new Error('Expected L line');
-  const second = line[2] as string;
-  if (['D', 'R'].includes(second)) {
+  const second = line[2];
+  if (isStraightLine(line)) {
     return `L${line[1]} ${second}${line[3]}${line[4] ? ' ; ' + line[4] : ''}`;
   }
-  if (['DS', 'RS'].includes(second)) {
+  if (isCurvedLine(line)) {
     return `L${line[1]} ${second}${line[5]} ${line[4]}${line[3]}${line[6] ? ' ' + line[6] : ''}${line[7] ? ' ; ' + (line[6] ? (line[7] as string).substring(1).trim() : line[7]) : ''}`;
   }
   return `L${line[1]}${line[2] ? ' ; ' + line[2] : ''}`;
@@ -333,6 +394,14 @@ export function removeEmptySegments(segments: Segment[]): Segment[] {
   return result;
 }
 
-function isPartingLine(line: any) {
+function isStraightLine(line: LatheLine): line is StraightLine {
+  return line[2] === 'D' || line[2] === 'R';
+}
+
+function isCurvedLine(line: LatheLine): line is CurvedLine {
+  return line[2] === 'DS' || line[2] === 'RS';
+}
+
+function isPartingLine(line: LatheLine) {
   return line.length === 3 || line[2] === 'D' && !line[3];
 }
