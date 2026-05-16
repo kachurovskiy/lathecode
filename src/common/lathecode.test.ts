@@ -117,6 +117,13 @@ describe('lathecode', () => {
     expectPoints('STOCK R4\nINSIDE\nL1\nL2 R3\nL3', '', 'LINE:4,3-4,1 LINE:4,1-3,1 LINE:3,1-3,3 LINE:3,3-4,3');
   });
 
+  it('inside stepped profile uses stock as the outer boundary', () => {
+    const latheCode = new LatheCode('STOCK D10\nINSIDE\nL2 R2\nL3 R3');
+    expect(latheCode.getStock()).toEqual({diameter: 10, length: 5});
+    expect(latheCode.getOutsideSegments()).toEqual([]);
+    expect(pointsToString(latheCode.getInsideSegments())).toBe('LINE:5,5-5,0 LINE:5,0-2,0 LINE:2,0-2,2 LINE:2,2-3,2 LINE:3,2-3,5 LINE:3,5-5,5');
+  });
+
   it('getCutoffStarts empty', () => {
     expect(new LatheCode('L2 R3\n').getCutoffStarts()).toEqual([]);
   });
