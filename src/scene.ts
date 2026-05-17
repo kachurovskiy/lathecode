@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { LatheCode, Point, Segment } from './common/lathecode';
+import { LatheCode, Point, Segment, Stock, type Tool } from './common/lathecode';
 
 export class Scene extends THREE.Scene {
   private camera: THREE.OrthographicCamera;
@@ -9,6 +9,7 @@ export class Scene extends THREE.Scene {
   private latheCode: LatheCode | null = null;
   private latheMesh: THREE.Object3D | null = null;
   private stock: THREE.Object3D | null = null;
+  private orientationMarkers: THREE.Object3D | null = null;
 
   constructor(readonly container: HTMLElement, size = 500) {
     super();
@@ -36,8 +37,11 @@ export class Scene extends THREE.Scene {
     return this.latheMesh;
   }
 
-  private fit(mesh: THREE.Object3D) {
-    const box = new THREE.Box3().setFromObject(mesh);
+  private fit(...objects: THREE.Object3D[]) {
+    const box = new THREE.Box3();
+    objects.forEach(object => box.union(new THREE.Box3().setFromObject(object)));
+    if (box.isEmpty()) return;
+
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDimension = Math.max(size.x, size.y, size.z);
@@ -79,15 +83,21 @@ export class Scene extends THREE.Scene {
     if (this.latheCode) {
       this.setLatheMesh(null);
       this.setStock(null);
+      this.setOrientationMarkers(null);
     }
     this.latheCode = value;
     if (this.latheCode) {
-      const stock = this.createStock();
+      const stockSpec = this.latheCode.getStock();
+      if (!stockSpec) throw new Error('stock is required');
+      const stock = this.createStock(stockSpec);
       this.setStock(centerObject(stock));
       const latheMesh = this.createLatheMesh();
-      latheMesh.position.set(stock.position.x, stock.position.y - this.latheCode!.getStock()!.length / 2, stock.position.z);
+      latheMesh.position.set(stock.position.x, stock.position.y - stockSpec.length / 2, stock.position.z);
       this.setLatheMesh(latheMesh);
-      this.fit(stock);
+      const orientationMarkers = this.createOrientationMarkers(stockSpec);
+      orientationMarkers.position.copy(stock.position);
+      this.setOrientationMarkers(orientationMarkers);
+      this.fit(stock, orientationMarkers);
     }
   }
 
@@ -101,6 +111,12 @@ export class Scene extends THREE.Scene {
     if (this.stock) this.remove(this.stock);
     this.stock = value;
     if (this.stock) this.add(this.stock);
+  }
+
+  private setOrientationMarkers(value: THREE.Object3D | null) {
+    if (this.orientationMarkers) this.remove(this.orientationMarkers);
+    this.orientationMarkers = value;
+    if (this.orientationMarkers) this.add(this.orientationMarkers);
   }
 
   private createLatheMesh(): THREE.Object3D {
@@ -132,13 +148,29 @@ export class Scene extends THREE.Scene {
     return new THREE.Mesh(latheGeometry, createMetalMaterial());
   }
 
-  private createStock() {
-    const stock = this.latheCode!.getStock();
-    if (!stock) throw new Error('stock is required');
+  private createStock(stock: Stock) {
     const geometry = new THREE.LatheGeometry(stock.getSegments().map(s => getApproxPoints(s)).flat(), 256, 0);
     geometry.translate(0, -stock.length / 2, 0);
     const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
     return new THREE.Mesh(geometry, material);
+  }
+
+  private createOrientationMarkers(stock: Stock) {
+    const group = new THREE.Group();
+    const maxDimension = Math.max(stock.length, stock.diameter, 1);
+    const markerSize = Math.min(Math.max(maxDimension * 0.08, 0.16), Math.max(stock.radius * 0.5, 0.2));
+    const sideOffset = Math.max(maxDimension * 0.025, 0.08);
+    const chuckY = stock.length / 2;
+    const zZeroY = -stock.length / 2;
+    const chuckColor = 0x555555;
+
+    const chuck = createRevolvedSquare(stock.radius * 1.14, markerSize, chuckColor, 0.75);
+    chuck.position.y = chuckY + sideOffset + markerSize / 2;
+    group.add(chuck);
+
+    group.add(createToolAtZero(this.latheCode!.getTool(), zZeroY, markerSize));
+
+    return group;
   }
 }
 
@@ -157,6 +189,157 @@ function createMetalMaterial() {
     transparent: false,
     opacity: 0.8,
   });
+}
+
+function createRevolvedSquare(radius: number, sideLength: number, color: number, opacity: number) {
+  const halfSide = sideLength / 2;
+  const innerRadius = Math.max(0, radius - halfSide);
+  const outerRadius = radius + halfSide;
+  const profile = [
+    new THREE.Vector2(innerRadius, -halfSide),
+    new THREE.Vector2(outerRadius, -halfSide),
+    new THREE.Vector2(outerRadius, halfSide),
+    new THREE.Vector2(innerRadius, halfSide),
+    new THREE.Vector2(innerRadius, -halfSide),
+  ];
+  const geometry = new THREE.LatheGeometry(profile, 72, 0);
+  const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+  return new THREE.Mesh(geometry, material);
+}
+
+function createToolAtZero(tool: Tool, zZeroY: number, markerSize: number) {
+  const group = new THREE.Group();
+  const insert = createToolInsert(tool, Math.max(markerSize * 0.28, 0.06));
+
+  insert.object.position.x = 0;
+  insert.object.position.z = 0;
+  group.add(insert.object);
+  group.position.set(0, zZeroY, 0);
+  return group;
+}
+
+function createToolInsert(tool: Tool, depth: number) {
+  const material = createMarkerMaterial(0xff0000, 0.95);
+  const group = new THREE.Group();
+  let radialHeight = tool.heightMm;
+  let axialWidth = tool.widthMm;
+
+  if (tool.type === 'RECT') {
+    radialHeight = Math.max(tool.heightMm, 0.01);
+    axialWidth = Math.max(tool.widthMm, 0.01);
+    group.add(createExtrudedShape(createRoundedRectShape(radialHeight, axialWidth, tool.cornerRadiusMm), depth, material, 9));
+  } else if (tool.type === 'ROUND') {
+    const radius = Math.max(tool.cornerRadiusMm, 0.01);
+    radialHeight = radius * 2;
+    axialWidth = radius * 2;
+    group.add(createExtrudedShape(createCircleShape(new THREE.Vector2(radius, -radius), radius), depth, material, 9));
+  } else if (tool.type === 'ANG') {
+    const geometry = createAngledToolShapes(tool);
+    radialHeight = geometry.radialHeight;
+    axialWidth = geometry.axialWidth;
+    geometry.shapes.forEach(shape => group.add(createExtrudedShape(shape, depth, material, 9)));
+  } else {
+    throw new Error(`tool of type ${tool.type} not implemented`);
+  }
+
+  return { object: group, radialHeight, axialWidth, depth };
+}
+
+function createMarkerMaterial(color: number, opacity: number) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
+function createExtrudedShape(shape: THREE.Shape, depth: number, material: THREE.Material, renderOrder: number) {
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: false,
+  });
+  geometry.translate(0, 0, -depth / 2);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.renderOrder = renderOrder;
+  return mesh;
+}
+
+function createRoundedRectShape(radialHeight: number, axialWidth: number, cornerRadius: number) {
+  const radius = Math.max(0, Math.min(cornerRadius, radialHeight / 2, axialWidth / 2));
+  const shape = new THREE.Shape();
+
+  shape.moveTo(radius, 0);
+  shape.lineTo(radialHeight - radius, 0);
+  shape.quadraticCurveTo(radialHeight, 0, radialHeight, -radius);
+  shape.lineTo(radialHeight, -axialWidth + radius);
+  shape.quadraticCurveTo(radialHeight, -axialWidth, radialHeight - radius, -axialWidth);
+  shape.lineTo(radius, -axialWidth);
+  shape.quadraticCurveTo(0, -axialWidth, 0, -axialWidth + radius);
+  shape.lineTo(0, -radius);
+  shape.quadraticCurveTo(0, 0, radius, 0);
+  return shape;
+}
+
+function createCircleShape(center: THREE.Vector2, radius: number) {
+  const shape = new THREE.Shape();
+  shape.absarc(center.x, center.y, radius, 0, Math.PI * 2, false);
+  return shape;
+}
+
+function createAngledToolShapes(tool: Tool) {
+  const edgeLengthMm = tool.widthMm;
+  const cornerRadiusMm = tool.cornerRadiusMm;
+  const sizeMm = (cornerRadiusMm + edgeLengthMm) * 2;
+  const center = new THREE.Vector2(sizeMm / 2, sizeMm / 2);
+  const noseAngleDeg = tool.noseAngleDeg ?? 0;
+  const rotation = tool.angleDeg ?? 0;
+  const leftArmStart = polarToCartesian(cornerRadiusMm, 180 - noseAngleDeg / 2 + rotation).add(center);
+  const leftArmEnd = polarToCartesian(edgeLengthMm, 270 - noseAngleDeg / 2 + rotation).add(leftArmStart);
+  const rightArmStart = polarToCartesian(cornerRadiusMm, noseAngleDeg / 2 + rotation).add(center);
+  const rightArmEnd = polarToCartesian(edgeLengthMm, 270 + noseAngleDeg / 2 + rotation).add(rightArmStart);
+  const bounds = getBounds([
+    new THREE.Vector2(center.x - cornerRadiusMm, center.y - cornerRadiusMm),
+    new THREE.Vector2(center.x + cornerRadiusMm, center.y + cornerRadiusMm),
+    leftArmStart,
+    leftArmEnd,
+    rightArmStart,
+    rightArmEnd,
+  ]);
+  const mapPoint = (point: THREE.Vector2) => new THREE.Vector2(point.y - bounds.minY, -(point.x - bounds.minX));
+  const shapes: THREE.Shape[] = [];
+  if (cornerRadiusMm > 0) shapes.push(createCircleShape(mapPoint(center), cornerRadiusMm));
+  shapes.push(createPolygonShape([leftArmStart, leftArmEnd, rightArmEnd, rightArmStart].map(mapPoint)));
+
+  return {
+    shapes,
+    radialHeight: Math.max(bounds.maxY - bounds.minY, 0.01),
+    axialWidth: Math.max(bounds.maxX - bounds.minX, 0.01),
+  };
+}
+
+function createPolygonShape(points: THREE.Vector2[]) {
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0].x, points[0].y);
+  points.slice(1).forEach(point => shape.lineTo(point.x, point.y));
+  shape.closePath();
+  return shape;
+}
+
+function getBounds(points: THREE.Vector2[]) {
+  return {
+    minX: Math.min(...points.map(point => point.x)),
+    maxX: Math.max(...points.map(point => point.x)),
+    minY: Math.min(...points.map(point => point.y)),
+    maxY: Math.max(...points.map(point => point.y)),
+  };
+}
+
+function polarToCartesian(radius: number, angleInDegrees: number) {
+  const angle = angleInDegrees * Math.PI / 180;
+  return new THREE.Vector2(radius * Math.cos(angle), -radius * Math.sin(angle));
 }
 
 function segmentsToVectors(segments: Segment[]): THREE.Vector2[] {
