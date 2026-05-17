@@ -269,6 +269,22 @@ L1 ; bore end
 L3 RS3 RE2
 L2 R2 ; bore start`);
   });
+
+  it('double-reverses mixed inside and outside profiles to the same part', () => {
+    const original = new LatheCode(`STOCK D12
+L1 R5
+L2 RS5 RE4 CONV
+L1 R4
+INSIDE
+L1 R1.5
+L2 RS1.5 RE2.5 CONC
+L1 R2.5`);
+    const doubleReversed = new LatheCode(new LatheCode(original.reverse()).reverse());
+
+    expect(doubleReversed.getProfiles().map(profile => profile.side)).toEqual(['outside', 'inside']);
+    expect(pointsToString(doubleReversed.getOutsideSegments())).toBe(pointsToString(original.getOutsideSegments()));
+    expect(pointsToString(doubleReversed.getInsideSegments())).toBe(pointsToString(original.getInsideSegments()));
+  });
 })
 
 function expectPoints(text: string, o: string, i: string) {

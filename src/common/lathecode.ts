@@ -443,18 +443,31 @@ export class LatheCode {
   }
 
   reverse(): string {
-    const entries = this.data[14].length ? this.data[14] : this.data[15]?.[2] || [];
+    const insideBlock = this.data[15];
     const firstLLine = this.data[14].length
       ? findLineStart(this.text, 'L')
       : findLineStart(this.text, 'L', findLineStart(this.text, 'INSIDE'));
     if (firstLLine === -1) return this.text;
     const preambula = this.text.substring(0, firstLLine);
     const result: string[] = [];
-    for (const line of entries) {
-      result.push(reverseLine(line[1]));
+    result.push(...reverseEntries(this.data[14]));
+    if (insideBlock) {
+      if (this.data[14].length) {
+        result.push(...insideBlock[0].map(commentToString));
+        result.push(insideDirectiveToString(insideBlock[1]));
+      }
+      result.push(...reverseEntries(insideBlock[2]));
     }
-    return (preambula ? preambula + '\n' : '') + result.reverse().join('\n');
+    return (preambula ? preambula + '\n' : '') + result.join('\n');
   }
+}
+
+function reverseEntries(entries: LatheEntry[]): string[] {
+  return entries.map(line => reverseLine(line[1])).reverse();
+}
+
+function insideDirectiveToString(directive: ['INSIDE', string]): string {
+  return `INSIDE${formatComment(directive[1])}`;
 }
 
 function findLineStart(text: string, lineStart: string, fromIndex = 0): number {
