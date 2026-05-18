@@ -63,12 +63,161 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 20;
+  overflow: auto;
   background-color: white;
   padding: 8px 30px;
 }
 
 .dialogCloseButton {
   margin-top: 12px;
+}
+
+.toolField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.toolField[hidden] {
+  display: none;
+}
+
+.toolField input,
+.toolField select {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #ccc;
+  padding: 10px;
+  font-size: 16px;
+}
+
+.toolPresetGallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.toolPresetCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  text-align: left;
+  border: 2px solid #d4d4d4;
+  background-color: #ffffff;
+  color: #000000;
+  margin: 0;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.toolPresetCard:hover {
+  background-color: #f3f3f3;
+}
+
+.toolPresetCard.selected {
+  border-color: #111111;
+  background-color: #fff7bf;
+}
+
+.toolPresetCard.selected:hover {
+  background-color: #fff7bf;
+}
+
+.toolPresetPreview {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background-color: #f7f7f7;
+  overflow: hidden;
+}
+
+.toolPresetPreview canvas {
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+}
+
+.toolPresetCard strong {
+  font-size: 14px;
+}
+
+.toolPresetCard span {
+  color: #444444;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.toolSecondaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.toolDialogError:not(:empty) {
+  padding: 10px;
+  background-color: #ff4c4c;
+  color: white;
+  margin-bottom: 12px;
+}
+
+.toolApplyButton {
+  width: fit-content;
+}
+
+.manualToolDetails {
+  border-top: 1px solid #dddddd;
+  margin-top: 18px;
+  padding-top: 12px;
+}
+
+.manualToolDetails summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.manualToolDetails input {
+  max-width: 200px;
+}
+
+.manualToolDetails .toolSecondaryGrid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 200px));
+  justify-content: start;
+}
+
+.manualToolTypeBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.manualToolTypeButton {
+  border: 1px solid #cccccc;
+  background-color: #ffffff;
+  margin: 0;
+}
+
+.manualToolTypeButton + .manualToolTypeButton {
+  border-left: 0;
+}
+
+.manualToolTypeButton:hover {
+  background-color: #f3f3f3;
+}
+
+.manualToolTypeButton.selected,
+.manualToolTypeButton.selected:hover {
+  background-color: #fff7bf;
+  border-color: #111111;
+}
+
+.manualToolApplyButton {
+  width: fit-content;
 }
 
 #sceneContainer {

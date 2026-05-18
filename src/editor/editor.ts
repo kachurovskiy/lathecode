@@ -1,5 +1,6 @@
 import { LatheCode, ProfileSide } from '../common/lathecode.ts';
 import { createFullScreenDialog } from '../common/dialog.ts';
+import { openToolDialog } from './tooldialog.ts';
 import StlImportWorker from './stlimportworker?worker&inline';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
 
@@ -25,6 +26,7 @@ export class Editor extends EventTarget {
   private exportButton: HTMLButtonElement;
   private importInput: HTMLInputElement;
   private importStlButton: HTMLButtonElement;
+  private toolButton: HTMLButtonElement;
   private flipButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
@@ -71,6 +73,9 @@ export class Editor extends EventTarget {
       });
       input.click();
     });
+
+    this.toolButton = container.querySelector<HTMLButtonElement>('.toolButton')!;
+    this.toolButton.addEventListener('click', () => this.openToolDialog());
 
     this.flipButton = container.querySelector<HTMLButtonElement>('.flipButton')!;
     this.flipButton.addEventListener('click', () => {
@@ -232,8 +237,18 @@ export class Editor extends EventTarget {
     });
   }
 
+  private openToolDialog() {
+    openToolDialog(
+      () => this.latheCodeInput.value,
+      text => {
+        this.latheCodeInput.value = text;
+        this.update();
+      });
+  }
+
   private async importStl(file: File) {
     return new Promise<void>((resolve, reject) => {
+      const textBeforeImport = this.latheCodeInput.value;
       const reader = new FileReader();
       reader.onload = async () => {
         const stl = reader.result as ArrayBuffer;
@@ -249,7 +264,7 @@ export class Editor extends EventTarget {
             this.statusContainer.textContent = '';
             resolve();
           } else if (m.latheCodeText) {
-            this.latheCodeInput.value = wrapStlText(file.name, m.latheCodeText);
+            this.latheCodeInput.value = wrapStlText(file.name, m.latheCodeText, textBeforeImport);
             this.statusContainer.textContent = '';
             this.update();
             resolve();
@@ -301,7 +316,8 @@ export class Editor extends EventTarget {
   }
 }
 
-function wrapStlText(name:string, stlText: string) {
+export function wrapStlText(name:string, stlText: string, previousText = '') {
+  const preservedToolLine = findToolLine(previousText);
   return `; ${name}
 
 ; Uncomment and modify lines below as needed
@@ -312,5 +328,43 @@ function wrapStlText(name:string, stlText: string) {
 ; MODE TURN ; for classic style of material removal
 ; AXES RIGHT DOWN ; for non-NanoEls controllers
 
-` + stlText;
+` + insertToolLine(stlText, preservedToolLine);
+}
+
+function findToolLine(text: string): string | undefined {
+  return text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .find(line => line.trimStart().startsWith('TOOL '))
+    ?.trim();
+}
+
+function insertToolLine(stlText: string, toolLine: string | undefined): string {
+  if (!toolLine) return stlText;
+
+  const lines = stlText.replace(/\r\n/g, '\n').split('\n');
+  const existingToolIndex = lines.findIndex(line => line.trimStart().startsWith('TOOL '));
+  if (existingToolIndex >= 0) {
+    lines[existingToolIndex] = toolLine;
+    return lines.join('\n');
+  }
+
+  const stockIndex = lines.findIndex(line => line.trimStart().startsWith('STOCK '));
+  if (stockIndex >= 0) {
+    lines.splice(stockIndex + 1, 0, toolLine);
+    return lines.join('\n');
+  }
+
+  const unitsIndex = lines.findIndex(line => line.trimStart().startsWith('UNITS '));
+  if (unitsIndex >= 0) {
+    lines.splice(unitsIndex + 1, 0, toolLine);
+    return lines.join('\n');
+  }
+
+  const firstCodeIndex = lines.findIndex(line => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith(';');
+  });
+  lines.splice(firstCodeIndex >= 0 ? firstCodeIndex : lines.length, 0, toolLine);
+  return lines.join('\n');
 }

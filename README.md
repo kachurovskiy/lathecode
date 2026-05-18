@@ -80,7 +80,7 @@ To use a tool with a nose angle e.g. [DCGT 070202](https://www.google.com/search
 TOOL ANG R0.2 L7.75 A30 NA55
 ```
 
-[**See this tool table**](https://docs.google.com/spreadsheets/d/1Tj3v0c-DxfOColeAaKtqCuPuzpS3YvOxvTCyOrsoGRw/edit#gid=0) for common inserts and ready-to-use lathecode TOOL lines.
+The online editor's Tool button can fill these standard `TOOL` lines from known insert presets and show the same rendered tool shape used by the planner.
 
 ## Depth of cut and finish pass
 
