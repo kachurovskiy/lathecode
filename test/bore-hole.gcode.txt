@@ -2,7 +2,7 @@
 ; INSIDE
 ; L3 D3
 
-; Run time 0.2 min, cutting 70% of time
+; Run time 0.2 min, cutting 66% of time
 ; Working area 3.00 by 0.49 mm
 
 G21 ; metric
@@ -15,59 +15,46 @@ G91 ; relative positioning
 Z0.5
 
 F50
-X-0.39 ; cut 0.1668 mm2
-
-F200
-Z-0.31
-X-0.06
-Z-0.05 X-0.04 ; cut 0.0005 mm2 at 51.34°
-
-F50
-Z-0.14 ; cut 0.0013 mm2
-
-F200
-X0.49
-Z1
-
-F50
-X-0.39 ; cut 0.1982 mm2
-Z-0.5 ; cut 0.0018 mm2
+X-0.39 ; cut 0.1656 mm2
 
 F200
 X0.39
-Z1
+Z0.5
 
 F50
-X-0.39 ; cut 0.1982 mm2
-Z-0.5 ; cut 0.0018 mm2
+X-0.39 ; cut 0.2 mm2
 
 F200
 X0.39
-Z1
+Z0.5
 
 F50
-X-0.39 ; cut 0.1982 mm2
-Z-0.5 ; cut 0.0018 mm2
+X-0.39 ; cut 0.2 mm2
 
 F200
 X0.39
-Z1
+Z0.5
 
 F50
-X-0.39 ; cut 0.1982 mm2
-Z-0.5 ; cut 0.0018 mm2
+X-0.39 ; cut 0.2 mm2
 
 F200
 X0.39
-Z1
+Z0.5
 
 F50
-X-0.39 ; cut 0.1982 mm2
-Z-0.5 ; cut 0.0018 mm2
+X-0.39 ; cut 0.2 mm2
 
 F200
 X0.39
-Z-2.49
+Z0.5
+
+F50
+X-0.39 ; cut 0.2 mm2
+
+F200
+X0.39
+Z-2.99
 X-0.49
 
 F50

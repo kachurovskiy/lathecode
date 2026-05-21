@@ -12,7 +12,7 @@
 ; L5.000 R10.000
 
 ; Run time 1.4 min, cutting 77% of time
-; Working area 10.00 by 4.32 mm
+; Working area 10.00 by 4.35 mm
 
 G21 ; metric
 G18 ; ZX plane
@@ -24,7 +24,7 @@ G91 ; relative positioning
 Z0.5
 
 F50
-X3.9 ; cut 1.9186 mm2
+X3.9 ; cut 1.9156 mm2
 
 F200
 X-3.9
@@ -92,22 +92,24 @@ X3.9 ; cut 1.95 mm2
 F200
 X-3.9
 Z-5
-X4.32
+X4.35
 
 F50
-Z0.06 X-0.14 ; cut 0.004 mm2 at -23.20°
-Z0.16 X-0.14 ; cut 0.0046 mm2 at -48.81°
-Z0.1 X-0.04 ; cut 0.0051 mm2 at -68.20°
-Z4.68 ; cut 0.4876 mm2
-X-3.68 ; cut 0.0368 mm2
-Z0.06 X-0.14 ; cut 0.0014 mm2 at -23.20°
-Z0.16 X-0.14 ; cut 0.0017 mm2 at -48.81°
+Z0.02 X-0.08 ; cut 0.0021 mm2 at -14.04°
+Z0.06 X-0.1 ; cut 0.0024 mm2 at -30.96°
+Z0.11 X-0.11 ; cut 0.0032 mm2 at -45.00°
+Z0.16 X-0.06 ; cut 0.0083 mm2 at -69.44°
+Z4.65 ; cut 0.4858 mm2
+X-3.65 ; cut 0.0365 mm2
 
 F200
-Z0.1 X-0.04 ; cut 0.001 mm2 at -68.20°
+Z0.02 X-0.08 ; cut 0.0008 mm2 at -14.04°
+Z0.06 X-0.1 ; cut 0.001 mm2 at -30.96°
 
 F50
-Z4.68 ; cut 0.0468 mm2
+Z0.11 X-0.11 ; cut 0.0012 mm2 at -45.00°
+Z0.16 X-0.06 ; cut 0.0016 mm2 at -69.44°
+Z4.65 ; cut 0.0465 mm2
 
 F200
 Z-10

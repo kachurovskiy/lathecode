@@ -1,12 +1,11 @@
-import * as Colors from "../common/colors";
 import { Pixel, PixelMove } from "../common/pixel";
 import { AppSettings, CUTTING_EDGE_THICKNESS_PX, DEFAULT_APP_SETTINGS, normalizeAppSettings } from "../common/settings";
+import { PlannerBitmap, PlannerCell } from "./bitmap";
 
 export type RadialCuttingEdge = 'top' | 'bottom';
 export type TravelRetractionSide = 'minY' | 'maxY';
 
-export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCuttingEdge = 'top', cuttingEdgeThicknessPx = CUTTING_EDGE_THICKNESS_PX): Pixel[] {
-  const toolData = tool.getContext("2d")!.getImageData(0, 0, tool.width, tool.height).data;
+export function getCuttingEdges(tool: PlannerBitmap, radialEdge: RadialCuttingEdge = 'top', cuttingEdgeThicknessPx = CUTTING_EDGE_THICKNESS_PX): Pixel[] {
   const set: Set<string> = new Set();
   const result: Pixel[] = [];
   const maybeAdd = (x: number, y: number) => {
@@ -19,13 +18,7 @@ export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCutting
   for (let y = 0; y < tool.height; y++) {
     let depth = 0;
     for (let x = 0; x < tool.width; x++) {
-      const i = (y * tool.width + x) * 4;
-      if (
-        Math.abs(toolData[i] - Colors.COLOR_TOOL.red()) <= 1 &&
-        Math.abs(toolData[i + 1] - Colors.COLOR_TOOL.green()) <= 1 &&
-        Math.abs(toolData[i + 2] - Colors.COLOR_TOOL.blue()) <= 1 &&
-        toolData[i + 3] > 250
-      ) {
+      if (tool.get(x, y) === PlannerCell.Tool) {
         maybeAdd(x, y);
         if (++depth > cuttingEdgeThicknessPx) break;
       }
@@ -34,13 +27,7 @@ export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCutting
   for (let x = 0; x < tool.width; x++) {
     let depth = 0;
     for (let y = radialEdge === 'top' ? 0 : tool.height - 1; y >= 0 && y < tool.height; y += radialEdge === 'top' ? 1 : -1) {
-      const i = (y * tool.width + x) * 4;
-      if (
-        Math.abs(toolData[i] - Colors.COLOR_TOOL.red()) <= 1 &&
-        Math.abs(toolData[i + 1] - Colors.COLOR_TOOL.green()) <= 1 &&
-        Math.abs(toolData[i + 2] - Colors.COLOR_TOOL.blue()) <= 1 &&
-        toolData[i + 3] > 250
-      ) {
+      if (tool.get(x, y) === PlannerCell.Tool) {
         maybeAdd(x, y);
         if (++depth > cuttingEdgeThicknessPx) break;
       }

@@ -1,10 +1,10 @@
 import { LatheCode, type ProfileSide } from '../common/lathecode';
 import { getCuttingEdges, optimizeMoves as optimizePlannerMoves } from './optimize';
-import { Painter } from './painter';
-import * as Colors from "../common/colors";
 import { Pixel, PixelMove } from "../common/pixel";
 import { Move } from '../common/move';
 import { AppSettings, normalizeAppSettings } from '../common/settings';
+import { PlannerBitmap, PlannerCell } from './bitmap';
+import { Rasterizer } from './rasterizer';
 
 export class ToWorkerMessage {
   constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number, readonly settings?: Partial<AppSettings>) {}
@@ -19,29 +19,23 @@ export class FromWorkerMessage {
     readonly tool?: {width: number, height: number, data: Uint8ClampedArray, x: number, y: number}) {}
 }
 
-const REMOVED_RGB_NUMBER = Colors.COLOR_REMOVED.rgbNumber();
-const STOCK_RGB_NUMBER = Colors.COLOR_STOCK.rgbNumber();
-const PART_RGB_NUMBER = Colors.COLOR_PART.rgbNumber();
-const FINISH_RGB_NUMBER = Colors.COLOR_FINISH.rgbNumber();
-
 class Pass {
   constructor(readonly x: number, readonly finishAfter: boolean) {}
 }
 
 type PlannerWorkerPostMessage = (message: FromWorkerMessage | {progressMessage?: string, error?: string, moves?: PixelMove[] | Move[]}) => void;
-type PlannerPainter = Pick<Painter, 'createCanvas' | 'createTool'>;
+type PlannerRasterizer = Pick<Rasterizer, 'createPartBitmap' | 'createToolBitmap'>;
 
 type PlannerWorkerOptions = {
-  painter?: PlannerPainter,
+  rasterizer?: PlannerRasterizer,
   postMessage?: PlannerWorkerPostMessage,
   optimizeMoves?: typeof optimizePlannerMoves,
 };
 
 export class PlannerWorker {
-  private painter: PlannerPainter;
-  private canvas: OffscreenCanvas;
-  private canvasCtx: OffscreenCanvasRenderingContext2D;
-  private tool: OffscreenCanvas;
+  private rasterizer: PlannerRasterizer;
+  private canvas: PlannerBitmap;
+  private tool: PlannerBitmap;
   private toolCuttingEdges: Pixel[];
   private toolOvershootX: number;
   private toolOvershootY: number;
@@ -56,7 +50,6 @@ export class PlannerWorker {
   private passes: Pass[];
   private previousFinishPass: Pass|null = null;
   private moves: PixelMove[] = [];
-  private partBitmap: number[][] = [];
   private radialCutAllowed = true;
   private isFinishPass = false;
   private postMessage: PlannerWorkerPostMessage;
@@ -80,15 +73,13 @@ export class PlannerWorker {
     this.postMessage = options.postMessage || (message => postMessage(message));
     this.postPixelMoves = !!options.postMessage;
     this.optimizeMoves = options.optimizeMoves || optimizePlannerMoves;
-    this.painter = options.painter || new Painter(latheCode, this.pxPerMm);
-    this.canvas = this.painter.createCanvas();
-    this.canvasCtx = this.canvas.getContext("2d")!;
-    this.tool = this.painter.createTool();
+    this.rasterizer = options.rasterizer || new Rasterizer(latheCode, this.pxPerMm);
+    this.canvas = this.rasterizer.createPartBitmap();
+    this.tool = this.rasterizer.createToolBitmap();
     this.toolCuttingEdges = getCuttingEdges(this.tool, this.profileSide === 'inside' ? 'bottom' : 'top', this.settings.cuttingEdgeThicknessPx);
     this.toolOvershootX = this.getToolOvershootX();
     this.toolOvershootY = this.getToolOvershootY();
     this.toolX = this.canvas.width;
-    this.partBitmap = this.createPartBitmap();
     this.radialSafeY = this.getRadialSafeY();
     this.toolY = this.radialSafeY;
     this.mode = this.latheCode.getMode();
@@ -194,17 +185,16 @@ export class PlannerWorker {
 
   private postProgress() {
     const includeCanvas = this.canvas.width * this.canvas.height < 2000000;
-    if (includeCanvas) this.flushBitmap();
     this.postMessage({
       canvas: includeCanvas ? {
         width: this.canvas.width,
         height: this.canvas.height,
-        data: this.canvas.getContext('2d')!.getImageData(0, 0, this.canvas.width, this.canvas.height).data,
+        data: this.canvas.toImageDataArray(),
       } : undefined,
       tool: includeCanvas ? {
         width: this.tool!.width,
         height: this.tool!.height,
-        data: this.tool!.getContext('2d')!.getImageData(0, 0, this.tool!.width, this.tool!.height).data,
+        data: this.tool!.toImageDataArray(true),
         x: this.toolX,
         y: this.toolY,
       } : undefined,
@@ -222,42 +212,12 @@ export class PlannerWorker {
     }
   }
 
-  private createPartBitmap(): number[][] {
-    const out: number[][] = [];
-    const data = this.canvasCtx.getImageData(0, 0, this.canvas.width, this.canvas.height).data;
-    for (let x = 0; x < this.canvas.width; x++) {
-      out[x] = [];
-      for (let y = 0; y < this.canvas.height; y++) {
-        const i = (y * this.canvas.width + x) * 4;
-        out[x][y] = (data[i] << 16) | (data[i+1] << 8) | data[i+2];
-      }
-    }
-    return out;
+  private getBitmap(x: number, y: number): PlannerCell {
+    return this.canvas.get(x, y);
   }
 
-  private getBitmap(x: number, y: number) {
-    if (!this.partBitmap[x]) return 0;
-    return this.partBitmap[x][y] || 0;
-  }
-
-  private setBitmap(x: number, y: number, rgb: number) {
-    this.partBitmap[x][y] = rgb;
-  }
-
-  private flushBitmap() {
-    const imageData = this.canvasCtx.createImageData(this.canvas.width, this.canvas.height);
-    const data = imageData.data;
-    for (let x = 0; x < this.canvas.width; x++) {
-      for (let y = 0; y < this.canvas.height; y++) {
-        const i = (y * this.canvas.width + x) * 4;
-        const rgbNumber = this.partBitmap[x][y];
-        data[i] = (rgbNumber >> 16) & 0xFF;
-        data[i+1] = (rgbNumber >> 8) & 0xFF;
-        data[i+2] = rgbNumber & 0xFF;
-        data[i+3] = 255;
-      }
-    }
-    this.canvasCtx.putImageData(imageData, 0, 0);
+  private setBitmap(x: number, y: number, cell: PlannerCell) {
+    this.canvas.set(x, y, cell);
   }
 
   private getToolOvershootX(): number {
@@ -293,7 +253,7 @@ export class PlannerWorker {
     for (let x = 0; x < this.canvas.width; x++) {
       for (let y = 0; y < this.canvas.height; y++) {
         const rgb = this.getBitmap(x, y);
-        if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER) {
+        if (rgb === PlannerCell.Stock || rgb === PlannerCell.Finish) {
           result = Math.max(result ?? y, y);
         }
       }
@@ -306,7 +266,7 @@ export class PlannerWorker {
     for (let x = 0; x < this.canvas.width; x++) {
       for (let y = 0; y < this.canvas.height; y++) {
         const rgb = this.getBitmap(x, y);
-        if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER) {
+        if (rgb === PlannerCell.Stock || rgb === PlannerCell.Finish) {
           result = Math.min(result ?? y, y);
         }
       }
@@ -397,7 +357,7 @@ export class PlannerWorker {
 
   private drawMove(m: PixelMove) {
     for (let p of m.cutPixels) {
-      this.setBitmap(p.x, p.y, REMOVED_RGB_NUMBER);
+      this.setBitmap(p.x, p.y, PlannerCell.Removed);
     }
   }
 
@@ -408,12 +368,12 @@ export class PlannerWorker {
     let pixels: Pixel[] = [];
     for (let p of this.toolCuttingEdges) {
       const rgb = this.getBitmap(topLeftX + p.x, topLeftY + p.y);
-      if (rgb === STOCK_RGB_NUMBER || rgb === FINISH_RGB_NUMBER && this.isFinishPass) {
+      if (rgb === PlannerCell.Stock || (rgb === PlannerCell.Finish && this.isFinishPass)) {
         pixels.push(new Pixel(topLeftX + p.x, topLeftY + p.y));
-      } else if (rgb === PART_RGB_NUMBER) {
+      } else if (rgb === PlannerCell.Part) {
         // Not allowed to place cutter onto the part.
         return null;
-      } else if (rgb === FINISH_RGB_NUMBER) {
+      } else if (rgb === PlannerCell.Finish) {
         // Only allow to touch finished surface during the finish pass.
         return null;
       }

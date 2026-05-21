@@ -65,19 +65,18 @@ async function renderKnownInsertTools(inserts: {name: string, toolLine: string}[
     const browserImport = (path: string) => new Function('path', 'return import(path)')(path);
     const [
       { LatheCode },
-      { Painter },
+      { Rasterizer },
     ] = await Promise.all([
       browserImport('/src/common/lathecode.ts'),
-      browserImport('/src/planner/painter.ts'),
+      browserImport('/src/planner/rasterizer.ts'),
     ]);
 
     const toolToPng = (toolLine: string) => {
-      const toolCanvas = new Painter(new LatheCode(`${toolLine}\nL1 R1`), 40).createTool();
+      const toolBitmap = new Rasterizer(new LatheCode(`${toolLine}\nL1 R1`), 40).createToolBitmap();
       const canvas = document.createElement('canvas');
-      canvas.width = toolCanvas.width;
-      canvas.height = toolCanvas.height;
-      const imageData = toolCanvas.getContext('2d')!.getImageData(0, 0, toolCanvas.width, toolCanvas.height);
-      canvas.getContext('2d')!.putImageData(imageData, 0, 0);
+      canvas.width = toolBitmap.width;
+      canvas.height = toolBitmap.height;
+      canvas.getContext('2d')!.putImageData(new ImageData(toolBitmap.toImageDataArray(true), toolBitmap.width), 0, 0);
       return canvas.toDataURL('image/png');
     };
 

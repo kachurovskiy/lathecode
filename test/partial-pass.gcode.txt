@@ -12,8 +12,8 @@
 ; L0.1 DS10.5 DE10.3
 ; L2 D7
 
-; Run time 2.5 min, cutting 83% of time
-; Working area 9.89 by 8.09 mm
+; Run time 2.4 min, cutting 82% of time
+; Working area 9.90 by 8.11 mm
 
 G21 ; metric
 G18 ; ZX plane
@@ -25,26 +25,25 @@ G91 ; relative positioning
 Z0.5
 
 F50
-X1.24 ; cut 0.6124 mm2
-Z-0.01 X0.01 ; cut 0.0038 mm2
-X6.84 ; cut 3.2902 mm2
+X8.11 ; cut 3.975 mm2
 
 F200
-X-8.09
-Z0.51
+X-8.11
+Z0.5
 
 F50
-X1 ; cut 0.4925 mm2
+X1 ; cut 0.4916 mm2
 
 F200
-Z-0.29 X0.01 ; cut 0.0008 mm2 at -88.03°
+Z-0.27 X0.01 ; cut 0.001 mm2 at -87.88°
 
 F50
-Z-0.2 X0.19 ; cut 0.0028 mm2 at -46.47°
+Z-0.05 X0.03 ; cut 0.0019 mm2 at -59.04°
+Z-0.14 X0.14 ; cut 0.0026 mm2 at -45.00°
 
 F200
-X-1.2
-Z0.99
+X-1.18
+Z0.96
 
 F50
 X1 ; cut 0.5 mm2
@@ -75,21 +74,17 @@ X-1
 Z0.5
 
 F10
-X2.5 ; cut 3.4925 mm2
-
-F50
-Z-0.01 ; cut 0.015 mm2
+X1.26 ; cut 3.4916 mm2
 
 F200
-X-1.25
+Z-0.02 X-0.06 ; cut 0.001 mm2 at 18.43°
 
 F50
-Z-0.02 X-0.05 ; cut 0.0017 mm2 at 21.80°
-Z-0.18 X-0.18 ; cut 0.0028 mm2 at 45.00°
+Z-0.18 X-0.18 ; cut 0.0035 mm2 at 45.00°
 
 F200
 X-1.02
-Z0.71
+Z0.7
 
 F50
 X2.5 ; cut 1.25 mm2
@@ -173,43 +168,45 @@ X2.5 ; cut 1.25 mm2
 
 F200
 X-2.5
-Z0.39
+Z0.4
 
 F10
-X2.75 ; cut 4.4675 mm2
+X2.76 ; cut 4.4916 mm2
+
+F200
+Z-0.02 X-0.06 ; cut 0.001 mm2 at 18.43°
 
 F50
-Z-0.02 X-0.05 ; cut 0.0017 mm2 at 21.80°
-Z-0.18 X-0.18 ; cut 0.0028 mm2 at 45.00°
+Z-0.18 X-0.18 ; cut 0.0035 mm2 at 45.00°
 
 F200
 X-2.52
-Z-9.68
-X8.09
+Z-9.69
+X8.11
 
 F50
-Z0.48 ; cut 0.0048 mm2
+Z0.49 ; cut 0.0049 mm2
 X-6.64 ; cut 0.0664 mm2
-Z0.02 X-0.05 ; cut 0.0041 mm2 at -21.80°
-Z0.19 X-0.18 ; cut 0.0322 mm2 at -46.55°
-Z0.04 X-0.02 ; cut 0.0058 mm2 at -63.43°
-Z2.5 ; cut 0.1678 mm2
-Z0.05 X0.02 ; cut 0.0019 mm2 at 68.20°
-Z0.18 X0.18 ; cut 0.0039 mm2 at 45.00°
+Z0.02 X-0.06 ; cut 0.0041 mm2 at -18.43°
+Z0.17 X-0.17 ; cut 0.0307 mm2 at -45.00°
+Z0.08 X-0.04 ; cut 0.0118 mm2 at -63.43°
+Z2.47 ; cut 0.1652 mm2
+Z0.06 X0.02 ; cut 0.0018 mm2 at 71.57°
+Z0.16 X0.16 ; cut 0.0037 mm2 at 45.00°
 
 F200
-Z0.02 X0.06 ; cut 0.0006 mm2 at 18.43°
+Z0.04 X0.08 ; cut 0.0008 mm2 at 26.57°
 
 F10
-X1.24 ; cut 0.4029 mm2
+X1.24 ; cut 0.402 mm2
 
 F50
-Z6.15 ; cut 0.8981 mm2
-Z0.05 X0.02 ; cut 0.0019 mm2 at 68.20°
-Z0.18 X0.18 ; cut 0.0039 mm2 at 45.00°
+Z6.14 ; cut 0.8997 mm2
+Z0.06 X0.02 ; cut 0.0018 mm2 at 71.57°
+Z0.16 X0.16 ; cut 0.0037 mm2 at 45.00°
 
 F200
-Z0.02 X0.06 ; cut 0.0006 mm2 at 18.43°
+Z0.04 X0.08 ; cut 0.0008 mm2 at 26.57°
 
 F10
 X1.49 ; cut 0.4129 mm2
@@ -218,4 +215,4 @@ F50
 X-4.45 ; cut 0.0445 mm2
 
 F200
-Z-9.89
+Z-9.9

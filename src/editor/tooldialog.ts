@@ -1,7 +1,7 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
 import { LatheCode } from '../common/lathecode.ts';
 import {KNOWN_INSERT_OPTIONS, insertOptionToToolLine, type KnownInsertOption} from '../common/toolpresets.ts';
-import { Painter } from '../planner/painter.ts';
+import { Rasterizer } from '../planner/rasterizer.ts';
 
 type ToolType = 'RECT' | 'ROUND' | 'ANG';
 type ToolParamName = 'R' | 'L' | 'H' | 'A' | 'NA';
@@ -340,18 +340,19 @@ function createInsertPreview(option: KnownInsertOption): HTMLElement {
   const preview = document.createElement('div');
   preview.className = 'toolPresetPreview';
 
-  if (typeof OffscreenCanvas === 'undefined') {
+  if (typeof ImageData === 'undefined') {
     preview.textContent = option.type;
     return preview;
   }
 
   try {
-    const toolCanvas = new Painter(new LatheCode(`${insertOptionToToolLine(option)}\nL1 R1`), 18).createTool();
+    const toolBitmap = new Rasterizer(new LatheCode(`${insertOptionToToolLine(option)}\nL1 R1`), 18).createToolBitmap();
     const canvas = document.createElement('canvas');
-    canvas.width = toolCanvas.width;
-    canvas.height = toolCanvas.height;
-    const imageData = toolCanvas.getContext('2d')!.getImageData(0, 0, toolCanvas.width, toolCanvas.height);
-    canvas.getContext('2d')!.putImageData(imageData, 0, 0);
+    canvas.width = toolBitmap.width;
+    canvas.height = toolBitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('2D canvas unavailable');
+    ctx.putImageData(new ImageData(toolBitmap.toImageDataArray(true), toolBitmap.width), 0, 0);
     preview.appendChild(canvas);
   } catch {
     preview.textContent = option.type;
