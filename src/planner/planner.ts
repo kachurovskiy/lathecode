@@ -3,9 +3,7 @@ import InlineWorker from './plannerworker?worker&inline';
 import { FromWorkerMessage, ToWorkerMessage } from './plannerworker';
 import { Move } from '../common/move';
 import { createFullScreenDialog } from '../common/dialog';
-
-const PX_PER_MM = 100;
-const CANVAS_SIZE = 500;
+import { AppSettings, DEFAULT_APP_SETTINGS, DEFAULT_MOVE_TIMEOUT_MS, normalizeAppSettings } from '../common/settings';
 
 export class Planner extends EventTarget {
   private latheCode: LatheCode | null = null;
@@ -15,6 +13,7 @@ export class Planner extends EventTarget {
   private canvas: HTMLCanvasElement | null = null;
   private tool: HTMLCanvasElement | null = null;
   private worker: Worker | null = null;
+  private settings: AppSettings = DEFAULT_APP_SETTINGS;
 
   constructor(private container: HTMLElement) {
     super();
@@ -22,7 +21,8 @@ export class Planner extends EventTarget {
     container.style.display = 'none';
   }
 
-  setLatheCode(value: LatheCode | null) {
+  setLatheCode(value: LatheCode | null, settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS) {
+    this.settings = normalizeAppSettings(settings);
     if (this.latheCode) {
       if (this.worker) {
         this.worker.onmessage = null;
@@ -42,7 +42,7 @@ export class Planner extends EventTarget {
       this.worker.onmessage = (event: MessageEvent<any>) => {
         this.handleMessage(event.data as FromWorkerMessage);
       };
-      const toWorker: ToWorkerMessage = {latheCode: this.latheCode, pxPerMm: PX_PER_MM};
+      const toWorker: ToWorkerMessage = {latheCode: this.latheCode, settings: this.settings};
       this.worker.postMessage(toWorker);
       this.handleMessage({progressMessage: 'Initializing worker...'});
     }
@@ -79,7 +79,7 @@ export class Planner extends EventTarget {
         this.canvas.width = data.canvas.width;
         this.canvas.height = data.canvas.height;
         this.canvasContainer!.appendChild(this.canvas);
-        this.canvasContainer!.style.transform = `scale(${Math.min(1, 500 / data.canvas.width, 500 / data.canvas.height / 2)})`;
+        this.canvasContainer!.style.transform = `scale(${Math.min(1, this.settings.plannerCanvasSizePx / data.canvas.width, this.settings.plannerCanvasSizePx / data.canvas.height / 2)})`;
         const spacer = document.createElement('div');
         spacer.innerHTML = '&nbsp;';
         spacer.style.height = `${this.canvasContainer!.getBoundingClientRect().height}px`;
@@ -112,17 +112,17 @@ export class Planner extends EventTarget {
 
   private drawMoves(moves: Move[]): void {
     this.container.insertAdjacentHTML('beforeend', '<h3>Toolpath</h3>');
-    this.container.appendChild(createMovesCanvas(moves, CANVAS_SIZE, CANVAS_SIZE / 2));
+    this.container.appendChild(createMovesCanvas(moves, this.settings.plannerCanvasSizePx, this.settings.plannerCanvasSizePx / 2, this.settings.moveTimeoutMs));
     const button = document.createElement('button');
     button.innerText = 'Zoom in';
     button.addEventListener('click', () => {
-      createFullScreenDialog(createMovesCanvas(moves, window.visualViewport!.width - 100, window.visualViewport!.height - 200), 'Toolpath');
+      createFullScreenDialog(createMovesCanvas(moves, window.visualViewport!.width - 100, window.visualViewport!.height - 200, this.settings.moveTimeoutMs), 'Toolpath');
     });
     this.container.appendChild(button);
   }
 }
 
-export function createMovesCanvas(moves: Move[], width: number, height: number): HTMLCanvasElement {
+export function createMovesCanvas(moves: Move[], width: number, height: number, moveTimeoutMs = DEFAULT_MOVE_TIMEOUT_MS): HTMLCanvasElement {
   let minXMm = Infinity;
   let maxXMm = -Infinity;
   let minYMm = Infinity;
@@ -152,7 +152,7 @@ export function createMovesCanvas(moves: Move[], width: number, height: number):
     context.lineTo(xToPx(move.xStartMm + move.xDeltaMm) + xOffset, yToPx(move.yStartMm + move.yDeltaMm));
     context.stroke();
   }
-  const timeMs = getMoveTimeout();
+  const timeMs = getMoveTimeout(moveTimeoutMs);
   const runDrawMoveWithDelay = (moves: Move[], index: number) => {
     if (index < moves.length) {
         drawMove(moves[index]);
@@ -167,9 +167,9 @@ export function createMovesCanvas(moves: Move[], width: number, height: number):
   return canvas;
 }
 
-function getMoveTimeout() {
+function getMoveTimeout(defaultMoveTimeoutMs = DEFAULT_MOVE_TIMEOUT_MS) {
   const params = new URLSearchParams(window.location.search);
   const value = params.get('moveTimeout');
   if (value) return Number(value);
-  return 50;
+  return defaultMoveTimeoutMs;
 }

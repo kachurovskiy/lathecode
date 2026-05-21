@@ -1,12 +1,11 @@
 import * as Colors from "../common/colors";
 import { Pixel, PixelMove } from "../common/pixel";
-
-const CUTTING_EDGE_THICKNESS = 2;
+import { AppSettings, CUTTING_EDGE_THICKNESS_PX, DEFAULT_APP_SETTINGS, normalizeAppSettings } from "../common/settings";
 
 export type RadialCuttingEdge = 'top' | 'bottom';
 export type TravelRetractionSide = 'minY' | 'maxY';
 
-export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCuttingEdge = 'top'): Pixel[] {
+export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCuttingEdge = 'top', cuttingEdgeThicknessPx = CUTTING_EDGE_THICKNESS_PX): Pixel[] {
   const toolData = tool.getContext("2d")!.getImageData(0, 0, tool.width, tool.height).data;
   const set: Set<string> = new Set();
   const result: Pixel[] = [];
@@ -28,7 +27,7 @@ export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCutting
         toolData[i + 3] > 250
       ) {
         maybeAdd(x, y);
-        if (++depth > CUTTING_EDGE_THICKNESS) break;
+        if (++depth > cuttingEdgeThicknessPx) break;
       }
     }
   }
@@ -43,15 +42,12 @@ export function getCuttingEdges(tool: OffscreenCanvas, radialEdge: RadialCutting
         toolData[i + 3] > 250
       ) {
         maybeAdd(x, y);
-        if (++depth > CUTTING_EDGE_THICKNESS) break;
+        if (++depth > cuttingEdgeThicknessPx) break;
       }
     }
   }
   return result;
 }
-
-const EPSILON_DEGREES_DEFAULT = 0.05;
-const EPSILON_SMOOTH_PX = 0.9;
 
 export function isSmoothingAllowed(m1: PixelMove, m2: PixelMove, epsilonPx: number) {
   const m = mergeGeometry(m1, m2);
@@ -87,18 +83,23 @@ export function smoothMovesOnce(moves: PixelMove[], epsilonPx: number): PixelMov
   return result;
 }
 
-export function optimizeMoves(moves: PixelMove[], progressCallback: (message: string) => void, travelRetractionSide: TravelRetractionSide = 'maxY'): PixelMove[] {
+export function optimizeMoves(
+  moves: PixelMove[],
+  progressCallback: (message: string) => void,
+  travelRetractionSide: TravelRetractionSide = 'maxY',
+  settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS): PixelMove[] {
+  const normalizedSettings = normalizeAppSettings(settings);
   let result = moves;
   let prevLength = result.length;
   do {
     prevLength = result.length;
-    result = optimizeMovesOnce(result, progressCallback, travelRetractionSide);
+    result = optimizeMovesOnce(result, progressCallback, travelRetractionSide, normalizedSettings);
     progressCallback(`Optimized moves to ${result.length}`);
   } while (result.length < prevLength)
-  return smoothMoves(result, EPSILON_SMOOTH_PX);
+  return smoothMoves(result, normalizedSettings.smoothingEpsilonPx);
 }
 
-function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: string) => void, travelRetractionSide: TravelRetractionSide): PixelMove[] {
+function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: string) => void, travelRetractionSide: TravelRetractionSide, settings: AppSettings): PixelMove[] {
   const result: PixelMove[] = [];
   let i = 0;
   while (i < moves.length) {
@@ -135,7 +136,7 @@ function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: strin
         const j = i + count * 2;
         if (moves[j].isBasic() &&
             moves[j + 1].isHorizontalOrVertical() &&
-            mergeGeometry(moves[j - 2], moves[j - 1]).getAngleToDegrees(mergeGeometry(moves[j], moves[j + 1])) < EPSILON_DEGREES_DEFAULT) {
+            mergeGeometry(moves[j - 2], moves[j - 1]).getAngleToDegrees(mergeGeometry(moves[j], moves[j + 1])) < settings.optimizeEpsilonDegrees) {
           count++;
         } else {
           break;

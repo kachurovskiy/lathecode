@@ -31,8 +31,9 @@ editor.addEventListener('stl', () => {
 });
 
 editor.addEventListener('plan', (event) => {
-  plannedLatheCode = (event as PlanEvent).latheCode;
-  planner.setLatheCode(plannedLatheCode);
+  const planEvent = event as PlanEvent;
+  plannedLatheCode = planEvent.latheCode;
+  planner.setLatheCode(plannedLatheCode, planEvent.settings);
 });
 
 planner.addEventListener('change', () => {

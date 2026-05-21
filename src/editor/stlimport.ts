@@ -8,10 +8,12 @@ import * as polygonClipping from "polygon-clipping";
 import { cutPolygonLower, getPolygonArea, mirrorPolygonY, moveIntoNonNegativeX, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
 import { LatheCode } from "../common/lathecode";
 import { booleanValid } from '@turf/boolean-valid';
+import { AppSettings, DEFAULT_APP_SETTINGS, loadAppSettings, normalizeAppSettings } from "../common/settings";
 
 type CoordinatePlane = "xy" | "xz" | "yz";
 
-export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (progressMessage: string) => void): LatheCode[] {
+export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (progressMessage: string) => void, settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS): LatheCode[] {
+  const normalizedSettings = normalizeAppSettings({...settings, pxPerMm});
   // Mesh is centered around 0
   const loader = new STLLoader();
   const geometry = loader.parse(stl).center();
@@ -26,12 +28,12 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (pr
   callback("Post-processing sections...");
 
   let latheCodes = [
-    ...sectionLoopsToLatheCodes(projectionsX, pxPerMm),
-    ...sectionLoopsToLatheCodes(projectionsY, pxPerMm),
-    ...sectionLoopsToLatheCodes(projectionsZ, pxPerMm),
-    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsX), pxPerMm),
-    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsY), pxPerMm),
-    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsZ), pxPerMm),
+    ...sectionLoopsToLatheCodes(projectionsX, normalizedSettings),
+    ...sectionLoopsToLatheCodes(projectionsY, normalizedSettings),
+    ...sectionLoopsToLatheCodes(projectionsZ, normalizedSettings),
+    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsX), normalizedSettings),
+    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsY), normalizedSettings),
+    ...sectionLoopsToLatheCodes(swapSectionLoops(projectionsZ), normalizedSettings),
   ];
   latheCodes = deduplicateLatheCodes(latheCodes);
   if (geometry.boundingBox !== null) {
@@ -73,25 +75,26 @@ export function projectOrCut(
   }
 }
 
-function sectionLoopsToLatheCodes(sectionLoops: Pixel[][], pxPerMm: number): LatheCode[] {
+function sectionLoopsToLatheCodes(sectionLoops: Pixel[][], settings: AppSettings): LatheCode[] {
   let projections = removeTinyAreaPolygons(sectionLoops);
-  projections = projections.map(projection => scaleAndRoundPolygon(projection, pxPerMm));
+  projections = projections.map(projection => scaleAndRoundPolygon(projection, settings.pxPerMm));
   projections = projections.map(projection => removeConsecutiveDuplicatePoints(projection));
   projections = projections.map(projection => moveIntoNonNegativeX(mirrorPolygonY(cutPolygonLower(projection))));
   projections = projections.filter(projection => projection.length > 2 && getPolygonArea(projection) > 0.001);
-  return projections.map(projection => materialPolygonToLatheCodeOrNull(projection, pxPerMm)).filter(lc => lc !== null) as LatheCode[];
+  return projections.map(projection => materialPolygonToLatheCodeOrNull(projection, settings)).filter(lc => lc !== null) as LatheCode[];
 }
 
 function swapSectionLoops(sectionLoops: Pixel[][]): Pixel[][] {
   return sectionLoops.map(loop => loop.map(pair => new Pixel(pair.y, pair.x)));
 }
 
-function materialPolygonToLatheCodeOrNull(polygon: Pixel[], pxPerMm: number): LatheCode | null {
+function materialPolygonToLatheCodeOrNull(polygon: Pixel[], settings: AppSettings): LatheCode | null {
+  const pxPerMm = settings.pxPerMm;
   const outer = normalizeProfileChain(extractBoundaryChain(polygon, "outer"));
   const inner = normalizeProfileChain(extractBoundaryChain(polygon, "inner"));
   if (outer.length < 2) return null;
 
-  const outerText = profileChainToLatheText(outer, pxPerMm);
+  const outerText = profileChainToLatheText(outer, settings);
   if (!outerText) return null;
 
   const maxOuterRadiusPx = Math.max(...outer.map(p => p.y));
@@ -103,7 +106,7 @@ function materialPolygonToLatheCodeOrNull(polygon: Pixel[], pxPerMm: number): La
   if (constantInnerRadiusPx !== null && constantInnerRadiusPx > 0) {
     text = `STOCK D${formatMm(maxOuterRadiusPx * 2 / pxPerMm)} ID${formatMm(constantInnerRadiusPx * 2 / pxPerMm)}\n${outerText}`;
   } else if (hasInnerProfile) {
-    const innerText = profileChainToLatheText(inner, pxPerMm);
+    const innerText = profileChainToLatheText(inner, settings);
     if (!innerText) return null;
     text = `STOCK D${formatMm(maxOuterRadiusPx * 2 / pxPerMm)}\n${outerText}\nINSIDE\n${innerText}`;
   }
@@ -169,10 +172,10 @@ function normalizeProfileChain(chain: Pixel[]): Pixel[] {
   return removeConsecutiveDuplicatePoints(repairPointsGoingBack(removeConsecutiveDuplicatePoints(chain.concat())));
 }
 
-function profileChainToLatheText(chain: Pixel[], pxPerMm: number): string {
-  const moves = optimizeMoves(segmentToMoves(chain), () => {});
+function profileChainToLatheText(chain: Pixel[], settings: AppSettings): string {
+  const moves = optimizeMoves(segmentToMoves(chain), () => {}, 'maxY', settings);
   return moves
-    .map(m => m.toMove(pxPerMm).toLatheCode().trim())
+    .map(m => m.toMove(settings.pxPerMm).toLatheCode().trim())
     .filter(line => line.length > 0)
     .join('\n');
 }
@@ -391,10 +394,11 @@ function cutMeshWithPlane(
 }
 
 export function showForDebug(projections: Pixel[][]) {
+  const settings = loadAppSettings();
   const elements = projections.map(projection => {
     const canvas = document.createElement('canvas');
     canvas.className = 'selectorScene';
-    const size = 500;
+    const size = settings.stlDebugCanvasSizePx;
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;

@@ -4,9 +4,10 @@ import { Painter } from './painter';
 import * as Colors from "../common/colors";
 import { Pixel, PixelMove } from "../common/pixel";
 import { Move } from '../common/move';
+import { AppSettings, normalizeAppSettings } from '../common/settings';
 
 export class ToWorkerMessage {
-  constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number) {}
+  constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number, readonly settings?: Partial<AppSettings>) {}
 }
 
 export class FromWorkerMessage {
@@ -61,8 +62,14 @@ export class PlannerWorker {
   private postMessage: PlannerWorkerPostMessage;
   private postPixelMoves: boolean;
   private optimizeMoves: typeof optimizePlannerMoves;
+  private settings: AppSettings;
+  private pxPerMm: number;
 
-  constructor(private latheCode: LatheCode, private pxPerMm: number, options: PlannerWorkerOptions = {}) {
+  constructor(private latheCode: LatheCode, settings: number | Partial<AppSettings>, options: PlannerWorkerOptions = {}) {
+    this.settings = typeof settings === 'number'
+      ? normalizeAppSettings({pxPerMm: settings})
+      : normalizeAppSettings(settings);
+    this.pxPerMm = this.settings.pxPerMm;
     const profile = latheCode.getSingleProfile();
     if (!profile) {
       if (latheCode.getProfiles().length > 1) throw new Error('Error: inside and outside not supported yet');
@@ -73,11 +80,11 @@ export class PlannerWorker {
     this.postMessage = options.postMessage || (message => postMessage(message));
     this.postPixelMoves = !!options.postMessage;
     this.optimizeMoves = options.optimizeMoves || optimizePlannerMoves;
-    this.painter = options.painter || new Painter(latheCode, pxPerMm);
+    this.painter = options.painter || new Painter(latheCode, this.pxPerMm);
     this.canvas = this.painter.createCanvas();
     this.canvasCtx = this.canvas.getContext("2d")!;
     this.tool = this.painter.createTool();
-    this.toolCuttingEdges = getCuttingEdges(this.tool, this.profileSide === 'inside' ? 'bottom' : 'top');
+    this.toolCuttingEdges = getCuttingEdges(this.tool, this.profileSide === 'inside' ? 'bottom' : 'top', this.settings.cuttingEdgeThicknessPx);
     this.toolOvershootX = this.getToolOvershootX();
     this.toolOvershootY = this.getToolOvershootY();
     this.toolX = this.canvas.width;
@@ -126,7 +133,8 @@ export class PlannerWorker {
     const moves = this.normalizeMovesForOutput(this.optimizeMoves(
       this.moves,
       (progressMessage) => this.postMessage({progressMessage}),
-      this.profileSide === 'inside' ? 'minY' : 'maxY'));
+      this.profileSide === 'inside' ? 'minY' : 'maxY',
+      this.settings));
     this.postMessage({progressMessage: `Showing ${moves.length} moves...`});
     this.postMessage({moves: this.postPixelMoves ? moves : moves.map(m => m.toMove(this.pxPerMm))});
   }
@@ -427,7 +435,7 @@ self.onmessage = (event) => {
   if (latheCode) {
     Object.setPrototypeOf(latheCode, LatheCode.prototype);
     try {
-      new PlannerWorker(new LatheCode(latheCode.getText()), data.pxPerMm || 100);
+      new PlannerWorker(new LatheCode(latheCode.getText()), normalizeAppSettings({...(data.settings ?? {}), pxPerMm: data.pxPerMm ?? data.settings?.pxPerMm}));
     } catch (e) {
       postMessage({error: e instanceof Error ? e.message : String(e)});
     }

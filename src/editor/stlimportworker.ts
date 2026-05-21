@@ -1,7 +1,8 @@
 import { stlToLatheCodes } from "./stlimport";
+import { AppSettings, normalizeAppSettings } from "../common/settings";
 
 export class ToStlWorkerMessage {
-  constructor(readonly pxPerMm: number, readonly stl: ArrayBuffer) {}
+  constructor(readonly pxPerMm: number | undefined, readonly stl: ArrayBuffer, readonly settings?: Partial<AppSettings>) {}
 }
 
 export class FromStlWorkerMessage {
@@ -15,7 +16,8 @@ export class FromStlWorkerMessage {
 self.onmessage = async (event) => {
   const data = event.data as ToStlWorkerMessage;
   try {
-    const latheCodes = stlToLatheCodes(data.stl, event.data.pxPerMm, (progressMessage) => postMessage(new FromStlWorkerMessage(progressMessage)));
+    const settings = normalizeAppSettings({...(data.settings ?? {}), pxPerMm: data.pxPerMm ?? data.settings?.pxPerMm});
+    const latheCodes = stlToLatheCodes(data.stl, settings.pxPerMm, (progressMessage) => postMessage(new FromStlWorkerMessage(progressMessage)), settings);
     if (latheCodes.length > 0) {
       postMessage(new FromStlWorkerMessage(undefined, undefined, latheCodes[0].getText().trim()));
     } else {

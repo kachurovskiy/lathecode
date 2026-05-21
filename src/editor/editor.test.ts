@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Editor, PlanEvent, wrapStlText } from './editor';
+import { APP_SETTING_DEFINITIONS, DEFAULT_APP_SETTINGS } from '../common/settings';
 
 describe('Editor', () => {
   beforeEach(() => {
@@ -36,6 +37,41 @@ describe('Editor', () => {
     await waitForAsyncClick();
 
     expect(planned).toEqual(['STOCK D10\nINSIDE\nL2 R3']);
+  });
+
+  it('opens a settings dialog with guidance and stored values', () => {
+    localStorage.setItem('pxPerMm', '750');
+    localStorage.setItem('smoothingEpsilonPx', '1.25');
+    const container = createEditorContainer('STOCK D10\nL2 R3');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.settingsButton')!.click();
+
+    const dialog = document.querySelector('.settingsDialog')!;
+    expect(dialog.textContent).toContain('Reasonable values');
+    expect(dialog.querySelectorAll<HTMLInputElement>('.settingInput').length).toBe(APP_SETTING_DEFINITIONS.length);
+    expect(dialog.querySelector<HTMLInputElement>('input[name="pxPerMm"]')!.value).toBe('750');
+    expect(dialog.querySelector<HTMLInputElement>('input[name="smoothingEpsilonPx"]')!.value).toBe('1.25');
+  });
+
+  it('persists settings and sends them with plan events', async () => {
+    const container = createEditorContainer('STOCK D10\nL2 R3');
+    const editor = new Editor(container);
+    const plannedSettings: PlanEvent['settings'][] = [];
+    editor.addEventListener('plan', event => {
+      plannedSettings.push((event as PlanEvent).settings);
+    });
+
+    container.querySelector<HTMLButtonElement>('.settingsButton')!.click();
+    setInputValue('input[name="pxPerMm"]', '750');
+    setInputValue('input[name="smoothingEpsilonPx"]', '1.25');
+    clickDialogButton('Save settings');
+    container.querySelector<HTMLButtonElement>('.planButton')!.click();
+    await waitForAsyncClick();
+
+    expect(localStorage.getItem('pxPerMm')).toBe('750');
+    expect(localStorage.getItem('smoothingEpsilonPx')).toBe('1.25');
+    expect(plannedSettings).toEqual([{...DEFAULT_APP_SETTINGS, pxPerMm: 750, smoothingEpsilonPx: 1.25}]);
   });
 
   it('flips inside-only profiles', () => {
@@ -138,6 +174,7 @@ function createEditorContainer(value: string): HTMLElement {
     <button class="saveButton"></button>
     <button class="loadButton"></button>
     <select class="loadSelect"></select>
+    <button class="settingsButton"></button>
     <button class="deleteButton"></button>
     <button class="exportButton"></button>
     <input id="importFile" />

@@ -3,12 +3,15 @@ import { createFullScreenDialog } from '../common/dialog.ts';
 import { openToolDialog } from './tooldialog.ts';
 import StlImportWorker from './stlimportworker?worker&inline';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
-
-const PX_PER_MM = 100;
+import { APP_SETTING_DEFINITIONS, AppSettingKey, AppSettings, DEFAULT_APP_SETTINGS, loadAppSettings, normalizeAppSettings, saveAppSettings } from '../common/settings.ts';
 
 export class PlanEvent extends Event {
-  constructor(readonly latheCode: LatheCode) {
+  constructor(readonly latheCode: LatheCode, readonly settings: AppSettings) {
     super('plan');
+  }
+
+  get pxPerMm() {
+    return this.settings.pxPerMm;
   }
 }
 
@@ -22,6 +25,7 @@ export class Editor extends EventTarget {
   private saveButton: HTMLButtonElement;
   private loadButton: HTMLButtonElement;
   private loadSelect: HTMLSelectElement;
+  private settingsButton: HTMLButtonElement;
   private deleteButton: HTMLButtonElement;
   private exportButton: HTMLButtonElement;
   private importInput: HTMLInputElement;
@@ -48,7 +52,7 @@ export class Editor extends EventTarget {
 
     this.planButton.addEventListener('click', async () => {
       const latheCode = await this.getLatheCodeForPlanning();
-      if (latheCode) this.dispatchEvent(new PlanEvent(latheCode));
+      if (latheCode) this.dispatchEvent(new PlanEvent(latheCode, this.getAppSettings()));
     });
 
     this.importStlButton = container.querySelector<HTMLButtonElement>('.imageButton')!;
@@ -87,6 +91,7 @@ export class Editor extends EventTarget {
     this.saveButton = container.querySelector<HTMLButtonElement>('.saveButton')!;
     this.loadButton = container.querySelector<HTMLButtonElement>('.loadButton')!;
     this.loadSelect = container.querySelector<HTMLSelectElement>('.loadSelect')!;
+    this.settingsButton = container.querySelector<HTMLButtonElement>('.settingsButton')!;
     this.deleteButton = container.querySelector<HTMLButtonElement>('.deleteButton')!;
     this.exportButton = container.querySelector<HTMLButtonElement>('.exportButton')!;
     this.importInput = container.querySelector<HTMLInputElement>('#importFile')!;
@@ -100,6 +105,7 @@ export class Editor extends EventTarget {
     this.exportButton.addEventListener('click', () => this.exportLocalStorage());
     this.importInput.addEventListener('change', (event) => this.handleImportInputChange(event));
     this.expandCollapseButton.addEventListener('click', () => this.toggleMoreOptions());
+    this.settingsButton.addEventListener('click', () => this.openSettingsDialog());
     this.updateLoadSelect();
   }
 
@@ -194,6 +200,76 @@ export class Editor extends EventTarget {
     return this.latheCode;
   }
 
+  getPxPerMm() {
+    return this.getAppSettings().pxPerMm;
+  }
+
+  getAppSettings() {
+    return loadAppSettings();
+  }
+
+  private openSettingsDialog() {
+    const currentSettings = this.getAppSettings();
+    const form = document.createElement('form');
+    form.className = 'settingsDialog';
+
+    const grid = document.createElement('div');
+    grid.className = 'settingsGrid';
+    form.appendChild(grid);
+
+    for (const definition of APP_SETTING_DEFINITIONS) {
+      const field = document.createElement('label');
+      field.className = 'settingField';
+
+      const heading = document.createElement('span');
+      heading.className = 'settingHeading';
+      heading.textContent = definition.label;
+      field.appendChild(heading);
+
+      const input = document.createElement('input');
+      input.className = 'settingInput';
+      input.name = definition.key;
+      input.type = 'number';
+      input.min = String(definition.min);
+      input.max = String(definition.max);
+      input.step = String(definition.step);
+      input.value = String(currentSettings[definition.key]);
+      field.appendChild(input);
+
+      const guide = document.createElement('span');
+      guide.className = 'settingGuide';
+      guide.textContent = `${definition.guidance} Reasonable values: ${definition.reasonableValues} ${definition.unit}. Default: ${definition.defaultValue} ${definition.unit}.`;
+      field.appendChild(guide);
+
+      grid.appendChild(field);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'settingsActions';
+
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.textContent = 'Save settings';
+    actions.appendChild(saveButton);
+
+    const resetButton = document.createElement('button');
+    resetButton.type = 'button';
+    resetButton.textContent = 'Reset defaults';
+    resetButton.addEventListener('click', () => this.fillSettingsForm(form, DEFAULT_APP_SETTINGS));
+    actions.appendChild(resetButton);
+
+    form.appendChild(actions);
+
+    const dialog = createFullScreenDialog(form, 'Settings');
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const settings = this.readSettingsForm(form);
+      saveAppSettings(settings);
+      dialog.remove();
+      this.dispatchEvent(new Event('change'));
+    });
+  }
+
   private update() {
     try {
       localStorage.setItem('latheCode', this.latheCodeInput.value);
@@ -272,7 +348,7 @@ export class Editor extends EventTarget {
             this.statusContainer.textContent = m.progressMessage;
           }
         };
-        this.worker.postMessage({ stl, pxPerMm: PX_PER_MM });
+        this.worker.postMessage({ stl, settings: this.getAppSettings() });
       };
       reader.onerror = reject;
       reader.readAsArrayBuffer(file);
@@ -308,11 +384,28 @@ export class Editor extends EventTarget {
           }
         }
         this.updateLoadSelect();
+        this.dispatchEvent(new Event('change'));
       } catch (e) {
         console.error('Failed to import data: ', e);
       }
     };
     reader.readAsText(file);
+  }
+
+  private readSettingsForm(form: HTMLFormElement): AppSettings {
+    const raw: Partial<Record<AppSettingKey, string>> = {};
+    for (const definition of APP_SETTING_DEFINITIONS) {
+      const input = form.elements.namedItem(definition.key) as HTMLInputElement | null;
+      raw[definition.key] = input?.value ?? '';
+    }
+    return normalizeAppSettings(raw);
+  }
+
+  private fillSettingsForm(form: HTMLFormElement, settings: AppSettings) {
+    for (const definition of APP_SETTING_DEFINITIONS) {
+      const input = form.elements.namedItem(definition.key) as HTMLInputElement | null;
+      if (input) input.value = String(settings[definition.key]);
+    }
   }
 }
 

@@ -309,7 +309,8 @@ progress {
 
 .save-group,
 .load-group,
-.import-export-group {
+.import-export-group,
+.settings-group {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -319,6 +320,50 @@ progress {
 .save-group .saveNameInput,
 .load-group .loadSelect {
   flex-grow: 1;
+}
+
+.settingsDialog {
+  max-width: 900px;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin: 12px 0;
+}
+
+.settingField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #dddddd;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.settingHeading {
+  font-weight: 600;
+}
+
+.settingInput {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #cccccc;
+  padding: 10px;
+  font-size: 16px;
+}
+
+.settingGuide {
+  color: #444444;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.settingsActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .toolbar input[type="text"],
