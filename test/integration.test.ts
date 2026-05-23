@@ -72,18 +72,25 @@ async function setLatheCodeInput(page: Page, value: string) {
   }, value);
 }
 
+async function openStarterLatheCode(page: Page) {
+  await page.click('.sampleCatalogButton');
+  await page.click('.sampleButton[data-sample="starter"]');
+  await page.waitForSelector('#editorContainer:not([hidden])', { visible: true });
+}
+
 test('stl to lathecode', async () => {
   const name = STL_INTEGRATION_CASE;
   const browser = await puppeteer.launch(PUPPETEER_LAUNCH_OPTIONS);
   try {
     const page = await browser.newPage();
     await page.goto(getAppUrl(), {waitUntil: 'domcontentloaded'});
+    await openStarterLatheCode(page);
 
     // Empty the lathecode input
     await setLatheCodeInput(page, '');
 
-    // Click imageButton and pick the stl file in the system file picker
-    const [fileChooser] = await Promise.all([page.waitForFileChooser(), page.click('.imageButton')]);
+    // Pick the STL file from the Start UI.
+    const [fileChooser] = await Promise.all([page.waitForFileChooser(), page.click('.startStlButton')]);
     await fileChooser.accept([resolve(__dirname, name + '.stl')]);
 
     // Wait for body to lose busy cursor
@@ -105,6 +112,7 @@ test('lathecode inputs to gcode', async () => {
   try {
     const page = await browser.newPage();
     await page.goto(getAppUrl(), {waitUntil: 'domcontentloaded'});
+    await openStarterLatheCode(page);
 
     // Set the lathecode
     await setLatheCodeInput(page, getInput(name));

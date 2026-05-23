@@ -1,9 +1,10 @@
 import { LatheCode, ProfileSide } from '../common/lathecode.ts';
 import { createFullScreenDialog } from '../common/dialog.ts';
 import { openToolDialog } from './tooldialog.ts';
+import { openSetupDialog, type SetupDialogKind } from './setupdialog.ts';
 import StlImportWorker from './stlimportworker?worker&inline';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
-import { APP_SETTING_DEFINITIONS, APP_SETTING_SECTIONS, AppSettingDefinition, AppSettingKey, AppSettings, AppSettingSectionDefinition, DEFAULT_APP_SETTINGS, loadAppSettings, normalizeAppSettings, saveAppSettings } from '../common/settings.ts';
+import { AppSettings, loadAppSettings } from '../common/settings.ts';
 
 export class PlanEvent extends Event {
   constructor(readonly latheCode: LatheCode, readonly settings: AppSettings) {
@@ -19,65 +20,49 @@ export class Editor extends EventTarget {
   private errorContainer: HTMLDivElement;
   private statusContainer: HTMLDivElement;
   private latheCodeInput: HTMLTextAreaElement;
+  private defaultLatheCodeText: string;
   private planButton: HTMLButtonElement;
-  private expandCollapseButton: HTMLButtonElement;
-  private moreOptionsSection: HTMLElement;
+  private outsidePlanButton: HTMLButtonElement;
+  private insidePlanButton: HTMLButtonElement;
   private saveButton: HTMLButtonElement;
-  private loadButton: HTMLButtonElement;
-  private loadSelect: HTMLSelectElement;
-  private settingsButton: HTMLButtonElement;
-  private deleteButton: HTMLButtonElement;
-  private exportButton: HTMLButtonElement;
-  private importInput: HTMLInputElement;
-  private importStlButton: HTMLButtonElement;
   private toolButton: HTMLButtonElement;
   private flipButton: HTMLButtonElement;
   private scaleButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, options: {deferInitialUpdate?: boolean} = {}) {
     super();
 
     this.planButton = container.querySelector<HTMLButtonElement>('.planButton')!;
+    this.outsidePlanButton = container.querySelector<HTMLButtonElement>('.outsidePlanButton')!;
+    this.insidePlanButton = container.querySelector<HTMLButtonElement>('.insidePlanButton')!;
     this.errorContainer = container.querySelector('.errorContainer')!;
     this.statusContainer = container.querySelector('.statusContainer')!;
     this.latheCodeInput = container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!;
+    this.defaultLatheCodeText = this.latheCodeInput.value;
     this.latheCodeInput.addEventListener('input', () => this.update());
-    this.latheCodeInput.value = localStorage.getItem('latheCode') || this.latheCodeInput.value;
-    this.update();
+
+    for (const button of [
+      {selector: '.unitsButton', kind: 'units' as const},
+      {selector: '.stockButton', kind: 'stock' as const},
+      {selector: '.depthButton', kind: 'depth' as const},
+      {selector: '.feedButton', kind: 'feed' as const},
+      {selector: '.modeButton', kind: 'mode' as const},
+      {selector: '.axesButton', kind: 'axes' as const},
+    ]) {
+      container
+        .querySelector<HTMLButtonElement>(button.selector)!
+        .addEventListener('click', () => this.openSetupDialog(button.kind));
+    }
 
     container.querySelector<HTMLButtonElement>('.stlButton')!.addEventListener('click', () => {
       this.dispatchEvent(new Event('stl'));
     });
 
-    this.planButton.addEventListener('click', async () => {
-      const latheCode = await this.getLatheCodeForPlanning();
-      if (latheCode) this.dispatchEvent(new PlanEvent(latheCode, this.getAppSettings()));
-    });
-
-    this.importStlButton = container.querySelector<HTMLButtonElement>('.imageButton')!;
-    this.importStlButton.addEventListener('click', () => {
-      this.errorContainer.textContent = '';
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.stl';
-      input.addEventListener('change', async () => {
-        const selectedFile = input.files?.[0];
-        if (!selectedFile) return;
-        this.importStlButton.disabled = true;
-        document.body.style.cursor = 'wait';
-        try {
-          await this.importStl(selectedFile);
-        } catch (error) {
-          this.errorContainer.textContent = error instanceof Error ? error.message : String(error);
-        } finally {
-          document.body.style.cursor = 'default';
-          this.importStlButton.disabled = false;
-        }
-      });
-      input.click();
-    });
+    this.planButton.addEventListener('click', () => this.planLatheCode());
+    this.outsidePlanButton.addEventListener('click', () => this.planLatheCode('outside'));
+    this.insidePlanButton.addEventListener('click', () => this.planLatheCode('inside'));
 
     this.toolButton = container.querySelector<HTMLButtonElement>('.toolButton')!;
     this.toolButton.addEventListener('click', () => this.openToolDialog());
@@ -90,77 +75,19 @@ export class Editor extends EventTarget {
     });
 
     this.saveButton = container.querySelector<HTMLButtonElement>('.saveButton')!;
-    this.loadButton = container.querySelector<HTMLButtonElement>('.loadButton')!;
-    this.loadSelect = container.querySelector<HTMLSelectElement>('.loadSelect')!;
-    this.settingsButton = container.querySelector<HTMLButtonElement>('.settingsButton')!;
     this.scaleButton = container.querySelector<HTMLButtonElement>('.scaleButton')!;
-    this.deleteButton = container.querySelector<HTMLButtonElement>('.deleteButton')!;
-    this.exportButton = container.querySelector<HTMLButtonElement>('.exportButton')!;
-    this.importInput = container.querySelector<HTMLInputElement>('#importFile')!;
-    this.expandCollapseButton = container.querySelector<HTMLButtonElement>('.expandCollapseButton')!;
-    this.moreOptionsSection = container.querySelector<HTMLElement>('#moreOptions')!;
 
-    // Add event listeners for save, load, and delete buttons
     this.saveButton.addEventListener('click', () => this.saveLatheCode());
-    this.loadButton.addEventListener('click', () => this.loadLatheCode());
-    this.deleteButton.addEventListener('click', () => this.deleteLatheCode());
-    this.exportButton.addEventListener('click', () => this.exportLocalStorage());
-    this.importInput.addEventListener('change', (event) => this.handleImportInputChange(event));
-    this.expandCollapseButton.addEventListener('click', () => this.toggleMoreOptions());
-    this.settingsButton.addEventListener('click', () => this.openSettingsDialog());
     this.scaleButton.addEventListener('click', () => this.openScaleDialog());
-    this.updateLoadSelect();
-  }
 
-  private handleImportInputChange(event: Event) {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (file) {
-      this.importLocalStorage(file);
-    }
-  }
-
-  private toggleMoreOptions() {
-    this.moreOptionsSection.classList.toggle('expanded');
-  }
-
-  private isRelevantLocalStorageKey(key: string): boolean {
-    const value = localStorage.getItem(key);
-    if (!value) return false;
-    return value.indexOf('\n') >= 0;
-  }
-
-  // Update the loadSelect dropdown
-  updateLoadSelect() {
-    this.loadSelect.innerHTML = '';
-
-    let hasSavedItems = false;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      // Exclude 'latheCode' from the dropdown options
-      if (key && key !== 'latheCode' && this.isRelevantLocalStorageKey(key)) {
-        hasSavedItems = true;
-        const option = document.createElement('option');
-        option.value = key;
-        option.textContent = key;
-        this.loadSelect.appendChild(option);
-      }
-    }
-
-    // If no saved items, add a placeholder
-    if (!hasSavedItems) {
-      const placeholderOption = document.createElement('option');
-      placeholderOption.textContent = 'No items saved';
-      placeholderOption.disabled = true; // Make it non-selectable
-      this.loadSelect.appendChild(placeholderOption);
+    const savedDraft = localStorage.getItem('latheCode');
+    if (savedDraft?.trim()) {
+      this.latheCodeInput.value = savedDraft;
+      this.update();
+    } else if (options.deferInitialUpdate) {
+      this.updatePlanningButtons(null);
     } else {
-      // Sort the keys alphabetically if there are saved items
-      const sortedOptions = Array.from(this.loadSelect.options)
-        .sort((a, b) => a.text.localeCompare(b.text));
-
-      this.loadSelect.innerHTML = '';
-      sortedOptions.forEach(option => {
-        this.loadSelect.appendChild(option);
-      });
+      this.update();
     }
   }
 
@@ -174,33 +101,20 @@ export class Editor extends EventTarget {
     if (!saveName) return; // Handle empty name case
 
     localStorage.setItem(saveName, saveValue);
-    this.updateLoadSelect();
-
-    // Set the newly saved item as the selected option in the dropdown
-    this.loadSelect.value = saveName;
-  }
-
-  // Load LatheCode by name
-  loadLatheCode() {
-    const loadSelect = document.querySelector<HTMLSelectElement>('.loadSelect')!;
-    const selectedName = loadSelect.value;
-    const latheCode = localStorage.getItem(selectedName);
-    if (latheCode) {
-      this.latheCodeInput.value = latheCode;
-      this.update(); // Update the editor with the loaded code
-    }
-  }
-
-  deleteLatheCode() {
-    const selectedName = this.loadSelect.value;
-    if (selectedName) {
-      localStorage.removeItem(selectedName);
-      this.updateLoadSelect();
-    }
+    this.dispatchEvent(new Event('saved'));
   }
 
   getLatheCode() {
     return this.latheCode;
+  }
+
+  getDefaultText() {
+    return this.defaultLatheCodeText;
+  }
+
+  setText(text: string) {
+    this.latheCodeInput.value = text;
+    this.update();
   }
 
   getPxPerMm() {
@@ -211,119 +125,52 @@ export class Editor extends EventTarget {
     return loadAppSettings();
   }
 
-  private openSettingsDialog() {
-    const currentSettings = this.getAppSettings();
-    const form = document.createElement('form');
-    form.className = 'settingsDialog';
-
-    for (const sectionDefinition of APP_SETTING_SECTIONS) {
-      const section = document.createElement('section');
-      section.className = 'settingsSection';
-      section.dataset.settingSectionId = sectionDefinition.id;
-
-      const title = document.createElement('h3');
-      title.className = 'settingsSectionTitle';
-      title.textContent = sectionDefinition.label;
-      section.appendChild(title);
-
-      const guidance = document.createElement('p');
-      guidance.className = 'settingsSectionGuide';
-      guidance.textContent = sectionDefinition.guidance;
-      section.appendChild(guidance);
-
-      const grid = document.createElement('div');
-      grid.className = 'settingsGrid';
-      section.appendChild(grid);
-
-      for (const definition of sectionDefinition.definitions) {
-        grid.appendChild(this.createSettingsField(definition, currentSettings));
-      }
-
-      form.appendChild(section);
-    }
-
-    const actions = document.createElement('div');
-    actions.className = 'settingsActions';
-
-    const saveButton = document.createElement('button');
-    saveButton.type = 'button';
-    saveButton.textContent = 'Save settings';
-    actions.appendChild(saveButton);
-
-    const resetButton = document.createElement('button');
-    resetButton.type = 'button';
-    resetButton.textContent = 'Reset defaults';
-    actions.appendChild(resetButton);
-
-    form.appendChild(actions);
-
-    const dialog = createFullScreenDialog(form, 'Settings');
-    const updateSectionVisibility = () => this.updateSettingsSectionVisibility(form);
-    const saveSettings = () => {
-      const settings = this.readSettingsForm(form);
-      saveAppSettings(settings);
-      dialog.remove();
-      this.dispatchEvent(new Event('change'));
-    };
-    updateSectionVisibility();
-    form.addEventListener('input', updateSectionVisibility);
-    form.addEventListener('change', updateSectionVisibility);
-    saveButton.addEventListener('click', saveSettings);
-    resetButton.addEventListener('click', () => {
-      this.fillSettingsForm(form, DEFAULT_APP_SETTINGS);
-      updateSectionVisibility();
-    });
-    form.addEventListener('submit', event => {
-      event.preventDefault();
-      saveSettings();
-    });
-  }
-
   private update() {
     try {
       localStorage.setItem('latheCode', this.latheCodeInput.value);
       this.latheCode = new LatheCode(this.latheCodeInput.value);
-      this.planButton.style.display = this.latheCode.getProfiles().length ? 'inline' : 'none';
+      this.updatePlanningButtons(this.latheCode);
       this.errorContainer.textContent = '';
     } catch (error: any) {
       this.latheCode = null;
+      this.updatePlanningButtons(null);
       this.errorContainer.textContent = error.message;
     }
     this.dispatchEvent(new Event('change'));
   }
 
-  private async getLatheCodeForPlanning(): Promise<LatheCode | null> {
+  private updatePlanningButtons(latheCode: LatheCode | null) {
+    const profiles = latheCode?.getProfiles() ?? [];
+    const hasMultipleProfiles = profiles.length > 1;
+    this.planButton.hidden = !profiles.length || hasMultipleProfiles;
+    this.outsidePlanButton.hidden = !hasMultipleProfiles;
+    this.insidePlanButton.hidden = !hasMultipleProfiles;
+  }
+
+  private planLatheCode(side?: ProfileSide) {
+    const latheCode = this.getLatheCodeForPlanning(side);
+    if (latheCode) this.dispatchEvent(new PlanEvent(latheCode, this.getAppSettings()));
+  }
+
+  private getLatheCodeForPlanning(side?: ProfileSide): LatheCode | null {
     if (!this.latheCode) return null;
     const profiles = this.latheCode.getProfiles();
     if (profiles.length <= 1) return this.latheCode;
-    const side = await this.pickProfileSide();
     return side ? this.latheCode.getLatheCodeForProfile(side) : null;
-  }
-
-  private pickProfileSide(): Promise<ProfileSide | null> {
-    return new Promise(resolve => {
-      const container = document.createElement('div');
-      const choose = (side: ProfileSide) => {
-        dialog.remove();
-        resolve(side);
-      };
-
-      const outsideButton = document.createElement('button');
-      outsideButton.textContent = 'Cut outside';
-      outsideButton.addEventListener('click', () => choose('outside'));
-      container.appendChild(outsideButton);
-
-      const insideButton = document.createElement('button');
-      insideButton.textContent = 'Cut inside';
-      insideButton.addEventListener('click', () => choose('inside'));
-      container.appendChild(insideButton);
-
-      const dialog = createFullScreenDialog(container, 'Select profile', () => resolve(null));
-    });
   }
 
   private openToolDialog() {
     openToolDialog(
+      () => this.latheCodeInput.value,
+      text => {
+        this.latheCodeInput.value = text;
+        this.update();
+      });
+  }
+
+  private openSetupDialog(kind: SetupDialogKind) {
+    openSetupDialog(
+      kind,
       () => this.latheCodeInput.value,
       text => {
         this.latheCodeInput.value = text;
@@ -455,6 +302,18 @@ export class Editor extends EventTarget {
     return value;
   }
 
+  async importStlFile(file: File) {
+    this.errorContainer.textContent = '';
+    document.body.style.cursor = 'wait';
+    try {
+      await this.importStl(file);
+    } catch (error) {
+      this.errorContainer.textContent = error instanceof Error ? error.message : String(error);
+    } finally {
+      document.body.style.cursor = 'default';
+    }
+  }
+
   private async importStl(file: File) {
     return new Promise<void>((resolve, reject) => {
       const textBeforeImport = this.latheCodeInput.value;
@@ -486,113 +345,6 @@ export class Editor extends EventTarget {
       reader.onerror = reject;
       reader.readAsArrayBuffer(file);
     });
-  }
-
-  exportLocalStorage() {
-    const data: { [key: string]: string } = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key) {
-        data[key] = localStorage.getItem(key) ?? '';
-      }
-    }
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const href = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = href;
-    link.download = 'localStorageBackup.json';
-    link.click();
-    URL.revokeObjectURL(href);
-  }
-
-  importLocalStorage(file: File) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result as string);
-        for (const key in data) {
-          if (Object.prototype.hasOwnProperty.call(data, key)) {
-            localStorage.setItem(key, data[key]);
-          }
-        }
-        this.updateLoadSelect();
-        this.dispatchEvent(new Event('change'));
-      } catch (e) {
-        console.error('Failed to import data: ', e);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  private readSettingsForm(form: HTMLFormElement): AppSettings {
-    const raw: Partial<Record<AppSettingKey, string>> = {};
-    for (const definition of APP_SETTING_DEFINITIONS) {
-      const input = form.elements.namedItem(definition.key) as HTMLInputElement | HTMLSelectElement | null;
-      raw[definition.key] = input?.value ?? '';
-    }
-    return normalizeAppSettings(raw);
-  }
-
-  private updateSettingsSectionVisibility(form: HTMLFormElement) {
-    const settings = this.readSettingsForm(form);
-    for (const sectionDefinition of APP_SETTING_SECTIONS) {
-      const section = form.querySelector<HTMLElement>(`.settingsSection[data-setting-section-id="${sectionDefinition.id}"]`);
-      if (section) section.hidden = !this.settingsSectionApplies(sectionDefinition, settings);
-    }
-  }
-
-  private settingsSectionApplies(sectionDefinition: AppSettingSectionDefinition, settings: AppSettings): boolean {
-    return !sectionDefinition.plannerEngines || sectionDefinition.plannerEngines.includes(settings.plannerEngine);
-  }
-
-  private createSettingsField(definition: AppSettingDefinition, currentSettings: AppSettings): HTMLLabelElement {
-    const field = document.createElement('label');
-    field.className = 'settingField';
-
-    const heading = document.createElement('span');
-    heading.className = 'settingHeading';
-    heading.textContent = definition.label;
-    field.appendChild(heading);
-
-    let input: HTMLInputElement | HTMLSelectElement;
-    if (definition.type === 'select') {
-      const select = document.createElement('select');
-      for (const optionDefinition of definition.options) {
-        const option = document.createElement('option');
-        option.value = optionDefinition.value;
-        option.textContent = optionDefinition.label;
-        select.appendChild(option);
-      }
-      input = select;
-    } else {
-      const numberInput = document.createElement('input');
-      numberInput.type = 'number';
-      numberInput.min = String(definition.min);
-      numberInput.max = String(definition.max);
-      numberInput.step = String(definition.step);
-      input = numberInput;
-    }
-    input.className = 'settingInput';
-    input.name = definition.key;
-    input.value = String(currentSettings[definition.key]);
-    field.appendChild(input);
-
-    const guide = document.createElement('span');
-    guide.className = 'settingGuide';
-    guide.textContent = definition.type === 'select'
-      ? `${definition.guidance} Default: ${definition.options.find(option => option.value === definition.defaultValue)?.label ?? definition.defaultValue}.`
-      : `${definition.guidance} Reasonable values: ${definition.reasonableValues} ${definition.unit}. Default: ${definition.defaultValue} ${definition.unit}.`;
-    field.appendChild(guide);
-
-    return field;
-  }
-
-  private fillSettingsForm(form: HTMLFormElement, settings: AppSettings) {
-    for (const definition of APP_SETTING_DEFINITIONS) {
-      const input = form.elements.namedItem(definition.key) as HTMLInputElement | HTMLSelectElement | null;
-      if (input) input.value = String(settings[definition.key]);
-    }
   }
 }
 

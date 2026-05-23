@@ -13,6 +13,7 @@ export type AppSettings = {
   plannerCanvasSizePx: number,
   moveTimeoutMs: number,
   stlDebugCanvasSizePx: number,
+  partRevolutionDegrees: number,
   vectorComparisonToleranceMm: number,
   vectorContactClearanceMm: number,
   vectorToolpathGougeToleranceAreaMm2: number,
@@ -43,6 +44,7 @@ export type AppSettings = {
   stlProjectionMinimumAreaPx2: number,
   stlConstantRadiusTolerancePx: number,
   stlSizeMatchTolerance: number,
+  showNanoElsH4Controls: boolean,
 };
 
 export type AppSettingKey = keyof AppSettings;
@@ -74,7 +76,12 @@ export type SelectAppSettingDefinition = BaseAppSettingDefinition & {
   }[],
 };
 
-export type AppSettingDefinition = NumericAppSettingDefinition | SelectAppSettingDefinition;
+export type BooleanAppSettingDefinition = BaseAppSettingDefinition & {
+  type: 'boolean',
+  defaultValue: boolean,
+};
+
+export type AppSettingDefinition = NumericAppSettingDefinition | SelectAppSettingDefinition | BooleanAppSettingDefinition;
 
 export type AppSettingSectionDefinition = {
   id: string,
@@ -93,6 +100,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   plannerCanvasSizePx: 500,
   moveTimeoutMs: 50,
   stlDebugCanvasSizePx: 500,
+  partRevolutionDegrees: 360,
   vectorComparisonToleranceMm: 1e-6,
   vectorContactClearanceMm: 1e-4,
   vectorToolpathGougeToleranceAreaMm2: 1e-4,
@@ -123,6 +131,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   stlProjectionMinimumAreaPx2: 0.001,
   stlConstantRadiusTolerancePx: 1,
   stlSizeMatchTolerance: 0.2,
+  showNanoElsH4Controls: false,
 };
 
 export const DEFAULT_PX_PER_MM = DEFAULT_APP_SETTINGS.pxPerMm;
@@ -641,6 +650,20 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
     guidance: 'Display-only settings for previews and diagnostic canvases.',
     definitions: [
       {
+        key: 'partRevolutionDegrees',
+        type: 'number',
+        label: '3D part revolution',
+        storageKey: 'partRevolutionDegrees',
+        defaultValue: DEFAULT_APP_SETTINGS.partRevolutionDegrees,
+        min: 45,
+        max: 360,
+        step: 1,
+        unit: 'degrees',
+        reasonableValues: '180 to 360',
+        guidance: 'Angular sweep used when revolving the part in the 3D preview. Use 360 for a complete solid or 270 for a cutaway view.',
+        integer: true,
+      },
+      {
         key: 'plannerCanvasSizePx',
         type: 'number',
         label: 'Planner preview size',
@@ -684,16 +707,33 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
       },
     ],
   },
+  {
+    id: 'gcodeOutput',
+    label: 'GCode Output',
+    guidance: 'Controls for generated G-code output actions and sender integrations.',
+    definitions: [
+      {
+        key: 'showNanoElsH4Controls',
+        type: 'boolean',
+        label: 'Show NanoEls H4 controls',
+        storageKey: 'showNanoElsH4Controls',
+        defaultValue: DEFAULT_APP_SETTINGS.showNanoElsH4Controls,
+        guidance: 'Show browser Serial API buttons for running or saving generated G-code on NanoEls H4. Keep this off if you usually copy G-code or use another controller.',
+      },
+    ],
+  },
 ];
 
 export const APP_SETTING_DEFINITIONS: readonly AppSettingDefinition[] = APP_SETTING_SECTIONS.flatMap(section => section.definitions);
+
+type RawAppSettingValue = number | string | boolean | null | undefined;
 
 export function parsePxPerMm(value: number | string | null | undefined): number {
   return parseNumericAppSetting(getNumericAppSettingDefinition('pxPerMm'), value);
 }
 
-export function normalizeAppSettings(values: Partial<Record<AppSettingKey, number | string | null | undefined>> = {}): AppSettings {
-  const settings = {...DEFAULT_APP_SETTINGS} as Record<AppSettingKey, number | PlannerEngine>;
+export function normalizeAppSettings(values: Partial<Record<AppSettingKey, RawAppSettingValue>> = {}): AppSettings {
+  const settings = {...DEFAULT_APP_SETTINGS} as Record<AppSettingKey, number | PlannerEngine | boolean>;
   for (const definition of APP_SETTING_DEFINITIONS) {
     settings[definition.key] = parseAppSetting(definition, values[definition.key]);
   }
@@ -716,22 +756,32 @@ export function saveAppSettings(settings: Partial<AppSettings>, storage: Storage
   return normalized;
 }
 
-function parseAppSetting(definition: AppSettingDefinition, value: number | string | null | undefined): number | PlannerEngine {
+function parseAppSetting(definition: AppSettingDefinition, value: RawAppSettingValue): number | PlannerEngine | boolean {
   if (definition.type === 'select') return parseSelectAppSetting(definition, value);
+  if (definition.type === 'boolean') return parseBooleanAppSetting(definition, value);
   return parseNumericAppSetting(definition, value);
 }
 
-function parseSelectAppSetting(definition: SelectAppSettingDefinition, value: number | string | null | undefined): PlannerEngine {
+function parseSelectAppSetting(definition: SelectAppSettingDefinition, value: RawAppSettingValue): PlannerEngine {
   if (typeof value !== 'string') return definition.defaultValue;
   return definition.options.some(option => option.value === value) ? value as PlannerEngine : definition.defaultValue;
 }
 
-function parseNumericAppSetting(definition: NumericAppSettingDefinition, value: number | string | null | undefined): number {
+function parseNumericAppSetting(definition: NumericAppSettingDefinition, value: RawAppSettingValue): number {
   if (value === null || value === undefined || value === '') return definition.defaultValue;
+  if (typeof value === 'boolean') return definition.defaultValue;
   const numberValue = Number(value);
   if (!Number.isFinite(numberValue)) return definition.defaultValue;
   const rounded = definition.integer ? Math.round(numberValue) : numberValue;
   return Math.min(definition.max, Math.max(definition.min, rounded));
+}
+
+function parseBooleanAppSetting(definition: BooleanAppSettingDefinition, value: RawAppSettingValue): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return definition.defaultValue;
+  if (value === 'true' || value === '1') return true;
+  if (value === 'false' || value === '0') return false;
+  return definition.defaultValue;
 }
 
 function getNumericAppSettingDefinition(key: AppSettingKey): NumericAppSettingDefinition {

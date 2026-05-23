@@ -3,6 +3,10 @@ body {
   padding: 0 20px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .vcont {
   display: grid;
   grid-template-columns: repeat(auto-fit, 500px);
@@ -29,6 +33,187 @@ body {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
+}
+.startSection {
+  width: 100%;
+}
+.startSection[hidden] {
+  display: none;
+}
+.startSection p {
+  margin: 0 0 14px;
+  color: #444444;
+  line-height: 1.35;
+}
+
+.startGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+button.startCard {
+  display: flex;
+  min-height: 120px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #ccd9c7;
+  background-color: #f4faf1;
+  color: #000000;
+  text-align: left;
+}
+
+button.startCard:hover {
+  background-color: #ecf6e7;
+}
+
+.startCard strong {
+  font-size: 17px;
+}
+
+.startCard span {
+  color: #444444;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.startPanel {
+  border-top: 1px solid #dddddd;
+  border-bottom: 1px solid #dddddd;
+  padding: 12px 0;
+  margin: 14px 0;
+}
+
+.startPanel h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.startActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.overflowContainer {
+  position: relative;
+  display: inline-flex;
+}
+
+.overflowMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  display: flex;
+  min-width: 150px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #cccccc;
+  background-color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.overflowMenu button,
+.overflowMenu .button-like {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  text-align: left;
+}
+
+.sampleDialog {
+  width: 100%;
+}
+
+.sampleDialogGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+button.sampleDialogCard {
+  display: flex;
+  min-height: 340px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #d7d7d7;
+  background-color: #ffffff;
+  color: #000000;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.samplePreview {
+  display: grid;
+  place-items: center;
+  width: min(216px, 100%);
+  aspect-ratio: 1 / 1;
+  align-self: center;
+  overflow: hidden;
+}
+
+.samplePreviewCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.samplePreviewFallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background-color: #f5f5f5;
+  color: #555555;
+  font-size: 13px;
+}
+
+.samplePreviewUnavailable {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background-color: #f7f7f7;
+  color: #666666;
+  font-size: 13px;
+}
+
+button.sampleDialogCard:hover {
+  background-color: #ffffff;
+  border-color: #b8b8b8;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.sampleDialogCard strong {
+  font-size: 17px;
+}
+
+.sampleDialogCard span {
+  color: #444444;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.sampleDialogCard small {
+  margin-top: auto;
+  color: #666666;
+  font-size: 12px;
 }
 
 .errorContainer:not(:empty) {
@@ -70,7 +255,7 @@ body {
 }
 
 .dialogCloseButton {
-  margin-top: 12px;
+  margin: 0;
 }
 
 .toolField {
@@ -220,17 +405,47 @@ body {
   width: fit-content;
 }
 
+#crossSectionContainer,
 #sceneContainer {
   width: 500px;
 }
 
-#sceneContainer canvas {
-  display: block;
+#crossSectionContainer[hidden],
+#sceneContainer[hidden] {
+  display: none;
 }
 
-.sceneDimensions {
-  margin: 6px 0 0;
+.crossSectionSvg {
+  display: block;
+  width: 100%;
+  height: auto;
+  box-sizing: border-box;
+  background-color: #ffffff;
+}
+
+.crossSectionDimensions {
+  margin: 6px 0 8px;
   line-height: 1.35;
+}
+
+.crossSectionStock {
+  fill: #cfe7b5;
+  fill-opacity: 0.32;
+}
+
+.crossSectionPart {
+  fill: #b8c0c8;
+  fill-opacity: 0.9;
+}
+
+.crossSectionAxis,
+.crossSectionOutsideProfile,
+.crossSectionInsideProfile {
+  display: none;
+}
+
+#sceneContainer canvas {
+  display: block;
 }
 
 .selectorContainer {
@@ -267,6 +482,34 @@ body {
   margin-bottom: 8px;
 }
 
+.movesViewer {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.movesViewer canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.movesScrubber {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.movesScrubberInput {
+  width: 100%;
+}
+
+.movesScrubberOutput {
+  color: #444444;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 #gcodeContainer textarea {
   box-sizing: border-box;
   height: 400px;
@@ -275,26 +518,66 @@ body {
 
 button {
   display: inline-block;
-  padding: 12px 24px;
-  margin: 8px 4px 8px 0;
-  font-size: 16px;
+  padding: 6px 12px;
+  margin: 4px 4px 4px 0;
+  font: inherit;
   text-align: center;
   text-decoration: none;
-  color: #000;
-  background-color: #ffd500;
-  border-radius: 0;
-  border: none;
+  color: #222222;
+  background-color: #f4f4f4;
+  border-radius: 3px;
+  border: 1px solid #bdbdbd;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
-
 button:hover {
-  background-color: #ffff00;
+  background-color: #e9e9e9;
+  border-color: #999999;
 }
 
 button:disabled {
-  background-color: #ccc;
+  color: #777777;
+  background-color: #eeeeee;
+  border-color: #d0d0d0;
   cursor: not-allowed;
+}
+
+.editorToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.editorToolbarGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0;
+  align-items: center;
+}
+
+.editorToolbarGroup button {
+  margin: 0;
+  min-height: 32px;
+  border-radius: 3px;
+}
+
+.editorToolbarGroup button:not([hidden]) + button:not([hidden]) {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.editorToolbarGroup button:not([hidden]):has(+ button:not([hidden])) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.editorToolbarGroup button:hover,
+.editorToolbarGroup button:focus {
+  position: relative;
+  z-index: 1;
 }
 
 
@@ -321,6 +604,7 @@ progress {
 .settings-group {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
@@ -328,6 +612,10 @@ progress {
 .save-group .saveNameInput,
 .load-group .loadSelect {
   flex-grow: 1;
+}
+
+.load-group .loadSelect {
+  height: 32px;
 }
 
 .settingsDialog {
@@ -385,6 +673,12 @@ progress {
   font-size: 16px;
 }
 
+.settingInput[type="checkbox"] {
+  align-self: flex-start;
+  width: auto;
+  margin: 0;
+}
+
 .settingGuide {
   color: #444444;
   font-size: 13px;
@@ -395,6 +689,140 @@ progress {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.settingsActions button {
+  min-height: 32px;
+  margin: 0;
+}
+
+.setupDialog {
+  max-width: 980px;
+}
+
+.setupIntro {
+  max-width: 760px;
+  margin: 0 0 14px;
+  color: #444444;
+  line-height: 1.4;
+}
+
+.setupLayout {
+  display: grid;
+  grid-template-columns: minmax(260px, 380px) minmax(260px, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin: 12px 0;
+}
+
+.setupVisual {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #dddddd;
+  background-color: #fafafa;
+}
+
+.setupVisual svg {
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+}
+
+.setupVisual text {
+  fill: #333333;
+  font-size: 13px;
+}
+
+.setupVisualCaption {
+  margin: 0;
+  color: #444444;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.setupControls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.setupFieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setupChoiceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+button.setupChoiceButton {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #cccccc;
+  background-color: #ffffff;
+  color: #222222;
+  text-align: left;
+}
+
+button.setupChoiceButton:hover {
+  background-color: #f3f3f3;
+}
+
+button.setupChoiceButton.selected,
+button.setupChoiceButton.selected:hover {
+  border-color: #111111;
+  background-color: #fff7bf;
+}
+
+.setupChoiceButton strong {
+  font-size: 14px;
+}
+
+.setupChoiceButton span {
+  color: #444444;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.setupSegmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+button.setupSegmentButton {
+  display: inline-block;
+  min-width: 84px;
+  text-align: center;
+  border-radius: 0;
+}
+
+button.setupSegmentButton + button.setupSegmentButton {
+  margin-left: -1px;
+}
+
+button.setupSegmentButton:first-child {
+  border-radius: 3px 0 0 3px;
+}
+
+button.setupSegmentButton:last-child {
+  border-radius: 0 3px 3px 0;
+}
+
+@media (max-width: 760px) {
+  .setupLayout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .toolbar input[type="text"],
@@ -411,23 +839,27 @@ progress {
 
 .toolbar .button-like {
   display: inline-block;
-  padding: 12px 24px;
-  margin: 8px 4px 8px 0;
-  font-size: 16px;
+  padding: 6px 12px;
+  margin: 4px 4px 4px 0;
+  font: inherit;
   text-align: center;
   text-decoration: none;
-  color: #000;
-  background-color: #ffd500;
-  border-radius: 0;
-  border: none;
+  color: #222222;
+  background-color: #f4f4f4;
+  border-radius: 3px;
+  border: 1px solid #bdbdbd;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-#moreOptions {
-  display: none;
+.toolbar .button-like:hover {
+  background-color: #e9e9e9;
+  border-color: #999999;
 }
 
-#moreOptions.expanded {
-  display: block;
+.toolbar .overflowMenu button,
+.toolbar .overflowMenu .button-like {
+  width: 100%;
+  margin: 0;
+  text-align: left;
 }

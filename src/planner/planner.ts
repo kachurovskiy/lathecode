@@ -112,17 +112,73 @@ export class Planner extends EventTarget {
 
   private drawMoves(moves: Move[]): void {
     this.container.insertAdjacentHTML('beforeend', '<h3>Toolpath</h3>');
-    this.container.appendChild(createMovesCanvas(moves, this.settings.plannerCanvasSizePx, this.settings.plannerCanvasSizePx / 2, this.settings.moveTimeoutMs));
+    this.container.appendChild(createMovesViewer(moves, this.settings.plannerCanvasSizePx, this.settings.plannerCanvasSizePx / 2, this.settings.moveTimeoutMs));
     const button = document.createElement('button');
     button.innerText = 'Zoom in';
     button.addEventListener('click', () => {
-      createFullScreenDialog(createMovesCanvas(moves, window.visualViewport!.width - 100, window.visualViewport!.height - 200, this.settings.moveTimeoutMs), 'Toolpath');
+      const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      createFullScreenDialog(
+        createMovesViewer(moves, viewportWidth - 100, viewportHeight - 200, this.settings.moveTimeoutMs),
+        'Toolpath');
     });
     this.container.appendChild(button);
   }
 }
 
 export function createMovesCanvas(moves: Move[], width: number, height: number, moveTimeoutMs = DEFAULT_MOVE_TIMEOUT_MS): HTMLCanvasElement {
+  const renderer = createMovesRenderer(moves, width, height);
+  renderer.startAnimation(moveTimeoutMs);
+  return renderer.canvas;
+}
+
+export function createMovesViewer(moves: Move[], width: number, height: number, moveTimeoutMs = DEFAULT_MOVE_TIMEOUT_MS): HTMLDivElement {
+  const renderer = createMovesRenderer(moves, width, height);
+  const viewer = document.createElement('div');
+  viewer.className = 'movesViewer';
+  viewer.appendChild(renderer.canvas);
+
+  const scrubber = document.createElement('div');
+  scrubber.className = 'movesScrubber';
+
+  const range = document.createElement('input');
+  range.type = 'range';
+  range.className = 'movesScrubberInput';
+  range.min = '0';
+  range.max = String(moves.length);
+  range.step = '1';
+  range.value = String(moves.length);
+  range.setAttribute('aria-label', 'Toolpath execution state');
+  scrubber.appendChild(range);
+
+  const output = document.createElement('span');
+  output.className = 'movesScrubberOutput';
+  scrubber.appendChild(output);
+  viewer.appendChild(scrubber);
+
+  const updateScrubber = (moveCount: number) => {
+    const clampedMoveCount = clampMoveCount(moveCount, moves.length);
+    range.value = String(clampedMoveCount);
+    output.textContent = `Move ${clampedMoveCount} / ${moves.length}`;
+  };
+
+  range.addEventListener('input', () => {
+    renderer.stopAnimation();
+    const moveCount = clampMoveCount(Number(range.value), moves.length);
+    renderer.render(moveCount);
+    updateScrubber(moveCount);
+  });
+
+  renderer.startAnimation(moveTimeoutMs, updateScrubber);
+  return viewer;
+}
+
+function createMovesRenderer(moves: Move[], width: number, height: number): {
+  canvas: HTMLCanvasElement,
+  render: (moveCount: number) => void,
+  startAnimation: (moveTimeoutMs: number, onFrame?: (moveCount: number) => void) => void,
+  stopAnimation: () => void,
+} {
   let minXMm = Infinity;
   let maxXMm = -Infinity;
   let minYMm = Infinity;
@@ -156,19 +212,42 @@ export function createMovesCanvas(moves: Move[], width: number, height: number, 
     context.lineTo(xToPx(move.xStartMm + move.xDeltaMm) + xOffset, yToPx(move.yStartMm + move.yDeltaMm));
     context.stroke();
   }
-  const timeMs = getMoveTimeout(moveTimeoutMs);
-  const runDrawMoveWithDelay = (moves: Move[], index: number) => {
-    if (index < moves.length) {
-        drawMove(moves[index]);
-        const next = () => runDrawMoveWithDelay(moves, index + 1);
-        if (timeMs) setTimeout(next, timeMs);
-        else next();
-    }
-  }
-  if (timeMs) runDrawMoveWithDelay(moves, 0);
-  else moves.forEach(drawMove);
 
-  return canvas;
+  let animationId = 0;
+  const render = (moveCount: number) => {
+    const clampedMoveCount = clampMoveCount(moveCount, moves.length);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < clampedMoveCount; i++) {
+      drawMove(moves[i]);
+    }
+  };
+
+  const stopAnimation = () => {
+    animationId++;
+  };
+
+  const startAnimation = (moveTimeoutMs: number, onFrame: (moveCount: number) => void = () => {}) => {
+    const timeMs = getMoveTimeout(moveTimeoutMs);
+    const currentAnimationId = ++animationId;
+
+    if (!timeMs) {
+      render(moves.length);
+      onFrame(moves.length);
+      return;
+    }
+
+    const drawFrame = (moveCount: number) => {
+      if (currentAnimationId !== animationId) return;
+      render(moveCount);
+      onFrame(moveCount);
+      if (moveCount < moves.length) {
+        setTimeout(() => drawFrame(moveCount + 1), timeMs);
+      }
+    };
+    drawFrame(0);
+  };
+
+  return {canvas, render, startAnimation, stopAnimation};
 }
 
 function getMoveTimeout(defaultMoveTimeoutMs = DEFAULT_MOVE_TIMEOUT_MS) {
@@ -176,4 +255,9 @@ function getMoveTimeout(defaultMoveTimeoutMs = DEFAULT_MOVE_TIMEOUT_MS) {
   const value = params.get('moveTimeout');
   if (value) return Number(value);
   return defaultMoveTimeoutMs;
+}
+
+function clampMoveCount(value: number, max: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(max, Math.floor(value)));
 }

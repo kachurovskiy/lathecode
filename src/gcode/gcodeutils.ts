@@ -10,6 +10,7 @@ export function createGCode(latheCode: LatheCode, moves: Move[]): string {
     '',
     '; Run time $duration min, cutting $cutPercent% of time',
     `; Working area ${area.widthMm.toFixed(2)} by ${area.heightMm.toFixed(2)} mm`,
+    `; Axes expected: Z+ points ${latheCode.getZDirection().toLowerCase()}, X+ points ${latheCode.getXDirection().toLowerCase()}`,
     '',
     'G21 ; metric',
     'G18 ; ZX plane',

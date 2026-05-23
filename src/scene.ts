@@ -1,23 +1,21 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { LatheCode, Point, Segment, Stock, type Tool } from './common/lathecode';
+import { DEFAULT_APP_SETTINGS, type AppSettings, normalizeAppSettings } from './common/settings';
 
 export class Scene extends THREE.Scene {
   private camera: THREE.OrthographicCamera;
   private renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer();
   private controls: OrbitControls;
+  private settings: AppSettings;
   private latheCode: LatheCode | null = null;
   private latheMesh: THREE.Object3D | null = null;
   private stock: THREE.Object3D | null = null;
   private orientationMarkers: THREE.Object3D | null = null;
-  private dimensionsElement: HTMLParagraphElement;
 
-  constructor(readonly container: HTMLElement, size = 500) {
+  constructor(readonly container: HTMLElement, size = 500, settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS) {
     super();
-
-    this.dimensionsElement = document.createElement('p');
-    this.dimensionsElement.className = 'sceneDimensions';
-    container.appendChild(this.dimensionsElement);
+    this.settings = normalizeAppSettings(settings);
 
     this.background = new THREE.Color(0xffffff);
     this.renderer.shadowMap.enabled = true;
@@ -33,9 +31,7 @@ export class Scene extends THREE.Scene {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.autoRotate = true;
     this.animate();
-    this.rotation.z = -8.5;
-    this.rotation.y = 1;
-    this.rotation.x = 1.5;
+    applyLatheViewRotation(this);
   }
 
   getLatheMesh(): THREE.Object3D | null {
@@ -43,39 +39,11 @@ export class Scene extends THREE.Scene {
   }
 
   private fit(...objects: THREE.Object3D[]) {
-    const box = new THREE.Box3();
-    objects.forEach(object => box.union(new THREE.Box3().setFromObject(object)));
-    if (box.isEmpty()) return;
-
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDimension = Math.max(size.x, size.y, size.z);
-    const desiredSize = maxDimension * 0.7;
-    const desiredZoom = Math.max(1 / desiredSize, 1);
-    this.camera.left = -desiredSize;
-    this.camera.right = desiredSize;
-    this.camera.top = desiredSize;
-    this.camera.bottom = -desiredSize;
-    this.camera.zoom = desiredZoom;
-    this.camera.near = -100000;
-    this.camera.far = 100000;
-    this.camera.updateProjectionMatrix();
+    fitLatheCamera(this.camera, objects);
   }
 
   private addLight() {
-    let light;
-    light = new THREE.DirectionalLight(0xffffff, 1);
-    light.castShadow = true;
-    light.position.set(0, 1, 0);
-    this.add(light);
-    light = new THREE.DirectionalLight(0xffffff, 0.8);
-    light.castShadow = true;
-    light.position.set(1, 0, 0);
-    this.add(light);
-    light = new THREE.DirectionalLight(0xffffff, 0.6);
-    light.castShadow = true;
-    light.position.set(0, 0, 1);
-    this.add(light);
+    addLatheLights(this);
   }
 
   private animate() {
@@ -84,27 +52,26 @@ export class Scene extends THREE.Scene {
     this.renderer.render(this, this.camera);
   }
 
+  setSettings(settings: Partial<AppSettings>) {
+    this.settings = normalizeAppSettings(settings);
+  }
+
   setLatheCode(value: LatheCode | null) {
     if (this.latheCode) {
       this.setLatheMesh(null);
       this.setStock(null);
       this.setOrientationMarkers(null);
-      this.updateDimensions(null);
     }
     this.latheCode = value;
     if (this.latheCode) {
-      const stockSpec = this.latheCode.getStock();
-      if (!stockSpec) throw new Error('stock is required');
-      const stock = this.createStock(stockSpec);
-      this.setStock(centerObject(stock));
-      const latheMesh = this.createLatheMesh();
-      latheMesh.position.set(stock.position.x, stock.position.y - stockSpec.length / 2, stock.position.z);
-      this.setLatheMesh(latheMesh);
-      this.updateDimensions(latheMesh, stockSpec);
-      const orientationMarkers = this.createOrientationMarkers(stockSpec);
-      orientationMarkers.position.copy(stock.position);
-      this.setOrientationMarkers(orientationMarkers);
-      this.fit(stock, orientationMarkers);
+      const renderObjects = createLatheRenderObjects(this.latheCode, {
+        includeOrientationMarkers: true,
+        partRevolutionDegrees: this.settings.partRevolutionDegrees,
+      });
+      this.setStock(renderObjects.stockMesh);
+      this.setLatheMesh(renderObjects.latheMesh);
+      this.setOrientationMarkers(renderObjects.orientationMarkers ?? null);
+      this.fit(renderObjects.stockMesh, renderObjects.orientationMarkers!);
     }
   }
 
@@ -125,78 +92,152 @@ export class Scene extends THREE.Scene {
     this.orientationMarkers = value;
     if (this.orientationMarkers) this.add(this.orientationMarkers);
   }
+}
 
-  private updateDimensions(part: THREE.Object3D | null, stock?: Stock) {
-    if (!part) {
-      this.dimensionsElement.textContent = '';
-      return;
-    }
+export type LatheRenderObjects = {
+  stockSpec: Stock,
+  stockMesh: THREE.Object3D,
+  latheMesh: THREE.Object3D,
+  orientationMarkers?: THREE.Object3D,
+};
 
-    const box = new THREE.Box3().setFromObject(part);
-    if (box.isEmpty()) {
-      this.dimensionsElement.textContent = '';
-      return;
-    }
+export type LatheRenderOptions = {
+  includeOrientationMarkers?: boolean,
+  partRevolutionDegrees?: number,
+};
 
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const diameter = Math.max(size.x, size.z);
-    this.dimensionsElement.textContent = `Part ⌀${formatDimension(diameter)} L${formatDimension(size.y)}mm, stock ${formatStockDimensions(stock)}`;
-  }
+export function createLatheRenderObjects(
+    latheCode: LatheCode,
+    options: LatheRenderOptions = {}): LatheRenderObjects {
+  const stockSpec = latheCode.getStock();
+  if (!stockSpec) throw new Error('stock is required');
 
-  private createLatheMesh(): THREE.Object3D {
-    const profiles = this.latheCode?.getProfiles() || [];
-    if (profiles.length > 1) {
-      return this.createCombinedLatheMesh();
-    }
-    const profile = profiles[0];
-    if (!profile) throw new Error('Unable to build the profile');
-    const vectors = profile.segments.map(s => getApproxPoints(s)).flat();
-    const latheGeometry = new THREE.LatheGeometry(vectors, 256, 0);
-    return new THREE.Mesh(latheGeometry, createMetalMaterial());
-  }
+  const stockMesh = centerObject(createStockMesh(stockSpec));
+  const latheMesh = createLatheMesh(latheCode, options);
+  latheMesh.position.set(stockMesh.position.x, stockMesh.position.y - stockSpec.length / 2, stockMesh.position.z);
 
-  private createCombinedLatheMesh(): THREE.Object3D {
-    const outside = segmentsToVectors(this.latheCode!.getOutsideProfileSegments());
-    const inside = segmentsToVectors(this.latheCode!.getInsideProfileSegments());
-    if (outside.length < 2 || inside.length < 2) throw new Error('Unable to build combined inside/outside profile');
+  const orientationMarkers = options.includeOrientationMarkers
+    ? createOrientationMarkers(latheCode, stockSpec, stockMesh.position)
+    : undefined;
 
-    const profile = removeConsecutiveVectorDuplicates([
-      inside[0],
-      outside[0],
-      ...outside.slice(1),
-      inside.at(-1)!,
-      ...inside.slice(0, -1).reverse(),
-      inside[0],
-    ]);
-    const latheGeometry = new THREE.LatheGeometry(profile, 256, 0);
-    return new THREE.Mesh(latheGeometry, createMetalMaterial());
-  }
+  return {stockSpec, stockMesh, latheMesh, orientationMarkers};
+}
 
-  private createStock(stock: Stock) {
-    const geometry = new THREE.LatheGeometry(stock.getSegments().map(s => getApproxPoints(s)).flat(), 256, 0);
-    geometry.translate(0, -stock.length / 2, 0);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
-    return new THREE.Mesh(geometry, material);
-  }
+export function createLatheRenderGroup(
+    latheCode: LatheCode,
+    options: LatheRenderOptions = {}): {group: THREE.Group, objects: LatheRenderObjects} {
+  const objects = createLatheRenderObjects(latheCode, options);
+  const group = new THREE.Group();
+  group.add(objects.stockMesh);
+  group.add(objects.latheMesh);
+  if (objects.orientationMarkers) group.add(objects.orientationMarkers);
+  return {group, objects};
+}
 
-  private createOrientationMarkers(stock: Stock) {
-    const group = new THREE.Group();
-    const maxDimension = Math.max(stock.length, stock.diameter, 1);
-    const markerSize = Math.min(Math.max(maxDimension * 0.08, 0.16), Math.max(stock.radius * 0.5, 0.2));
-    const sideOffset = Math.max(maxDimension * 0.025, 0.08);
-    const chuckY = stock.length / 2;
-    const zZeroY = -stock.length / 2;
-    const chuckColor = 0x555555;
+export function addLatheLights(target: THREE.Object3D) {
+  let light;
+  light = new THREE.DirectionalLight(0xffffff, 1);
+  light.castShadow = true;
+  light.position.set(0, 1, 0);
+  target.add(light);
+  light = new THREE.DirectionalLight(0xffffff, 0.8);
+  light.castShadow = true;
+  light.position.set(1, 0, 0);
+  target.add(light);
+  light = new THREE.DirectionalLight(0xffffff, 0.6);
+  light.castShadow = true;
+  light.position.set(0, 0, 1);
+  target.add(light);
+}
 
-    const chuck = createRevolvedSquare(stock.radius * 1.14, markerSize, chuckColor, 0.75);
-    chuck.position.y = chuckY + sideOffset + markerSize / 2;
-    group.add(chuck);
+export function applyLatheViewRotation(object: THREE.Object3D) {
+  object.rotation.z = -8.5;
+  object.rotation.y = 1;
+  object.rotation.x = 1.5;
+}
 
-    group.add(createToolAtZero(this.latheCode!.getTool(), zZeroY, markerSize));
+export function fitLatheCamera(camera: THREE.OrthographicCamera, objects: THREE.Object3D[]) {
+  const box = new THREE.Box3();
+  objects.forEach(object => box.union(new THREE.Box3().setFromObject(object)));
+  if (box.isEmpty()) return;
 
-    return group;
-  }
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxDimension = Math.max(size.x, size.y, size.z);
+  const desiredSize = maxDimension * 0.7;
+  const desiredZoom = Math.max(1 / desiredSize, 1);
+  camera.left = -desiredSize;
+  camera.right = desiredSize;
+  camera.top = desiredSize;
+  camera.bottom = -desiredSize;
+  camera.zoom = desiredZoom;
+  camera.near = -100000;
+  camera.far = 100000;
+  camera.updateProjectionMatrix();
+}
+
+function createLatheMesh(latheCode: LatheCode, options: LatheRenderOptions = {}): THREE.Object3D {
+  const profiles = latheCode.getProfiles();
+  if (profiles.length > 1) return createCombinedLatheMesh(latheCode, options);
+  const profile = profiles[0];
+  if (!profile) throw new Error('Unable to build the profile');
+  const vectors = profile.segments.map(s => getApproxPoints(s)).flat();
+  const latheGeometry = new THREE.LatheGeometry(vectors, 256, 0, getPartRevolutionRadians(options.partRevolutionDegrees));
+  return new THREE.Mesh(latheGeometry, createMetalMaterial());
+}
+
+function createCombinedLatheMesh(latheCode: LatheCode, options: LatheRenderOptions = {}): THREE.Object3D {
+  const outside = segmentsToVectors(latheCode.getOutsideProfileSegments());
+  const inside = segmentsToVectors(latheCode.getInsideProfileSegments());
+  if (outside.length < 2 || inside.length < 2) throw new Error('Unable to build combined inside/outside profile');
+
+  const profile = removeConsecutiveVectorDuplicates([
+    inside[0],
+    outside[0],
+    ...outside.slice(1),
+    inside.at(-1)!,
+    ...inside.slice(0, -1).reverse(),
+    inside[0],
+  ]);
+  const latheGeometry = new THREE.LatheGeometry(profile, 256, 0, getPartRevolutionRadians(options.partRevolutionDegrees));
+  return new THREE.Mesh(latheGeometry, createMetalMaterial());
+}
+
+function getPartRevolutionRadians(degrees = DEFAULT_APP_SETTINGS.partRevolutionDegrees): number {
+  const clampedDegrees = Math.min(360, Math.max(1, degrees));
+  return clampedDegrees >= 360 ? Math.PI * 2 : clampedDegrees * Math.PI / 180;
+}
+
+function createStockMesh(stock: Stock) {
+  const geometry = new THREE.LatheGeometry(stock.getSegments().map(s => getApproxPoints(s)).flat(), 256, 0);
+  geometry.translate(0, -stock.length / 2, 0);
+  const material = new THREE.MeshBasicMaterial({
+    color: STOCK_MATERIAL_COLOR,
+    transparent: true,
+    opacity: STOCK_MATERIAL_OPACITY,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  return new THREE.Mesh(geometry, material);
+}
+
+function createOrientationMarkers(latheCode: LatheCode, stock: Stock, stockPosition: THREE.Vector3) {
+  const group = new THREE.Group();
+  const maxDimension = Math.max(stock.length, stock.diameter, 1);
+  const markerSize = Math.min(Math.max(maxDimension * 0.08, 0.16), Math.max(stock.radius * 0.5, 0.2));
+  const sideOffset = Math.max(maxDimension * 0.025, 0.08);
+  const chuckY = stock.length / 2;
+  const zZeroY = -stock.length / 2;
+  const chuckColor = 0x555555;
+
+  const chuck = createRevolvedSquare(stock.radius * 1.14, markerSize, chuckColor, 0.75);
+  chuck.position.y = chuckY + sideOffset + markerSize / 2;
+  group.add(chuck);
+
+  group.add(createToolAtZero(latheCode.getTool(), zZeroY, markerSize));
+  group.position.copy(stockPosition);
+
+  return group;
 }
 
 function centerObject(object: THREE.Object3D) {
@@ -205,26 +246,20 @@ function centerObject(object: THREE.Object3D) {
   return object;
 }
 
-function formatDimension(value: number): string {
-  const rounded = Math.round(value * 1000) / 1000;
-  if (Number.isInteger(rounded)) return rounded.toFixed(0);
-  return rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
-}
-
-function formatStockDimensions(stock: Stock | undefined): string {
-  if (!stock) return 'unavailable';
-  const innerDiameter = stock.innerDiameter > 0 ? ` ID${formatDimension(stock.innerDiameter)}` : '';
-  return `⌀${formatDimension(stock.diameter)}${innerDiameter} L${formatDimension(stock.length)} mm`;
-}
+const PART_MATERIAL_COLOR = 0xe5e8ec;
+const PART_MATERIAL_OPACITY = 0.68;
+const STOCK_MATERIAL_COLOR = 0x7ed957;
+const STOCK_MATERIAL_OPACITY = 0.22;
 
 function createMetalMaterial() {
   return new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 1,
-    metalness: 0.8,
+    color: PART_MATERIAL_COLOR,
+    roughness: 0.65,
+    metalness: 0.25,
     side: THREE.DoubleSide,
-    transparent: false,
-    opacity: 0.8,
+    transparent: true,
+    opacity: PART_MATERIAL_OPACITY,
+    depthWrite: false,
   });
 }
 

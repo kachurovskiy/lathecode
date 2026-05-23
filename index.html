@@ -9,7 +9,43 @@
 
 <body>
   <div class="vcont">
-    <div id="editorContainer">
+    <div id="startContainer">
+      <section class="startSection">
+        <h2>Start a lathecode</h2>
+        <p>Design lathe parts from samples, saved work, or STL meshes, preview the result, and export STL or G-code for machining.</p>
+        <div class="startGrid">
+          <button class="startCard sampleCatalogButton" title="Pick from basic forms and sample parts">
+            <strong>Samples</strong>
+            <span>Open basic forms, bore examples, tapers, arcs, and parting samples.</span>
+          </button>
+          <button class="startCard startStlButton" title="Generate lathecode from an STL file">
+            <strong>Import STL</strong>
+            <span>Project a mesh into lathecode using the STL importer.</span>
+          </button>
+        </div>
+        <div class="startPanel">
+          <h3>Saved in this browser</h3>
+          <div class="load-group">
+            <select class="loadSelect"></select>
+            <button class="loadButton" title="Load from storage">Open</button>
+            <button class="deleteButton" title="Delete from storage">Delete</button>
+          </div>
+        </div>
+        <div class="startActions toolbar">
+          <button class="settingsButton" title="Tune planner and import settings">Settings</button>
+          <div class="overflowContainer">
+            <button class="overflowButton" type="button" title="More start options">...</button>
+            <div class="overflowMenu" hidden>
+              <button class="exportButton" title="Export saved lathecodes and settings to JSON" hidden>Export Backup</button>
+              <input type="file" id="importFile" accept="application/json,.json" style="display: none;" />
+              <label for="importFile" class="importButton button-like"
+                title="Import saved lathecodes and settings from a JSON backup">Import Backup</label>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div id="editorContainer" hidden>
       <h2>Editor</h2>
       <p>Visualizes lathecode and generates GCode - more on <a
           href="https://github.com/kachurovskiy/lathecode">GitHub</a></p>
@@ -37,34 +73,33 @@ L3</textarea>
         <div class="statusContainer"></div>
         <div class="errorContainer"></div>
       </div>
-      <div class="toolbar">
-        <button class="imageButton" title="Generate lathecode from an STL file">From STL</button>
-        <button class="toolButton" title="Pick a tool insert">Tool</button>
-        <button class="flipButton" title="Turn the part 180 degrees">Flip</button>
-        <button class="planButton" title="Generate GCode from current lathecode">To GCode</button>
-        <button class="expandCollapseButton" title="See more options">...</button>
-      </div>
-      <div id="moreOptions" class="toolbar">
-        <hr />
-        <div class="settings-group">
-          <button class="settingsButton" title="Tune planner and import settings">Settings</button>
+      <div class="toolbar editorToolbar" aria-label="Editor actions">
+        <div class="editorToolbarGroup" aria-label="Lathe setup">
+          <button class="unitsButton" title="Choose lathecode units">Units</button>
+          <button class="stockButton" title="Set stock diameter, bore, and allowance">Stock</button>
+          <button class="depthButton" title="Set roughing depth and finish allowance">Depth</button>
+          <button class="feedButton" title="Set move, cut, and parting feeds">Feed</button>
+          <button class="modeButton" title="Choose roughing mode">Mode</button>
+          <button class="axesButton" title="Set controller axis directions">Axes</button>
+          <button class="toolButton" title="Pick a tool insert">Tool</button>
+        </div>
+        <div class="editorToolbarGroup" aria-label="Shape edits">
+          <button class="flipButton" title="Turn the part 180 degrees">Flip</button>
           <button class="scaleButton" title="Scale stock and profile dimensions">Scale</button>
         </div>
-        <hr />
-        <div class="load-group">
+        <div class="editorToolbarGroup" aria-label="Files">
           <button class="saveButton" title="Save to local browser storage">Save</button>
-          <select class="loadSelect"></select>
-          <button class="loadButton" title="Load from storage">Load</button>
-          <button class="deleteButton" title="Delete from storage">Delete</button>
-        </div>
-        <hr />
-        <div class="import-export-group">
           <button class="stlButton" title="Download STL file">To STL</button>
-          <button class="exportButton" title="Export all to JSON">Export</button>
-          <input type="file" id="importFile" style="display: none;" />
-          <label for="importFile" class="importButton button-like">Import</label>
+        </div>
+        <div class="editorToolbarGroup" aria-label="GCode">
+          <button class="planButton" title="Generate GCode from current lathecode">To GCode</button>
+          <button class="outsidePlanButton" title="Generate outside-profile GCode" hidden>Outside GCode</button>
+          <button class="insidePlanButton" title="Generate inside-profile GCode" hidden>Inside GCode</button>
         </div>
       </div>
+    </div>
+    <div id="crossSectionContainer">
+      <h2>2D rendering</h2>
     </div>
     <div id="sceneContainer">
       <h2>3D rendering</h2>
@@ -75,11 +110,16 @@ L3</textarea>
       <textarea id="gcodeTextarea"></textarea>
       <div class="senderError" style="display: none;"></div>
       <progress max="1" style="display: none;"></progress>
-      <button class="sendButton">Run on H4</button>
-      <button class="saveGcodeButton">Save to H4</button>
-      <button class="stopButton" style="display: none;">Stop</button>
-      <a class="whatLink" href="https://github.com/kachurovskiy/nanoels/tree/main/h4" target="_blank">What is NanoEls
-        H4?</a>
+      <div class="gcodeActions">
+        <button class="copyGcodeButton">Copy</button>
+        <span class="h4Controls" hidden>
+          <button class="sendButton">Run on H4</button>
+          <button class="saveGcodeButton">Save to H4</button>
+          <button class="stopButton" style="display: none;">Stop</button>
+          <a class="whatLink" href="https://github.com/kachurovskiy/nanoels/tree/main/h4" target="_blank">What is NanoEls
+            H4?</a>
+        </span>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

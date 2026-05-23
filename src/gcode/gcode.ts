@@ -2,9 +2,12 @@ import { LatheCode } from '../common/lathecode';
 import { Sender, SenderMode } from './sender';
 import { Move } from '../common/move';
 import { createGCode } from './gcodeutils';
+import { loadAppSettings } from '../common/settings';
 
 export class GCode {
   private runTextarea: HTMLTextAreaElement;
+  private copyButton: HTMLButtonElement;
+  private h4Controls: HTMLElement;
   private sendButton: HTMLButtonElement;
   private saveGcodeButton: HTMLButtonElement;
   private stopButton: HTMLButtonElement;
@@ -12,6 +15,7 @@ export class GCode {
   private senderError: HTMLDivElement;
   private runProgress: HTMLProgressElement;
   private sender: Sender | null = null;
+  private copyStateTimeout = 0;
   private saveName = 'Part 1';
   private latheCode: LatheCode | null = null;
 
@@ -21,6 +25,13 @@ export class GCode {
     this.runTextarea = container.getElementsByTagName('textarea')[0];
     this.senderError = container.querySelector<HTMLDivElement>('.senderError')!;
     this.runProgress = container.getElementsByTagName('progress')[0];
+
+    this.copyButton = container.querySelector<HTMLButtonElement>('.copyGcodeButton')!;
+    this.copyButton.addEventListener('click', () => {
+      void this.copyGCode();
+    });
+
+    this.h4Controls = container.querySelector<HTMLElement>('.h4Controls')!;
 
     this.sendButton = container.querySelector<HTMLButtonElement>('.sendButton')!;
     this.sendButton.addEventListener('click', () => {
@@ -47,6 +58,11 @@ export class GCode {
     this.stopButton.style.display = 'none';
 
     this.whatLink = container.querySelector<HTMLAnchorElement>('.whatLink')!;
+    this.updateSettings();
+  }
+
+  updateSettings() {
+    this.h4Controls.hidden = !loadAppSettings().showNanoElsH4Controls;
   }
 
   private send(text: string, mode: SenderMode) {
@@ -67,6 +83,33 @@ export class GCode {
     this.runTextarea.value = createGCode(latheCode, moves);
     this.container.style.display = 'block';
     this.runTextarea.scrollIntoView({ behavior: "smooth" });
+  }
+
+  private async copyGCode() {
+    const text = this.runTextarea.value;
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        this.showCopiedState();
+        return;
+      } catch {
+        // Fall back to selection-based copying below.
+      }
+    }
+
+    this.runTextarea.focus();
+    this.runTextarea.select();
+    if (typeof document.execCommand === 'function' && document.execCommand('copy')) {
+      this.showCopiedState();
+    }
+  }
+
+  private showCopiedState() {
+    window.clearTimeout(this.copyStateTimeout);
+    this.copyButton.textContent = 'Copied';
+    this.copyStateTimeout = window.setTimeout(() => {
+      this.copyButton.textContent = 'Copy';
+    }, 1200);
   }
 
   private senderStatusChange() {

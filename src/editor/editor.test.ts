@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Editor, PlanEvent, wrapStlText } from './editor';
-import { APP_SETTING_DEFINITIONS, APP_SETTING_SECTIONS, DEFAULT_APP_SETTINGS, type PlannerEngine } from '../common/settings';
+import { DEFAULT_APP_SETTINGS } from '../common/settings';
 
 describe('Editor', () => {
   beforeEach(() => {
@@ -13,18 +13,22 @@ describe('Editor', () => {
 
     new Editor(container);
 
-    expect(container.querySelector<HTMLButtonElement>('.planButton')!.style.display).toBe('inline');
+    expect(container.querySelector<HTMLButtonElement>('.planButton')!.hidden).toBe(false);
+    expect(container.querySelector<HTMLButtonElement>('.outsidePlanButton')!.hidden).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('.insidePlanButton')!.hidden).toBe(true);
   });
 
-  it('shows GCode planning for mixed profiles', () => {
+  it('shows separate GCode planning buttons for mixed profiles', () => {
     const container = createEditorContainer('STOCK D10\nL2 R4\nINSIDE\nL2 R3');
 
     new Editor(container);
 
-    expect(container.querySelector<HTMLButtonElement>('.planButton')!.style.display).toBe('inline');
+    expect(container.querySelector<HTMLButtonElement>('.planButton')!.hidden).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('.outsidePlanButton')!.hidden).toBe(false);
+    expect(container.querySelector<HTMLButtonElement>('.insidePlanButton')!.hidden).toBe(false);
   });
 
-  it('lets user pick the mixed profile to plan', async () => {
+  it('plans mixed profiles directly from the profile GCode buttons', async () => {
     const container = createEditorContainer('STOCK D10\nL2 R4\nINSIDE\nL2 R3');
     const editor = new Editor(container);
     const planned: string[] = [];
@@ -32,40 +36,22 @@ describe('Editor', () => {
       planned.push((event as PlanEvent).latheCode.getText());
     });
 
-    container.querySelector<HTMLButtonElement>('.planButton')!.click();
-    clickDialogButton('Cut inside');
+    container.querySelector<HTMLButtonElement>('.insidePlanButton')!.click();
+    container.querySelector<HTMLButtonElement>('.outsidePlanButton')!.click();
     await waitForAsyncClick();
 
-    expect(planned).toEqual(['STOCK D10\nINSIDE\nL2 R3']);
+    expect(document.querySelector('.fullScreenDialog')).toBeNull();
+    expect(planned).toEqual([
+      'STOCK D10\nINSIDE\nL2 R3',
+      'STOCK D10\nL2 R4',
+    ]);
   });
 
-  it('opens a settings dialog with guidance and stored values', () => {
+  it('sends stored settings with plan events', async () => {
     localStorage.setItem('pxPerMm', '750');
+    localStorage.setItem('plannerEngine', 'vector');
     localStorage.setItem('smoothingEpsilonPx', '1.25');
-    const container = createEditorContainer('STOCK D10\nL2 R3');
-
-    new Editor(container);
-    container.querySelector<HTMLButtonElement>('.settingsButton')!.click();
-
-    const dialog = document.querySelector<HTMLFormElement>('.settingsDialog')!;
-    expect(dialog.textContent).toContain('Reasonable values');
-    for (const section of APP_SETTING_SECTIONS) {
-      expect(getSettingsSection(section.id).textContent).toContain(section.label);
-    }
-    expect(dialog.querySelectorAll<HTMLInputElement>('.settingInput').length).toBe(APP_SETTING_DEFINITIONS.length);
-    expectVisibleSettingsSections(['planning', 'pixelPlanner', 'stlImport', 'preview']);
-    expect(getVisibleSettingInputCount(dialog)).toBe(expectedVisibleSettingInputCount('pixel'));
-    expect(dialog.querySelector<HTMLInputElement>('input[name="pxPerMm"]')!.value).toBe('750');
-    expect(dialog.querySelector<HTMLInputElement>('input[name="smoothingEpsilonPx"]')!.value).toBe('1.25');
-    expect(dialog.querySelector<HTMLSelectElement>('select[name="plannerEngine"]')!.value).toBe('pixel');
-
-    setInputValue('select[name="plannerEngine"]', 'vector');
-
-    expectVisibleSettingsSections(['planning', 'vectorPlanner', 'geometry', 'stlImport', 'preview']);
-    expect(getVisibleSettingInputCount(dialog)).toBe(expectedVisibleSettingInputCount('vector'));
-  });
-
-  it('persists settings and sends them with plan events', async () => {
+    localStorage.setItem('vectorMinimumRoughChipAreaMm2', '0.02');
     const container = createEditorContainer('STOCK D10\nL2 R3');
     const editor = new Editor(container);
     const plannedSettings: PlanEvent['settings'][] = [];
@@ -73,12 +59,6 @@ describe('Editor', () => {
       plannedSettings.push((event as PlanEvent).settings);
     });
 
-    container.querySelector<HTMLButtonElement>('.settingsButton')!.click();
-    setInputValue('input[name="pxPerMm"]', '750');
-    setInputValue('select[name="plannerEngine"]', 'vector');
-    setInputValue('input[name="smoothingEpsilonPx"]', '1.25');
-    setInputValue('input[name="vectorMinimumRoughChipAreaMm2"]', '0.02');
-    clickDialogButton('Save settings');
     container.querySelector<HTMLButtonElement>('.planButton')!.click();
     await waitForAsyncClick();
 
@@ -93,6 +73,79 @@ describe('Editor', () => {
       smoothingEpsilonPx: 1.25,
       vectorMinimumRoughChipAreaMm2: 0.02,
     }]);
+  });
+
+  it('can defer the initial update until main selects a start source', () => {
+    const container = createEditorContainer('STOCK D10\nL2 R3');
+
+    new Editor(container, {deferInitialUpdate: true});
+
+    expect(localStorage.getItem('latheCode')).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('.planButton')!.hidden).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('.outsidePlanButton')!.hidden).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('.insidePlanButton')!.hidden).toBe(true);
+  });
+
+  it('updates setup directives from dedicated editor dialogs', () => {
+    const container = createEditorContainer('STOCK D10\nL2 R3');
+
+    new Editor(container);
+
+    container.querySelector<HTMLButtonElement>('.unitsButton')!.click();
+    expect(document.querySelector('.unitsVisual')).not.toBeNull();
+    expect(document.querySelector('.unitsVisual')!.textContent).toContain('1 in = 25.4 mm');
+    expect(document.querySelector<HTMLButtonElement>('.setupChoiceButton[data-unit="MM"]')!.classList.contains('selected'))
+      .toBe(true);
+    document.querySelector<HTMLButtonElement>('.setupChoiceButton[data-unit="IN"]')!.click();
+    clickDialogButton('Use units');
+
+    container.querySelector<HTMLButtonElement>('.stockButton')!.click();
+    expect(document.querySelector('.stockVisual')).not.toBeNull();
+    expect(document.querySelector('input[name="stockAllowance"]')).toBeNull();
+    setInputValue('input[name="stockDiameter"]', '20');
+    setInputValue('input[name="stockInnerDiameter"]', '4');
+    clickDialogButton('Use stock');
+
+    container.querySelector<HTMLButtonElement>('.depthButton')!.click();
+    expect(document.querySelector('.depthVisual')).toBeNull();
+    expect(document.querySelector<HTMLButtonElement>('.dialogCloseButton')!.parentElement?.classList.contains('settingsActions'))
+      .toBe(true);
+    setInputValue('input[name="depthCut"]', '0.03');
+    setInputValue('input[name="depthFinish"]', '0.005');
+    clickDialogButton('Use depth');
+
+    container.querySelector<HTMLButtonElement>('.feedButton')!.click();
+    expect(document.querySelector('.feedVisual')).toBeNull();
+    expect(document.querySelector<HTMLFormElement>('.setupFeedDialog')!.textContent).toContain('in/min');
+    setInputValue('input[name="feedMove"]', '8');
+    setInputValue('input[name="feedPass"]', '2');
+    setInputValue('input[name="feedPart"]', '0.5');
+    clickDialogButton('Use feed');
+
+    container.querySelector<HTMLButtonElement>('.modeButton')!.click();
+    expect(document.querySelector('.modeVisual')).toBeNull();
+    document.querySelector<HTMLButtonElement>('.setupChoiceButton[data-mode="TURN"]')!.click();
+    clickDialogButton('Use mode');
+
+    container.querySelector<HTMLButtonElement>('.axesButton')!.click();
+    expect(document.querySelector('.axesVisual')).toBeNull();
+    document.querySelector<HTMLButtonElement>('.setupChoiceButton[data-z="RIGHT"]')!.click();
+    document.querySelector<HTMLButtonElement>('.setupChoiceButton[data-x="DOWN"]')!.click();
+    clickDialogButton('Reset');
+    expect(document.querySelector<HTMLButtonElement>('.setupChoiceButton[data-z="LEFT"]')!.classList.contains('selected'))
+      .toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('.setupChoiceButton[data-x="UP"]')!.classList.contains('selected'))
+      .toBe(true);
+    clickDialogButton('Use axes');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value).toBe(
+      'UNITS IN\n' +
+      'STOCK D20 ID4\n' +
+      'DEPTH CUT0.03 FINISH0.005\n' +
+      'FEED MOVE8 PASS2 PART0.5\n' +
+      'MODE TURN\n' +
+      'AXES LEFT UP\n' +
+      'L2 R3');
   });
 
   it('scales lathecode by a factor', () => {
@@ -224,21 +277,20 @@ function createEditorContainer(value: string): HTMLElement {
       <div class="statusContainer"></div>
       <div class="errorContainer"></div>
     </div>
-    <button class="imageButton"></button>
+    <button class="unitsButton"></button>
+    <button class="stockButton"></button>
+    <button class="depthButton"></button>
+    <button class="feedButton"></button>
+    <button class="modeButton"></button>
+    <button class="axesButton"></button>
     <button class="toolButton"></button>
     <button class="flipButton"></button>
     <button class="stlButton"></button>
     <button class="planButton"></button>
+    <button class="outsidePlanButton"></button>
+    <button class="insidePlanButton"></button>
     <button class="saveButton"></button>
-    <button class="loadButton"></button>
-    <select class="loadSelect"></select>
-    <button class="settingsButton"></button>
     <button class="scaleButton"></button>
-    <button class="deleteButton"></button>
-    <button class="exportButton"></button>
-    <input id="importFile" />
-    <button class="expandCollapseButton"></button>
-    <div id="moreOptions"></div>
   `;
   container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value = value;
   document.body.appendChild(container);
@@ -257,31 +309,6 @@ function setInputValue(selector: string, value: string) {
   input.value = value;
   input.dispatchEvent(new Event('input', {bubbles: true}));
   input.dispatchEvent(new Event('change', {bubbles: true}));
-}
-
-function getSettingsSection(sectionId: string): HTMLElement {
-  const section = document.querySelector<HTMLElement>(`.settingsSection[data-setting-section-id="${sectionId}"]`);
-  if (!section) throw new Error(`Settings section not found: ${sectionId}`);
-  return section;
-}
-
-function expectVisibleSettingsSections(visibleSectionIds: string[]) {
-  const visible = new Set(visibleSectionIds);
-  for (const section of APP_SETTING_SECTIONS) {
-    expect(getSettingsSection(section.id).hidden).toBe(!visible.has(section.id));
-  }
-}
-
-function getVisibleSettingInputCount(dialog: HTMLElement): number {
-  return Array.from(dialog.querySelectorAll('.settingInput'))
-    .filter(input => !input.closest<HTMLElement>('.settingsSection')!.hidden)
-    .length;
-}
-
-function expectedVisibleSettingInputCount(plannerEngine: PlannerEngine): number {
-  return APP_SETTING_SECTIONS
-    .filter(section => !section.plannerEngines || section.plannerEngines.includes(plannerEngine))
-    .reduce((count, section) => count + section.definitions.length, 0);
 }
 
 function expectManualParamVisibility(visibleParams: string[]) {

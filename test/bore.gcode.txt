@@ -4,6 +4,7 @@
 
 ; Run time 0.4 min, cutting 73% of time
 ; Working area 3.00 by 1.49 mm
+; Axes expected: Z+ points left, X+ points up
 
 G21 ; metric
 G18 ; ZX plane
