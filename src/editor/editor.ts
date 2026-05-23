@@ -28,6 +28,7 @@ export class Editor extends EventTarget {
   private toolButton: HTMLButtonElement;
   private flipButton: HTMLButtonElement;
   private scaleButton: HTMLButtonElement;
+  private partingButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
 
@@ -76,9 +77,11 @@ export class Editor extends EventTarget {
 
     this.saveButton = container.querySelector<HTMLButtonElement>('.saveButton')!;
     this.scaleButton = container.querySelector<HTMLButtonElement>('.scaleButton')!;
+    this.partingButton = container.querySelector<HTMLButtonElement>('.partingButton')!;
 
     this.saveButton.addEventListener('click', () => this.saveLatheCode());
     this.scaleButton.addEventListener('click', () => this.openScaleDialog());
+    this.partingButton.addEventListener('click', () => this.togglePartingLine());
 
     const savedDraft = localStorage.getItem('latheCode');
     if (savedDraft?.trim()) {
@@ -145,6 +148,28 @@ export class Editor extends EventTarget {
     this.planButton.hidden = !profiles.length || hasMultipleProfiles;
     this.outsidePlanButton.hidden = !hasMultipleProfiles;
     this.insidePlanButton.hidden = !hasMultipleProfiles;
+    this.updatePartingButton(latheCode);
+  }
+
+  private updatePartingButton(latheCode: LatheCode | null) {
+    const canPart = latheCode?.getTool().type === 'RECT';
+    this.partingButton.hidden = !canPart;
+    if (!canPart || !latheCode) return;
+    this.partingButton.textContent = this.hasTrailingPartingLine(latheCode)
+      ? 'Remove parting'
+      : 'Add parting';
+  }
+
+  private togglePartingLine() {
+    if (!this.latheCode || this.latheCode.getTool().type !== 'RECT') return;
+    this.latheCodeInput.value = this.hasTrailingPartingLine(this.latheCode)
+      ? removeTrailingPartingLine(this.latheCodeInput.value, this.latheCode)
+      : addTrailingPartingLine(this.latheCodeInput.value, this.latheCode);
+    this.update();
+  }
+
+  private hasTrailingPartingLine(latheCode: LatheCode): boolean {
+    return trailingPartingLineIndex(this.latheCodeInput.value, latheCode) !== -1;
   }
 
   private planLatheCode(side?: ProfileSide) {
@@ -346,6 +371,74 @@ export class Editor extends EventTarget {
       reader.readAsArrayBuffer(file);
     });
   }
+}
+
+function addTrailingPartingLine(text: string, latheCode: LatheCode): string {
+  const lines = normalizeEditorLines(text);
+  const insertionIndex = getOutsideInsertionIndex(lines);
+  const partingLine = `L${formatEditorNumber(getPartingLengthInCurrentUnits(text, latheCode))}`;
+  lines.splice(insertionIndex, 0, partingLine);
+  return lines.join('\n');
+}
+
+function removeTrailingPartingLine(text: string, latheCode: LatheCode): string {
+  const lines = normalizeEditorLines(text);
+  const index = trailingPartingLineIndex(text, latheCode);
+  if (index === -1) return text;
+  lines.splice(index, 1);
+  return lines.join('\n');
+}
+
+function trailingPartingLineIndex(text: string, latheCode: LatheCode): number {
+  const lines = normalizeEditorLines(text);
+  const outsideEnd = findInsideLineIndex(lines);
+  let index = (outsideEnd === -1 ? lines.length : outsideEnd) - 1;
+  while (index >= 0 && isSkippableProfileTailLine(lines[index])) index--;
+  if (index < 0) return -1;
+
+  const match = lines[index].trim().match(/^L([0-9.]+)(?:\s*;.*)?$/);
+  if (!match) return -1;
+
+  const lineLengthMm = Number(match[1]) * getUnitsMultiplier(text);
+  return Math.abs(lineLengthMm - latheCode.getTool().widthMm) <= 0.001 ? index : -1;
+}
+
+function normalizeEditorLines(text: string): string[] {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+}
+
+function findInsideLineIndex(lines: string[]): number {
+  return lines.findIndex(line => /^\s*INSIDE\b/.test(line));
+}
+
+function getOutsideInsertionIndex(lines: string[]): number {
+  let insertionIndex = findInsideLineIndex(lines);
+  if (insertionIndex === -1) insertionIndex = lines.length;
+  while (insertionIndex > 0 && !lines[insertionIndex - 1].trim()) insertionIndex--;
+  return insertionIndex;
+}
+
+function isSkippableProfileTailLine(line: string): boolean {
+  return !line.trim() || /^\s*;/.test(line);
+}
+
+function getPartingLengthInCurrentUnits(text: string, latheCode: LatheCode): number {
+  return latheCode.getTool().widthMm / getUnitsMultiplier(text);
+}
+
+function getUnitsMultiplier(text: string): number {
+  const units = text.match(/^UNITS\s+([A-Z]+)/m)?.[1] ?? 'MM';
+  if (units === 'IN') return 25.4;
+  if (units === 'CM') return 10;
+  if (units === 'M') return 1000;
+  if (units === 'FT') return 304.8;
+  return 1;
+}
+
+function formatEditorNumber(value: number): string {
+  const rounded = Math.round(value * 1_000_000) / 1_000_000;
+  if (Number.isInteger(rounded)) return rounded.toFixed(0);
+  return rounded.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 export function wrapStlText(name:string, stlText: string, previousText = '') {

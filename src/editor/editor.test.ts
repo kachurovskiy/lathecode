@@ -236,6 +236,55 @@ describe('Editor', () => {
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value).toBe('STOCK D10\nINSIDE\nL3 R3\nL2 R2');
   });
 
+  it('adds and removes a rectangular-tool parting line', () => {
+    const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
+
+    new Editor(container);
+    const partingButton = container.querySelector<HTMLButtonElement>('.partingButton')!;
+    expect(partingButton.hidden).toBe(false);
+    expect(partingButton.textContent).toBe('Add parting');
+
+    partingButton.click();
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4\nL2');
+    expect(partingButton.textContent).toBe('Remove parting');
+
+    partingButton.click();
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
+    expect(partingButton.textContent).toBe('Add parting');
+  });
+
+  it('adds outside parting before an inside profile', () => {
+    const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4\nINSIDE\nL5 R2');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.partingButton')!.click();
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4\nL2\nINSIDE\nL5 R2');
+  });
+
+  it('uses current units for the parting line length', () => {
+    const container = createEditorContainer('UNITS IN\nSTOCK D1\nTOOL RECT R0.008 L0.125\nL0.5 R0.4');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.partingButton')!.click();
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('UNITS IN\nSTOCK D1\nTOOL RECT R0.008 L0.125\nL0.5 R0.4\nL0.125');
+  });
+
+  it('hides the parting button for non-rectangular tools', () => {
+    const roundContainer = createEditorContainer('STOCK D10\nTOOL ROUND R4\nL2 R3');
+    new Editor(roundContainer);
+    expect(roundContainer.querySelector<HTMLButtonElement>('.partingButton')!.hidden).toBe(true);
+
+    const angledContainer = createEditorContainer('STOCK D10\nTOOL ANG R0.4 L7.8 A32.5 NA55\nL2 R3');
+    new Editor(angledContainer);
+    expect(angledContainer.querySelector<HTMLButtonElement>('.partingButton')!.hidden).toBe(true);
+  });
+
   it('replaces the tool line from the tool dialog', () => {
     const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL2 R3');
 
@@ -334,6 +383,7 @@ function createEditorContainer(value: string): HTMLElement {
     <button class="insidePlanButton"></button>
     <button class="saveButton"></button>
     <button class="scaleButton"></button>
+    <button class="partingButton"></button>
   `;
   container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value = value;
   document.body.appendChild(container);
