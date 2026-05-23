@@ -29,6 +29,26 @@ describe('PlannerWorker', () => {
     expect(messages.some(message => message.progressMessage?.startsWith('Vector turn roughing pass '))).toBeTruthy();
   });
 
+  it('finishes the chuck-side region after the last face-mode cutoff', () => {
+    const messages = planMessages(`STOCK D22
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE220 PASS50 PART12
+L2 D12
+L4 D14
+L1.5
+L2 D10
+L5 D16
+L1.5
+L2 D12
+L7 D18
+L3 D20`, 10);
+
+    const finishMessages = messages.filter(message => message.progressMessage === 'Finishing previously cut area');
+
+    expect(finishMessages.length).toBe(3);
+  });
+
   it('does not change vector-generated moves when pxPerMm changes', () => {
     const text = 'STOCK D6\nTOOL RECT R0 L1 H1\nDEPTH CUT0.75 FINISH0.15\nL3 R2\nL2 R1.5';
 

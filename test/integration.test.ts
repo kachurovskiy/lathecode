@@ -80,8 +80,19 @@ async function openStarterLatheCode(page: Page) {
   await page.waitForSelector('#editorContainer:not([hidden])', { visible: true });
 }
 
+async function waitForImportedStl(page: Page, fileName: string) {
+  await page.waitForFunction(expectedHeader => {
+    const errorText = document.querySelector<HTMLDivElement>('.errorContainer')?.innerText;
+    if (errorText) return true;
+
+    const input = document.querySelector<HTMLTextAreaElement>('.latheCodeInput');
+    return input?.value.startsWith(expectedHeader) ?? false;
+  }, {timeout: 60000}, `; ${fileName}`);
+}
+
 test('stl to lathecode', async () => {
   const name = STL_INTEGRATION_CASE;
+  const fileName = `${name}.stl`;
   const browser = await puppeteer.launch(PUPPETEER_LAUNCH_OPTIONS);
   try {
     const page = await browser.newPage();
@@ -93,10 +104,9 @@ test('stl to lathecode', async () => {
 
     // Pick the STL file from the Start UI.
     const [fileChooser] = await Promise.all([page.waitForFileChooser(), page.click('.startStlButton')]);
-    await fileChooser.accept([resolve(__dirname, name + '.stl')]);
+    await fileChooser.accept([resolve(__dirname, fileName)]);
 
-    // Wait for body to lose busy cursor
-    await page.waitForFunction(() => getComputedStyle(document.body).cursor !== 'wait', {timeout: 60000});
+    await waitForImportedStl(page, fileName);
 
     // Ensure there's no error reported parsing lathecode
     expect(await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText), `Error in file ${name}`).toBe('');

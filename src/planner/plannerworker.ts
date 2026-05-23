@@ -113,12 +113,11 @@ class PixelPlannerWorker {
     // Plan passes in advance so that we can finish the part fully before cutting off.
     const cutXCoords = this.latheCode.getCutoffStarts().map(z => this.canvas.width - z * this.pxPerMm - this.tool.width + 1);
     this.passes = cutXCoords.map(x => new Pass(x, true));
-    let hasCutPasses = this.passes.length > 0;
     if (this.mode === 'FACE') {
       let x = this.canvas.width;
       while (true) {
         x -= this.getDepthOfCutPx();
-        if (!cutXCoords.includes(x)) this.passes.push(new Pass(Math.max(0, x), x <= 0 && !hasCutPasses));
+        if (!cutXCoords.includes(x)) this.passes.push(new Pass(Math.max(0, x), x <= 0));
         if (x <= 0) break;
       }
     } else if (this.mode === 'TURN') {

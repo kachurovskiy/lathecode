@@ -5,6 +5,7 @@ import puppeteer, { type Page } from 'puppeteer';
 import { createServer, type ViteDevServer } from 'vite';
 
 const SUFFIX = '.gcode.txt';
+const INTEGRATION_OWNED_CASES = new Set(['cylinder']);
 const PUPPETEER_LAUNCH_OPTIONS = {
   args: ['--disable-gpu', '--no-sandbox', '--disable-setuid-sandbox'],
   protocolTimeout: 360000,
@@ -68,7 +69,11 @@ function normalize(text: string) {
 }
 
 function getCases() {
-  return readdirSync(__dirname).filter(file => file.endsWith(SUFFIX)).map(name => name.substring(0, name.length - SUFFIX.length));
+  return readdirSync(__dirname)
+    .filter(file => file.endsWith(SUFFIX))
+    .map(name => name.substring(0, name.length - SUFFIX.length))
+    // cylinder.txt is regenerated from cylinder.stl by integration.test.ts.
+    .filter(name => !INTEGRATION_OWNED_CASES.has(name));
 }
 
 async function generateFixture(input: string): Promise<GeneratedFixture> {
