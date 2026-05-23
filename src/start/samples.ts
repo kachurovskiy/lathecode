@@ -4332,6 +4332,301 @@ L6 D24`,
     ],
   },
   {
+    id: 'v-belt-pulley-groove-standards',
+    title: 'V-Belt Pulley Groove Standards',
+    description: 'Single and multi-groove pulley samples using table-derived OD, groove opening, root diameter, spacing, and edge distance for metric wedge, classical, and narrow inch-series belts.',
+    samples: [
+      {
+        id: 'spz-80-single-v-pulley',
+        title: 'SPZ 80 mm Single V Pulley',
+        description: 'Metric SPZ groove at PD 80 mm: OD 84, 34 degree groove, 9.7 mm opening, and 16 mm face width.',
+        text: `; SPZ 80 mm Single V Pulley
+; PD80 OD84 alpha34 W9.7 D11 X2 E8
+
+STOCK D88 ID16
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT0.6 FINISH0.1
+FEED MOVE200 PASS42 PART10
+
+L3.15 D84
+L3.36 DS84 DE62
+L2.97 D62
+L3.36 DS62 DE84
+L3.15 D84
+
+INSIDE
+L15.99 D20`,
+      },
+      {
+        id: 'spz-160-triple-v-pulley',
+        title: 'SPZ 160 mm Triple V Pulley',
+        description: 'Three SPZ grooves at PD 160 mm with 38 degree flanks, 12 mm groove pitch, and table edge distance.',
+        text: `; SPZ 160 mm Triple V Pulley
+; PD160 OD164 alpha38 W9.7 D11 X2 S12 E8
+
+STOCK D168 ID28
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT0.8 FINISH0.1
+FEED MOVE220 PASS45 PART12
+
+L3.15 D164
+L3.79 DS164 DE142
+L2.12 D142
+L3.79 DS142 DE164
+L2.3 D164
+L3.79 DS164 DE142
+L2.12 D142
+L3.79 DS142 DE164
+L2.3 D164
+L3.79 DS164 DE142
+L2.12 D142
+L3.79 DS142 DE164
+L3.15 D164
+
+INSIDE
+L39.99 D40`,
+      },
+      {
+        id: 'spa-118-double-v-pulley',
+        title: 'SPA 118 mm Double V Pulley',
+        description: 'Two SPA grooves at the 34 degree datum-diameter range with 15 mm pitch and 10 mm edge distance.',
+        text: `; SPA 118 mm Double V Pulley
+; PD118 OD123.5 alpha34 W12.7 D13.8 X2.75 S15 E10
+
+STOCK D128 ID24
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT0.7 FINISH0.1
+FEED MOVE210 PASS44 PART11
+
+L3.65 D123.5
+L4.22 DS123.5 DE95.9
+L4.26 D95.9
+L4.22 DS95.9 DE123.5
+L2.3 D123.5
+L4.22 DS123.5 DE95.9
+L4.26 D95.9
+L4.22 DS95.9 DE123.5
+L3.65 D123.5
+
+INSIDE
+L34.99 D32`,
+      },
+      {
+        id: 'spb-224-double-v-pulley',
+        title: 'SPB 224 mm Double V Pulley',
+        description: 'Two SPB grooves above the 190 mm breakpoint: 38 degree groove, 16.2 mm opening, and 17 mm pitch.',
+        text: `; SPB 224 mm Double V Pulley
+; PD224 OD231 alpha38 W16.2 D17.5 X3.5 S17 E12.5
+
+STOCK D236 ID42
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT0.9 FINISH0.1
+FEED MOVE220 PASS46 PART12
+
+L4.4 D231
+L6.03 DS231 DE196
+L4.15 D196
+L6.03 DS196 DE231
+L0.8 D231
+L6.03 DS231 DE196
+L4.15 D196
+L6.03 DS196 DE231
+L4.4 D231
+
+INSIDE
+L42.02 D55`,
+      },
+      {
+        id: 'spc-355-single-v-pulley',
+        title: 'SPC 355 mm Single V Pulley',
+        description: 'Large SPC single groove using OD 364.6 mm, 38 degree flanks, 22 mm opening, and a 34 mm face.',
+        text: `; SPC 355 mm Single V Pulley
+; PD355 OD364.6 alpha38 W22 D23.8 X4.8 E17
+
+STOCK D372 ID70
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT1.2 FINISH0.1
+FEED MOVE240 PASS50 PART14
+
+L6 D364.6
+L8.19 DS364.6 DE317
+L5.61 D317
+L8.19 DS317 DE364.6
+L6 D364.6
+
+INSIDE
+L33.99 D90`,
+      },
+      {
+        id: 'ab-6in-double-v-pulley',
+        title: 'A/B 6 in Double V Pulley',
+        description: 'Classical A/B section at 6 in PD, converted to mm with 34 degree grooves and 19.05 mm pitch.',
+        text: `; A/B 6 in Double V Pulley
+; PD152.4 OD161.3 alpha34 W15.54 D15.88 X4.45 S19.05 E12.7
+
+STOCK D166 ID30
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT0.8 FINISH0.1
+FEED MOVE220 PASS45 PART12
+
+L4.93 D161.3
+L4.86 DS161.3 DE129.54
+L5.83 D129.54
+L4.86 DS129.54 DE161.3
+L3.51 D161.3
+L4.86 DS161.3 DE129.54
+L5.83 D129.54
+L4.86 DS129.54 DE161.3
+L4.93 D161.3
+
+INSIDE
+L44.47 D42`,
+      },
+      {
+        id: 'c-10in-single-v-pulley',
+        title: 'C 10 in Single V Pulley',
+        description: 'Classical C section in the 8-12 in range, using the 36 degree groove and converted mm dimensions.',
+        text: `; C 10 in Single V Pulley
+; PD254 OD264.16 alpha36 W22.53 D19.81 X5.08 E17.48
+
+STOCK D270 ID50
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT1 FINISH0.1
+FEED MOVE230 PASS48 PART13
+
+L6.21 D264.16
+L6.44 DS264.16 DE224.54
+L9.66 D224.54
+L6.44 DS224.54 DE264.16
+L6.21 D264.16
+
+INSIDE
+L34.96 D64`,
+      },
+      {
+        id: 'd-14in-double-v-pulley',
+        title: 'D 14 in Double V Pulley',
+        description: 'Classical D section in the 13-17 in range, with 36 degree grooves and a wide two-groove face.',
+        text: `; D 14 in Double V Pulley
+; PD355.6 OD370.84 alpha36 W32.28 D26.67 X7.62 S36.53 E22.23
+
+STOCK D378 ID70
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT1.2 FINISH0.1
+FEED MOVE240 PASS50 PART14
+
+L6.09 D370.84
+L8.67 DS370.84 DE317.5
+L14.95 D317.5
+L8.67 DS317.5 DE370.84
+L4.25 D370.84
+L8.67 DS370.84 DE317.5
+L14.95 D317.5
+L8.67 DS317.5 DE370.84
+L6.09 D370.84
+
+INSIDE
+L81.01 D90`,
+      },
+      {
+        id: 'e-24in-single-v-pulley',
+        title: 'E 24 in Single V Pulley',
+        description: 'Large classical E section at 24 in PD, using the 36 degree groove and converted mm dimensions.',
+        text: `; E 24 in Single V Pulley
+; PD609.6 OD629.92 alpha36 W38.79 D33.02 X10.16 E31.24
+
+STOCK D640 ID100
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT1.6 FINISH0.1
+FEED MOVE250 PASS54 PART15
+
+L11.84 D629.92
+L10.73 DS629.92 DE563.88
+L17.33 D563.88
+L10.73 DS563.88 DE629.92
+L11.84 D629.92
+
+INSIDE
+L62.47 D125`,
+      },
+      {
+        id: '3v-7in-triple-v-pulley',
+        title: '3V 7 in Triple V Pulley',
+        description: 'Narrow 3V triple pulley in the 40 degree range, using 10.34 mm pitch and 8.74 mm edge distance.',
+        text: `; 3V 7 in Triple V Pulley
+; PD177.8 OD179.08 alpha40 W8.89 D8.89 X0.64 S10.34 E8.74
+
+STOCK D184 ID30
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT0.6 FINISH0.1
+FEED MOVE220 PASS45 PART12
+
+L4.29 D179.08
+L3.24 DS179.08 DE161.3
+L2.42 D161.3
+L3.24 DS161.3 DE179.08
+L1.45 D179.08
+L3.24 DS179.08 DE161.3
+L2.42 D161.3
+L3.24 DS161.3 DE179.08
+L1.45 D179.08
+L3.24 DS179.08 DE161.3
+L2.42 D161.3
+L3.24 DS161.3 DE179.08
+L4.29 D179.08
+
+INSIDE
+L38.15 D40`,
+      },
+      {
+        id: '5v-12in-double-v-pulley',
+        title: '5V 12 in Double V Pulley',
+        description: 'Narrow 5V double pulley in the 10-16 in range, modeled with a 40 degree included groove angle.',
+        text: `; 5V 12 in Double V Pulley
+; PD304.8 OD307.34 alpha40 W15.24 D15.24 X1.27 S17.48 E12.7
+
+STOCK D314 ID50
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT1 FINISH0.1
+FEED MOVE230 PASS48 PART13
+
+L5.08 D307.34
+L5.55 DS307.34 DE276.86
+L4.15 D276.86
+L5.55 DS276.86 DE307.34
+L2.24 D307.34
+L5.55 DS307.34 DE276.86
+L4.15 D276.86
+L5.55 DS276.86 DE307.34
+L5.08 D307.34
+
+INSIDE
+L42.88 D70`,
+      },
+      {
+        id: '8v-18in-single-v-pulley',
+        title: '8V 18 in Single V Pulley',
+        description: 'Large narrow-series 8V pulley at 18 in PD with 40 degree groove, 25.4 mm opening, and 38.1 mm face.',
+        text: `; 8V 18 in Single V Pulley
+; PD457.2 OD462.28 alpha40 W25.4 D25.4 X2.54 E19.05
+
+STOCK D472 ID80
+TOOL RECT R0.15 L1.5 H4
+DEPTH CUT1.4 FINISH0.1
+FEED MOVE240 PASS52 PART14
+
+L6.35 D462.28
+L9.24 DS462.28 DE411.48
+L6.91 D411.48
+L9.24 DS411.48 DE462.28
+L6.35 D462.28
+
+INSIDE
+L38.09 D105`,
+      },
+    ],
+  },
+  {
     id: 'pulleys-wheels-rotating-blanks',
     title: 'Pulleys, Wheels & Rotating Blanks',
     description: 'Pulley, wheel, roller, spool, and reel blanks with realistic bores, flanges, crowns, tapers, and groove widths suitable for the selected tool.',

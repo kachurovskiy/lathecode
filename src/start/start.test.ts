@@ -43,6 +43,7 @@ describe('StartPanel', () => {
       'Bushings, Bearings & Spacers - Practical Set',
       'Plumbing, Fluid & Nozzle Shapes',
       'Measurement, Gauges & Calibration',
+      'V-Belt Pulley Groove Standards',
       'Pulleys, Wheels & Rotating Blanks',
       'Handles, Knobs & Control Parts',
     ]);
