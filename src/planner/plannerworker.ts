@@ -355,7 +355,7 @@ class PixelPlannerWorker {
   }
 
   private getDepthOfCutPx() {
-    return this.latheCode.getDepth().cutMm * this.pxPerMm;
+    return Math.max(1, Math.floor(this.latheCode.getDepth().cutMm * this.pxPerMm));
   }
 
   private tryMove(xDelta: number, yDelta: number): boolean {

@@ -49,6 +49,23 @@ L3 D20`, 10);
     expect(finishMessages.length).toBe(3);
   });
 
+  it('keeps inch depth-of-cut passes on the integer pixel grid', () => {
+    const moves = planMoves(`UNITS IN
+STOCK D1
+TOOL RECT R0 L0.1 H0.1
+DEPTH CUT0.025 FINISH0.004
+MODE TURN
+L1 D0.5`, 10);
+
+    expect(moves.every(move => move instanceof PixelMove)).toBe(true);
+    for (const move of moves as PixelMove[]) {
+      expect(Number.isInteger(move.xStart)).toBe(true);
+      expect(Number.isInteger(move.yStart)).toBe(true);
+      expect(Number.isInteger(move.xDelta)).toBe(true);
+      expect(Number.isInteger(move.yDelta)).toBe(true);
+    }
+  });
+
   it('does not change vector-generated moves when pxPerMm changes', () => {
     const text = 'STOCK D6\nTOOL RECT R0 L1 H1\nDEPTH CUT0.75 FINISH0.15\nL3 R2\nL2 R1.5';
 
