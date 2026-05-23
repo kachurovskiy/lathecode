@@ -32,6 +32,7 @@ export class Editor extends EventTarget {
   private importStlButton: HTMLButtonElement;
   private toolButton: HTMLButtonElement;
   private flipButton: HTMLButtonElement;
+  private scaleButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
 
@@ -92,6 +93,7 @@ export class Editor extends EventTarget {
     this.loadButton = container.querySelector<HTMLButtonElement>('.loadButton')!;
     this.loadSelect = container.querySelector<HTMLSelectElement>('.loadSelect')!;
     this.settingsButton = container.querySelector<HTMLButtonElement>('.settingsButton')!;
+    this.scaleButton = container.querySelector<HTMLButtonElement>('.scaleButton')!;
     this.deleteButton = container.querySelector<HTMLButtonElement>('.deleteButton')!;
     this.exportButton = container.querySelector<HTMLButtonElement>('.exportButton')!;
     this.importInput = container.querySelector<HTMLInputElement>('#importFile')!;
@@ -106,6 +108,7 @@ export class Editor extends EventTarget {
     this.importInput.addEventListener('change', (event) => this.handleImportInputChange(event));
     this.expandCollapseButton.addEventListener('click', () => this.toggleMoreOptions());
     this.settingsButton.addEventListener('click', () => this.openSettingsDialog());
+    this.scaleButton.addEventListener('click', () => this.openScaleDialog());
     this.updateLoadSelect();
   }
 
@@ -279,7 +282,7 @@ export class Editor extends EventTarget {
   private update() {
     try {
       localStorage.setItem('latheCode', this.latheCodeInput.value);
-      this.latheCode = new LatheCode(this.latheCodeInput.value + '\n');
+      this.latheCode = new LatheCode(this.latheCodeInput.value);
       this.planButton.style.display = this.latheCode.getProfiles().length ? 'inline' : 'none';
       this.errorContainer.textContent = '';
     } catch (error: any) {
@@ -326,6 +329,130 @@ export class Editor extends EventTarget {
         this.latheCodeInput.value = text;
         this.update();
       });
+  }
+
+  private openScaleDialog() {
+    if (!this.latheCode) return;
+
+    const stock = this.latheCode.getStock();
+    const form = document.createElement('form');
+    form.className = 'scaleDialog settingsDialog';
+
+    const grid = document.createElement('div');
+    grid.className = 'settingsGrid';
+    form.appendChild(grid);
+
+    const factorInput = this.createScaleNumberInput('scaleFactor', '1');
+    const targetWidthInput = this.createScaleNumberInput('targetWidth', stock ? formatScaleValue(stock.diameter) : '');
+    const targetLengthInput = this.createScaleNumberInput('targetLength', stock ? formatScaleValue(stock.length) : '');
+
+    grid.appendChild(this.createScaleField(
+      'Scale factor',
+      factorInput,
+      'Used when target width and target length are empty.'));
+    grid.appendChild(this.createScaleField(
+      'Target width',
+      targetWidthInput,
+      stock ? `Current width is ${formatScaleValue(stock.diameter)} mm.` : 'Current width is unavailable.'));
+    grid.appendChild(this.createScaleField(
+      'Target length',
+      targetLengthInput,
+      stock ? `Current length is ${formatScaleValue(stock.length)} mm.` : 'Current length is unavailable.'));
+
+    const error = document.createElement('div');
+    error.className = 'toolDialogError';
+    form.appendChild(error);
+
+    const actions = document.createElement('div');
+    actions.className = 'settingsActions';
+    const applyButton = document.createElement('button');
+    applyButton.type = 'submit';
+    applyButton.textContent = 'Scale lathecode';
+    actions.appendChild(applyButton);
+    form.appendChild(actions);
+
+    let dialog: HTMLDivElement;
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      try {
+        const {xScale, zScale} = this.readScaleFactors(factorInput, targetWidthInput, targetLengthInput);
+        if (!this.latheCode) throw new Error('Lathecode is not valid');
+        this.latheCodeInput.value = this.latheCode.scale(xScale, zScale);
+        this.update();
+        dialog.remove();
+      } catch (e) {
+        error.textContent = e instanceof Error ? e.message : String(e);
+      }
+    });
+
+    dialog = createFullScreenDialog(form, 'Scale');
+    factorInput.focus();
+  }
+
+  private createScaleNumberInput(name: string, placeholder: string): HTMLInputElement {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = 'any';
+    input.min = '0';
+    input.name = name;
+    input.placeholder = placeholder;
+    input.className = 'settingInput';
+    return input;
+  }
+
+  private createScaleField(labelText: string, input: HTMLInputElement, guideText: string): HTMLLabelElement {
+    const field = document.createElement('label');
+    field.className = 'settingField';
+
+    const heading = document.createElement('span');
+    heading.className = 'settingHeading';
+    heading.textContent = labelText;
+    field.appendChild(heading);
+
+    field.appendChild(input);
+
+    const guide = document.createElement('span');
+    guide.className = 'settingGuide';
+    guide.textContent = guideText;
+    field.appendChild(guide);
+
+    return field;
+  }
+
+  private readScaleFactors(
+    factorInput: HTMLInputElement,
+    targetWidthInput: HTMLInputElement,
+    targetLengthInput: HTMLInputElement,
+  ): {xScale: number, zScale: number} {
+    const factor = this.readOptionalPositiveNumber(factorInput, 'Scale factor');
+    const targetWidth = this.readOptionalPositiveNumber(targetWidthInput, 'Target width');
+    const targetLength = this.readOptionalPositiveNumber(targetLengthInput, 'Target length');
+    const stock = this.latheCode?.getStock();
+
+    if (targetWidth === null && targetLength === null) {
+      if (factor === null) throw new Error('Enter a scale factor, target width, or target length');
+      return {xScale: factor, zScale: factor};
+    }
+
+    if (targetWidth !== null && (!stock || stock.diameter <= 0)) throw new Error('Current width is not available');
+    if (targetLength !== null && (!stock || stock.length <= 0)) throw new Error('Current length is not available');
+
+    if (targetWidth !== null && targetLength !== null) {
+      return {xScale: targetWidth / stock!.diameter, zScale: targetLength / stock!.length};
+    }
+
+    const uniformScale = targetWidth !== null
+      ? targetWidth / stock!.diameter
+      : targetLength! / stock!.length;
+    return {xScale: uniformScale, zScale: uniformScale};
+  }
+
+  private readOptionalPositiveNumber(input: HTMLInputElement, label: string): number | null {
+    const rawValue = input.value.trim();
+    if (!rawValue) return null;
+    const value = Number(rawValue);
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`${label} must be a positive number`);
+    return value;
   }
 
   private async importStl(file: File) {
@@ -520,4 +647,10 @@ function insertToolLine(stlText: string, toolLine: string | undefined): string {
   });
   lines.splice(firstCodeIndex >= 0 ? firstCodeIndex : lines.length, 0, toolLine);
   return lines.join('\n');
+}
+
+function formatScaleValue(value: number): string {
+  const rounded = Math.round(value * 1e6) / 1e6;
+  if (Number.isInteger(rounded)) return rounded.toFixed(0);
+  return rounded.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 }

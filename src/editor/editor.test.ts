@@ -95,6 +95,43 @@ describe('Editor', () => {
     }]);
   });
 
+  it('scales lathecode by a factor', () => {
+    const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.scaleButton')!.click();
+    setInputValue('input[name="scaleFactor"]', '2');
+    clickDialogButton('Scale lathecode');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('STOCK D20\nTOOL RECT R0.2 L2\nL10 R8');
+  });
+
+  it('scales lathecode to target width and length', () => {
+    const container = createEditorContainer('STOCK D10\nL5 R4');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.scaleButton')!.click();
+    setInputValue('input[name="targetWidth"]', '30');
+    setInputValue('input[name="targetLength"]', '20');
+    clickDialogButton('Scale lathecode');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('STOCK D30\nL20 R12');
+  });
+
+  it('scales uniformly to one target dimension', () => {
+    const container = createEditorContainer('STOCK D10\nL5 R4');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.scaleButton')!.click();
+    setInputValue('input[name="targetLength"]', '20');
+    clickDialogButton('Scale lathecode');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('STOCK D40\nL20 R16');
+  });
+
   it('flips inside-only profiles', () => {
     const container = createEditorContainer('STOCK D10\nINSIDE\nL2 R2\nL3 R3');
 
@@ -196,6 +233,7 @@ function createEditorContainer(value: string): HTMLElement {
     <button class="loadButton"></button>
     <select class="loadSelect"></select>
     <button class="settingsButton"></button>
+    <button class="scaleButton"></button>
     <button class="deleteButton"></button>
     <button class="exportButton"></button>
     <input id="importFile" />

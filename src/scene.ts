@@ -10,9 +10,14 @@ export class Scene extends THREE.Scene {
   private latheMesh: THREE.Object3D | null = null;
   private stock: THREE.Object3D | null = null;
   private orientationMarkers: THREE.Object3D | null = null;
+  private dimensionsElement: HTMLParagraphElement;
 
   constructor(readonly container: HTMLElement, size = 500) {
     super();
+
+    this.dimensionsElement = document.createElement('p');
+    this.dimensionsElement.className = 'sceneDimensions';
+    container.appendChild(this.dimensionsElement);
 
     this.background = new THREE.Color(0xffffff);
     this.renderer.shadowMap.enabled = true;
@@ -84,6 +89,7 @@ export class Scene extends THREE.Scene {
       this.setLatheMesh(null);
       this.setStock(null);
       this.setOrientationMarkers(null);
+      this.updateDimensions(null);
     }
     this.latheCode = value;
     if (this.latheCode) {
@@ -94,6 +100,7 @@ export class Scene extends THREE.Scene {
       const latheMesh = this.createLatheMesh();
       latheMesh.position.set(stock.position.x, stock.position.y - stockSpec.length / 2, stock.position.z);
       this.setLatheMesh(latheMesh);
+      this.updateDimensions(latheMesh, stockSpec);
       const orientationMarkers = this.createOrientationMarkers(stockSpec);
       orientationMarkers.position.copy(stock.position);
       this.setOrientationMarkers(orientationMarkers);
@@ -117,6 +124,24 @@ export class Scene extends THREE.Scene {
     if (this.orientationMarkers) this.remove(this.orientationMarkers);
     this.orientationMarkers = value;
     if (this.orientationMarkers) this.add(this.orientationMarkers);
+  }
+
+  private updateDimensions(part: THREE.Object3D | null, stock?: Stock) {
+    if (!part) {
+      this.dimensionsElement.textContent = '';
+      return;
+    }
+
+    const box = new THREE.Box3().setFromObject(part);
+    if (box.isEmpty()) {
+      this.dimensionsElement.textContent = '';
+      return;
+    }
+
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const diameter = Math.max(size.x, size.z);
+    this.dimensionsElement.textContent = `Part ⌀${formatDimension(diameter)} L${formatDimension(size.y)}mm, stock ${formatStockDimensions(stock)}`;
   }
 
   private createLatheMesh(): THREE.Object3D {
@@ -178,6 +203,18 @@ function centerObject(object: THREE.Object3D) {
   const box = new THREE.Box3().setFromObject(object);
   object.position.sub(box.getCenter(new THREE.Vector3()));
   return object;
+}
+
+function formatDimension(value: number): string {
+  const rounded = Math.round(value * 1000) / 1000;
+  if (Number.isInteger(rounded)) return rounded.toFixed(0);
+  return rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function formatStockDimensions(stock: Stock | undefined): string {
+  if (!stock) return 'unavailable';
+  const innerDiameter = stock.innerDiameter > 0 ? ` ID${formatDimension(stock.innerDiameter)}` : '';
+  return `⌀${formatDimension(stock.diameter)}${innerDiameter} L${formatDimension(stock.length)} mm`;
 }
 
 function createMetalMaterial() {

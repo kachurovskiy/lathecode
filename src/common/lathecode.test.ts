@@ -220,6 +220,32 @@ describe('lathecode', () => {
     expect(new LatheCode('AXES RIGHT DOWN\nL1\nL2 R3\nL3 D0').getXDirection()).toEqual('DOWN');
   });
 
+  it('scales stock and profile dimensions without scaling machining settings', () => {
+    expect(new LatheCode(`UNITS MM
+STOCK D10 ID2 A0.5 ; stock
+TOOL RECT R0.2 L2
+DEPTH CUT0.5 FINISH0.1
+FEED MOVE200 PASS50 PART10
+L2 D4 ; outside
+L3 DS4 DE6 CONV
+INSIDE
+L1 R1
+L2 RS1 RE2 CONC`).scale(2, 3)).toEqual(`UNITS MM
+STOCK D20 ID4 A1 ; stock
+TOOL RECT R0.2 L2
+DEPTH CUT0.5 FINISH0.1
+FEED MOVE200 PASS50 PART10
+L6 D8 ; outside
+L9 DS8 DE12 CONV
+INSIDE
+L3 R2
+L6 RS2 RE4 CONC`);
+  });
+
+  it('rounds scaled dimensions to compact decimal output', () => {
+    expect(new LatheCode('STOCK D10 ID5\nTOOL RECT R0.2 L2\nL2 R1\nL1 RS1 RE2').scale(1 / 3)).toBe('STOCK D3.3333 ID1.6667\nTOOL RECT R0.2 L2\nL0.6667 R0.3333\nL0.3333 RS0.3333 RE0.6667');
+  });
+
   it('reverses', () => {
     expect(new LatheCode(`UNITS MM
 STOCK D23.25

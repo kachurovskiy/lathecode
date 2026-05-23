@@ -222,7 +222,15 @@ body {
 
 #sceneContainer {
   width: 500px;
-  height: 500px;
+}
+
+#sceneContainer canvas {
+  display: block;
+}
+
+.sceneDimensions {
+  margin: 6px 0 0;
+  line-height: 1.35;
 }
 
 .selectorContainer {

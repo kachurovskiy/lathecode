@@ -107,6 +107,7 @@ const UNITS: {
   "FT": 304.8,
   "IN": 25.4,
 };
+const SCALE_DECIMAL_PLACES = 4;
 
 type UnitType = keyof typeof UNITS;
 type ToolType = 'RECT'|'ROUND'|'ANG';
@@ -460,6 +461,47 @@ export class LatheCode {
     }
     return (preambula ? preambula + '\n' : '') + result.join('\n');
   }
+
+  scale(xScale: number, zScale = xScale): string {
+    if (!isPositiveFiniteNumber(xScale) || !isPositiveFiniteNumber(zScale)) {
+      throw new Error('Scale factors must be positive numbers');
+    }
+
+    const lines: string[] = [];
+    const pushComments = (comments: CommentList) => lines.push(...comments.map(commentToString));
+    const pushEntries = (entries: LatheEntry[]) => {
+      for (const entry of entries) {
+        pushComments(entry[0]);
+        lines.push(scaleLatheLine(entry[1], xScale, zScale));
+      }
+    };
+
+    pushComments(this.data[0]);
+    if (this.data[1]) lines.push(unitsDirectiveToString(this.data[1]));
+    pushComments(this.data[2]);
+    if (this.data[3]) lines.push(stockDirectiveToString(scaleStockDirective(this.data[3], xScale)));
+    pushComments(this.data[4]);
+    if (this.data[5]) lines.push(toolDirectiveToString(this.data[5]));
+    pushComments(this.data[6]);
+    if (this.data[7]) lines.push(depthDirectiveToString(this.data[7]));
+    pushComments(this.data[8]);
+    if (this.data[9]) lines.push(feedDirectiveToString(this.data[9]));
+    pushComments(this.data[10]);
+    if (this.data[11]) lines.push(modeDirectiveToString(this.data[11]));
+    pushComments(this.data[12]);
+    if (this.data[13]) lines.push(axesDirectiveToString(this.data[13]));
+    pushEntries(this.data[14]);
+
+    const insideBlock = this.data[15];
+    if (insideBlock) {
+      pushComments(insideBlock[0]);
+      lines.push(insideDirectiveToString(insideBlock[1]));
+      pushEntries(insideBlock[2]);
+    }
+
+    pushComments(this.data[16]);
+    return lines.join('\n');
+  }
 }
 
 function reverseEntries(entries: LatheEntry[]): string[] {
@@ -486,6 +528,44 @@ function reverseLine(line: LatheLine): string {
     return `L${line[1]} ${second}${line[5]} ${line[4]}${line[3]}${line[6] ? ' ' + line[6] : ''}${line[7] ? ' ; ' + (line[6] ? (line[7] as string).substring(1).trim() : line[7]) : ''}`;
   }
   return `L${line[1]}${line[2] ? ' ; ' + line[2] : ''}`;
+}
+
+function scaleStockDirective(directive: StockDirective, xScale: number): StockDirective {
+  const stock = directive[2];
+  return [
+    directive[0],
+    directive[1],
+    [
+      stock[0],
+      scaleNumber(stock[1], xScale),
+      scaleNumericParam(stock[2], xScale),
+      scaleNumericParam(stock[3], xScale),
+    ],
+    directive[3],
+  ];
+}
+
+function scaleLatheLine(line: LatheLine, xScale: number, zScale: number): string {
+  if (isCurvedLine(line)) {
+    return `L${numberToString(scaleNumber(line[1], zScale))} ${line[2]}${numberToString(scaleNumber(line[3], xScale))} ${line[4]}${numberToString(scaleNumber(line[5], xScale))}${line[6] ? ' ' + line[6] : ''}${formatComment(line[7])}`;
+  }
+  if (isStraightLine(line)) {
+    return `L${numberToString(scaleNumber(line[1], zScale))} ${line[2]}${numberToString(scaleNumber(line[3], xScale))}${formatComment(line[4])}`;
+  }
+  return `L${numberToString(scaleNumber(line[1], zScale))}${formatComment(line[2])}`;
+}
+
+function scaleNumericParam<Name extends string>(param: NumericParam<Name> | null, scale: number): NumericParam<Name> | null {
+  return param ? [param[0], scaleNumber(param[1], scale)] : null;
+}
+
+function scaleNumber(value: number, scale: number): number {
+  const multiplier = 10 ** SCALE_DECIMAL_PLACES;
+  return Math.round(value * scale * multiplier) / multiplier;
+}
+
+function isPositiveFiniteNumber(value: number): boolean {
+  return Number.isFinite(value) && value > 0;
 }
 
 function commentToString(comment: string): string {
@@ -546,7 +626,9 @@ function latheLineToString(line: LatheLine): string {
 }
 
 function numberToString(value: number): string {
-  return Number.isInteger(value) ? value.toFixed(0) : String(value);
+  const rounded = Math.round(value * 1e12) / 1e12;
+  if (Number.isInteger(rounded)) return rounded.toFixed(0);
+  return rounded.toFixed(12).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 export function removeColinearSegments(segments: Segment[]): Segment[] {
