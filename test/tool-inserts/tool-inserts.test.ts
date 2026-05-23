@@ -3,7 +3,7 @@ import { readdirSync, rmSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import puppeteer, { type Page } from 'puppeteer';
 import { createServer, type ViteDevServer } from 'vite';
-import { KNOWN_INSERT_OPTIONS, insertOptionToToolLine } from '../src/common/toolpresets';
+import { KNOWN_INSERT_OPTIONS, insertOptionToToolLine } from '../../src/common/toolpresets';
 
 const PUPPETEER_LAUNCH_OPTIONS = {
   args: ['--disable-gpu', '--no-sandbox', '--disable-setuid-sandbox'],

@@ -6,7 +6,12 @@ Project guidance for future coding agents working in this repository.
 
 - Do not revert generated fixture changes unless explicitly asked.
 - `npm test -- --run` intentionally updates `.gcode.txt`, `.moves.png`, `.part.png`, and `.tool.png` files based on the latest code. These diffs are useful evidence of planner behavior.
-- Inspect generated fixtures when debugging CAM changes. Examples from prior issues: `medium.moves.png`, `rect-cone.part.png`, `multi-part-turn.gcode.txt`, and `partial-pass.part.png` exposed real planning or visualization defects.
+- Fixture assets live under purpose-specific folders:
+  - `test/planner-fixtures/` contains the checked-in lathecode fixture inputs and generated planner outputs.
+  - `test/integration/` contains STL import and browser integration artifacts.
+  - `test/tool-inserts/` contains generated known-insert tool screenshots.
+  - `test/sample-toolpaths/` contains the opt-in full sample catalog artifact suite.
+- Inspect generated fixtures when debugging CAM changes. Examples from prior issues: `test/planner-fixtures/medium.moves.png`, `test/planner-fixtures/rect-cone.part.png`, `test/planner-fixtures/multi-part-turn.gcode.txt`, and `test/planner-fixtures/partial-pass.part.png` exposed real planning or visualization defects.
 
 ## Vector Planner Rules
 
