@@ -3914,7 +3914,7 @@ Lathecode syntax:
 - Optional setup directives come before profile lines and must not be commented out: UNITS MM|CM|M|FT|IN, STOCK D<number>|R<number> with optional ID<number>|IR<number>, TOOL RECT|ROUND|ANG, DEPTH CUT<number> FINISH<number>, FEED MOVE<number> PASS<number> PART<number>, MODE FACE|TURN, AXES LEFT|RIGHT UP|DOWN.
 - Use MM unless the request clearly asks for another unit.
 - For typical external turning, include STOCK, TOOL, DEPTH, and outside profile lines.
-- Use profile lines in order along the spindle axis from the free end toward the chuck side.
+- Lathecode pieces are assembled right-to-left: profile lines start at the right/free/end of the part and proceed left toward the chuck side.
 - Straight profile line: L<length> R<radius> or L<length> D<diameter>.
 - Curved or tapered profile line: L<length> RS<startRadius> RE<endRadius> CONV|CONC, or use DS/DE for diameters. Do not use DS or RS unless the same line also has matching DE or RE.
 - Complex silhouettes may be approximated with many short L lines. Dozens of short straight segments are acceptable when a part has freeform, compound, or drawing-derived curves.
