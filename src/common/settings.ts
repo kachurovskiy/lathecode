@@ -1,7 +1,7 @@
 export const PX_PER_MM_OPTIONS = [10, 50, 100, 250, 500, 750, 1000] as const;
 export const PX_PER_MM_STORAGE_KEY = 'pxPerMm';
 export const PLANNER_ENGINE_OPTIONS = ['pixel', 'vector'] as const;
-export const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-v3.2';
+export const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-v4-flash';
 export const DEFAULT_OPENROUTER_VISION_MODEL = 'google/gemini-3.1-flash-lite-preview';
 
 export type PlannerEngine = typeof PLANNER_ENGINE_OPTIONS[number];
