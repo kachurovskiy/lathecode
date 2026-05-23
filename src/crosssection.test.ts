@@ -20,6 +20,7 @@ describe('CrossSection', () => {
     const axis = svg.querySelector<SVGLineElement>('.crossSectionAxis')!;
     expect(axis).not.toBeNull();
     expect(Number(axis.getAttribute('x1'))).toBeGreaterThan(Number(axis.getAttribute('x2')));
+    expect(axis.getAttribute('stroke-dasharray')).toBe('6 6');
     expect(container.querySelector('.crossSectionDimensions')?.textContent)
       .toBe('Part ⌀6 L6mm, stock ⌀10 L6 mm');
     expect(svg.querySelector('.crossSectionChuck')).toBeNull();

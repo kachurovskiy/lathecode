@@ -7,6 +7,12 @@ type UnitOption = 'MM' | 'CM' | 'M' | 'FT' | 'IN';
 type ModeOption = 'FACE' | 'TURN';
 type ZDirection = 'LEFT' | 'RIGHT';
 type XDirection = 'UP' | 'DOWN';
+type FeedAnimationRow = {
+  input: HTMLInputElement,
+  track: HTMLSpanElement,
+  marker: HTMLSpanElement,
+  value: HTMLSpanElement,
+};
 
 const DIRECTIVE_ORDER: readonly DirectiveName[] = ['UNITS', 'STOCK', 'TOOL', 'DEPTH', 'FEED', 'MODE', 'AXES'];
 const UNIT_OPTIONS: readonly {value: UnitOption, label: string, guide: string}[] = [
@@ -30,6 +36,15 @@ const UNIT_FEED_LABELS: Record<UnitOption, string> = {
   FT: 'ft/min',
   IN: 'in/min',
 };
+const DEFAULT_FEED_MM_PER_MIN = {
+  move: 200,
+  pass: 50,
+  part: 10,
+};
+const FEED_RULER_LENGTH_MM = 25.4;
+const FEED_TRACK_SIDE_INSET_PX = 8;
+const FEED_PREVIEW_FALLBACK_TRACK_PX = 320;
+const MIN_FEED_PREVIEW_DURATION_MS = 250;
 
 export function openSetupDialog(
     kind: SetupDialogKind,
@@ -89,14 +104,17 @@ function openStockDialog(getText: () => string, applyText: (text: string) => voi
   const diameterInput = createNumberInput('stockDiameter', stock.diameter);
   const innerDiameterInput = createNumberInput('stockInnerDiameter', stock.innerDiameter);
 
-  controls.appendChild(createSetupField(
+  const diameterFields = document.createElement('div');
+  diameterFields.className = 'setupFieldGroup stockDiameterFields';
+  diameterFields.appendChild(createSetupField(
     'Outer diameter',
     diameterInput,
     'The starting bar or tube outside diameter.'));
-  controls.appendChild(createSetupField(
+  diameterFields.appendChild(createSetupField(
     'Inner diameter',
     innerDiameterInput,
     'Optional existing through-hole for tube stock or pre-drilled blanks.'));
+  controls.appendChild(diameterFields);
 
   showSetupDialog('Stock', form, 'Use stock', applyText, () => {
     const diameter = readPositiveNumber(diameterInput, 'Outer diameter');
@@ -141,7 +159,8 @@ function openFeedDialog(getText: () => string, applyText: (text: string) => void
     'setupFeedDialog',
     'Set feed rates for positioning moves, normal cutting passes, and parting or cutoff moves.');
   const controls = createSetupControls(form);
-  const feedUnit = UNIT_FEED_LABELS[parseCurrentUnits(getText())];
+  const units = parseCurrentUnits(getText());
+  const feedUnit = UNIT_FEED_LABELS[units];
   const feed = parseCurrentFeed(getText());
   const moveInput = createNumberInput('feedMove', feed.move);
   const passInput = createNumberInput('feedPass', feed.pass);
@@ -159,6 +178,11 @@ function openFeedDialog(getText: () => string, applyText: (text: string) => void
     `Parting feed (${feedUnit})`,
     partInput,
     'Used for cutoff or plunge-style parting moves.'));
+  controls.appendChild(createFeedAnimationPanel(units, feedUnit, [
+    {label: 'Positioning', input: moveInput},
+    {label: 'Cutting', input: passInput},
+    {label: 'Parting', input: partInput},
+  ]));
 
   showSetupDialog('Feed', form, 'Use feed', applyText, () => {
     const move = readPositiveNumber(moveInput, 'Positioning feed');
@@ -168,7 +192,19 @@ function openFeedDialog(getText: () => string, applyText: (text: string) => void
       getText(),
       'FEED',
       `FEED MOVE${formatNumber(move)} PASS${formatNumber(pass)} PART${formatNumber(part)}`);
-  }, moveInput);
+  }, moveInput, actions => {
+    const resetButton = document.createElement('button');
+    resetButton.type = 'button';
+    resetButton.textContent = 'Reset defaults';
+    resetButton.addEventListener('click', () => {
+      const defaults = getDefaultFeedValues(units);
+      moveInput.value = defaults.move;
+      passInput.value = defaults.pass;
+      partInput.value = defaults.part;
+      moveInput.dispatchEvent(new Event('input', {bubbles: true}));
+    });
+    actions.appendChild(resetButton);
+  });
 }
 
 function openModeDialog(getText: () => string, applyText: (text: string) => void) {
@@ -350,6 +386,162 @@ function createSetupField(labelText: string, control: HTMLElement, guideText: st
   return field;
 }
 
+function createFeedAnimationPanel(
+    units: UnitOption,
+    feedUnit: string,
+    feeds: readonly {label: string, input: HTMLInputElement}[]): HTMLDivElement {
+  const panel = document.createElement('div');
+  panel.className = 'feedAnimationPanel';
+  panel.setAttribute('aria-label', 'Feed speed preview');
+
+  const cssPxPerMm = estimateCssPixelsPerMillimeter();
+  panel.appendChild(createFeedScaleRuler(cssPxPerMm));
+
+  const rows: FeedAnimationRow[] = feeds.map(feed => {
+    const row = document.createElement('div');
+    row.className = 'feedAnimationRow';
+
+    const label = document.createElement('span');
+    label.className = 'feedAnimationLabel';
+    label.textContent = feed.label;
+    row.appendChild(label);
+
+    const track = document.createElement('span');
+    track.className = 'feedAnimationTrack';
+    const travel = document.createElement('span');
+    travel.className = 'feedAnimationTravel';
+    track.appendChild(travel);
+    const marker = document.createElement('span');
+    marker.className = 'feedAnimationMarker';
+    track.appendChild(marker);
+    row.appendChild(track);
+
+    const value = document.createElement('span');
+    value.className = 'feedAnimationValue';
+    row.appendChild(value);
+
+    panel.appendChild(row);
+    return {input: feed.input, track, marker, value};
+  });
+
+  const update = () => {
+    for (const row of rows) updateFeedAnimationRow(row, units, feedUnit, cssPxPerMm);
+  };
+  feeds.forEach(feed => feed.input.addEventListener('input', update));
+  update();
+  scheduleAfterLayout(update);
+  return panel;
+}
+
+function createFeedScaleRuler(cssPxPerMm: number): HTMLDivElement {
+  const ruler = document.createElement('div');
+  ruler.className = 'feedScaleRuler';
+
+  const label = document.createElement('span');
+  label.className = 'feedScaleRulerLabel';
+  label.textContent = 'Display ruler';
+  ruler.appendChild(label);
+
+  const track = document.createElement('span');
+  track.className = 'feedScaleRulerTrack';
+  track.style.width = `${formatNumber(FEED_RULER_LENGTH_MM * cssPxPerMm)}px`;
+  track.setAttribute('aria-label', '25.4 millimeters equals 1 inch');
+  for (let mm = 0; mm <= 25; mm += 5) {
+    track.appendChild(createFeedScaleTick(mm / FEED_RULER_LENGTH_MM, mm % 10 === 0, `${mm}`));
+  }
+  track.appendChild(createFeedScaleTick(1, true, '1 in'));
+  ruler.appendChild(track);
+
+  const value = document.createElement('span');
+  value.className = 'feedScaleRulerValue';
+  value.textContent = `${formatNumber(FEED_RULER_LENGTH_MM)} mm / 1 in`;
+  ruler.appendChild(value);
+
+  return ruler;
+}
+
+function createFeedScaleTick(position: number, major: boolean, labelText: string): HTMLSpanElement {
+  const tick = document.createElement('span');
+  tick.className = major ? 'feedScaleTick major' : 'feedScaleTick';
+  tick.style.left = `${formatNumber(position * 100)}%`;
+  if (major) {
+    const label = document.createElement('span');
+    label.className = 'feedScaleTickLabel';
+    label.textContent = labelText;
+    tick.appendChild(label);
+  }
+  return tick;
+}
+
+function updateFeedAnimationRow(row: FeedAnimationRow, units: UnitOption, feedUnit: string, cssPxPerMm: number) {
+  const feedValue = Number(row.input.value);
+  row.marker.classList.remove('running');
+  if (!Number.isFinite(feedValue) || feedValue <= 0) {
+    row.value.textContent = '';
+    return;
+  }
+
+  const feedMmPerMinute = feedValue * UNIT_MULTIPLIERS[units];
+  const travelPx = getFeedTrackTravelPx(row.track);
+  const travelMm = travelPx / cssPxPerMm;
+  const durationMs = Math.max(
+    travelMm / feedMmPerMinute * 60 * 1000,
+    MIN_FEED_PREVIEW_DURATION_MS,
+  );
+  row.value.textContent = `${formatNumber(feedValue)} ${feedUnit}`;
+  row.track.style.setProperty('--feed-preview-travel', `${formatNumber(travelPx)}px`);
+  row.track.style.setProperty('--feed-preview-duration', `${formatNumber(durationMs)}ms`);
+  restartOneShotAnimation(row.marker);
+}
+
+function getFeedTrackTravelPx(track: HTMLElement): number {
+  const trackWidth = track.getBoundingClientRect().width || FEED_PREVIEW_FALLBACK_TRACK_PX;
+  return Math.max(1, trackWidth - FEED_TRACK_SIDE_INSET_PX * 2);
+}
+
+function restartOneShotAnimation(element: HTMLElement) {
+  scheduleAfterLayout(() => element.classList.add('running'));
+}
+
+function scheduleAfterLayout(callback: () => void) {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => requestAnimationFrame(callback));
+  } else {
+    window.setTimeout(callback, 0);
+  }
+}
+
+function estimateCssPixelsPerMillimeter(): number {
+  if (typeof window === 'undefined') return 96 / 25.4;
+
+  const cssWidth = window.screen?.width || window.innerWidth || 0;
+  const cssHeight = window.screen?.height || window.innerHeight || 0;
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const physicalPixelDiagonal = Math.hypot(cssWidth * devicePixelRatio, cssHeight * devicePixelRatio);
+  if (!physicalPixelDiagonal) return 96 / 25.4;
+
+  const estimatedDiagonalInches = estimateScreenDiagonalInches(cssWidth, cssHeight, devicePixelRatio);
+  const estimatedCssPixelsPerInch = physicalPixelDiagonal / estimatedDiagonalInches / devicePixelRatio;
+  return clamp(estimatedCssPixelsPerInch / 25.4, 2.6, 8);
+}
+
+function estimateScreenDiagonalInches(cssWidth: number, cssHeight: number, devicePixelRatio: number): number {
+  const maxCssDimension = Math.max(cssWidth, cssHeight);
+  const minCssDimension = Math.min(cssWidth, cssHeight);
+  const maxPhysicalDimension = maxCssDimension * devicePixelRatio;
+
+  if (maxCssDimension <= 950 && minCssDimension <= 520 && devicePixelRatio >= 2) return 6.3;
+  if (maxCssDimension <= 1400 && minCssDimension <= 1000 && devicePixelRatio >= 1.5) return 11;
+  if (maxPhysicalDimension >= 3600) return 27;
+  if (maxPhysicalDimension >= 2500) return 24;
+  if (maxPhysicalDimension <= 1600) return 15.6;
+  return 22;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 function createNumberInput(name: string, value: string): HTMLInputElement {
   const input = document.createElement('input');
   input.type = 'number';
@@ -514,15 +706,24 @@ function parseCurrentDepth(text: string): {cut: string, finish: string} {
 }
 
 function parseCurrentFeed(text: string): {move: string, pass: string, part: string} {
-  const multiplier = UNIT_MULTIPLIERS[parseCurrentUnits(text)];
+  const defaults = getDefaultFeedValues(parseCurrentUnits(text));
   const line = getDirectiveLine(text, 'FEED');
   const move = line ? parseParam(line, ['MOVE']) : null;
   const pass = line ? parseParam(line, ['PASS']) : null;
   const part = line ? parseParam(line, ['PART']) : null;
   return {
-    move: move ? formatNumber(move.value) : formatNumber(200 / multiplier),
-    pass: pass ? formatNumber(pass.value) : formatNumber(50 / multiplier),
-    part: part ? formatNumber(part.value) : formatNumber(10 / multiplier),
+    move: move ? formatNumber(move.value) : defaults.move,
+    pass: pass ? formatNumber(pass.value) : defaults.pass,
+    part: part ? formatNumber(part.value) : defaults.part,
+  };
+}
+
+function getDefaultFeedValues(units: UnitOption): {move: string, pass: string, part: string} {
+  const multiplier = UNIT_MULTIPLIERS[units];
+  return {
+    move: formatNumber(DEFAULT_FEED_MM_PER_MIN.move / multiplier),
+    pass: formatNumber(DEFAULT_FEED_MM_PER_MIN.pass / multiplier),
+    part: formatNumber(DEFAULT_FEED_MM_PER_MIN.part / multiplier),
   };
 }
 

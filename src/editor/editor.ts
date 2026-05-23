@@ -181,7 +181,7 @@ export class Editor extends EventTarget {
   private openScaleDialog() {
     if (!this.latheCode) return;
 
-    const stock = this.latheCode.getStock();
+    const partDimensions = this.latheCode.getPartDimensions();
     const form = document.createElement('form');
     form.className = 'scaleDialog settingsDialog';
 
@@ -190,21 +190,21 @@ export class Editor extends EventTarget {
     form.appendChild(grid);
 
     const factorInput = this.createScaleNumberInput('scaleFactor', '1');
-    const targetWidthInput = this.createScaleNumberInput('targetWidth', stock ? formatScaleValue(stock.diameter) : '');
-    const targetLengthInput = this.createScaleNumberInput('targetLength', stock ? formatScaleValue(stock.length) : '');
+    const targetDiameterInput = this.createScaleNumberInput('targetDiameter', partDimensions ? formatScaleValue(partDimensions.diameter) : '');
+    const targetLengthInput = this.createScaleNumberInput('targetLength', partDimensions ? formatScaleValue(partDimensions.length) : '');
 
     grid.appendChild(this.createScaleField(
       'Scale factor',
       factorInput,
-      'Used when target width and target length are empty.'));
+      'Used when target diameter and target length are empty.'));
     grid.appendChild(this.createScaleField(
-      'Target width',
-      targetWidthInput,
-      stock ? `Current width is ${formatScaleValue(stock.diameter)} mm.` : 'Current width is unavailable.'));
+      'Target diameter',
+      targetDiameterInput,
+      partDimensions ? `Current part diameter is ${formatScaleValue(partDimensions.diameter)} mm.` : 'Current part diameter is unavailable.'));
     grid.appendChild(this.createScaleField(
       'Target length',
       targetLengthInput,
-      stock ? `Current length is ${formatScaleValue(stock.length)} mm.` : 'Current length is unavailable.'));
+      partDimensions ? `Current part length is ${formatScaleValue(partDimensions.length)} mm.` : 'Current part length is unavailable.'));
 
     const error = document.createElement('div');
     error.className = 'toolDialogError';
@@ -222,7 +222,7 @@ export class Editor extends EventTarget {
     form.addEventListener('submit', event => {
       event.preventDefault();
       try {
-        const {xScale, zScale} = this.readScaleFactors(factorInput, targetWidthInput, targetLengthInput);
+        const {xScale, zScale} = this.readScaleFactors(factorInput, targetDiameterInput, targetLengthInput);
         if (!this.latheCode) throw new Error('Lathecode is not valid');
         this.latheCodeInput.value = this.latheCode.scale(xScale, zScale);
         this.update();
@@ -268,29 +268,29 @@ export class Editor extends EventTarget {
 
   private readScaleFactors(
     factorInput: HTMLInputElement,
-    targetWidthInput: HTMLInputElement,
+    targetDiameterInput: HTMLInputElement,
     targetLengthInput: HTMLInputElement,
   ): {xScale: number, zScale: number} {
     const factor = this.readOptionalPositiveNumber(factorInput, 'Scale factor');
-    const targetWidth = this.readOptionalPositiveNumber(targetWidthInput, 'Target width');
+    const targetDiameter = this.readOptionalPositiveNumber(targetDiameterInput, 'Target diameter');
     const targetLength = this.readOptionalPositiveNumber(targetLengthInput, 'Target length');
-    const stock = this.latheCode?.getStock();
+    const partDimensions = this.latheCode?.getPartDimensions();
 
-    if (targetWidth === null && targetLength === null) {
-      if (factor === null) throw new Error('Enter a scale factor, target width, or target length');
+    if (targetDiameter === null && targetLength === null) {
+      if (factor === null) throw new Error('Enter a scale factor, target diameter, or target length');
       return {xScale: factor, zScale: factor};
     }
 
-    if (targetWidth !== null && (!stock || stock.diameter <= 0)) throw new Error('Current width is not available');
-    if (targetLength !== null && (!stock || stock.length <= 0)) throw new Error('Current length is not available');
+    if (targetDiameter !== null && (!partDimensions || partDimensions.diameter <= 0)) throw new Error('Current part diameter is not available');
+    if (targetLength !== null && (!partDimensions || partDimensions.length <= 0)) throw new Error('Current part length is not available');
 
-    if (targetWidth !== null && targetLength !== null) {
-      return {xScale: targetWidth / stock!.diameter, zScale: targetLength / stock!.length};
+    if (targetDiameter !== null && targetLength !== null) {
+      return {xScale: targetDiameter / partDimensions!.diameter, zScale: targetLength / partDimensions!.length};
     }
 
-    const uniformScale = targetWidth !== null
-      ? targetWidth / stock!.diameter
-      : targetLength! / stock!.length;
+    const uniformScale = targetDiameter !== null
+      ? targetDiameter / partDimensions!.diameter
+      : targetLength! / partDimensions!.length;
     return {xScale: uniformScale, zScale: uniformScale};
   }
 

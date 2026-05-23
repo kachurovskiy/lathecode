@@ -49,9 +49,9 @@ export class CrossSection {
 
     const mapper = createCrossSectionMapper(stock);
     this.dimensionsElement.textContent = formatDimensions(latheCode, stock);
-    drawAxis(this.svg, stock, mapper);
     drawStock(this.svg, stock, mapper);
     drawPart(this.svg, latheCode, mapper);
+    drawAxis(this.svg, stock, mapper);
     drawProfileLines(this.svg, latheCode, mapper);
   }
 }
@@ -94,11 +94,13 @@ function getDisplayExtents(stock: Stock): DisplayExtents {
 }
 
 function drawAxis(svg: SVGSVGElement, stock: Stock, mapper: CrossSectionMapper) {
-  appendLine(
+  const axis = appendLine(
     svg,
     mapper.map(new Point(0, 0)),
     mapper.map(new Point(0, stock.length)),
     'crossSectionAxis');
+  axis.setAttribute('stroke-dasharray', '6 6');
+  axis.setAttribute('aria-hidden', 'true');
 }
 
 function drawStock(svg: SVGSVGElement, stock: Stock, mapper: CrossSectionMapper) {
@@ -208,7 +210,7 @@ function appendPath(svg: SVGSVGElement, d: string, className: string) {
   svg.appendChild(path);
 }
 
-function appendLine(svg: SVGSVGElement, start: SvgPoint, end: SvgPoint, className: string) {
+function appendLine(svg: SVGSVGElement, start: SvgPoint, end: SvgPoint, className: string): SVGLineElement {
   const line = createSvgElement('line');
   line.classList.add(className);
   line.setAttribute('x1', formatSvgNumber(start.x));
@@ -216,6 +218,7 @@ function appendLine(svg: SVGSVGElement, start: SvgPoint, end: SvgPoint, classNam
   line.setAttribute('x2', formatSvgNumber(end.x));
   line.setAttribute('y2', formatSvgNumber(end.y));
   svg.appendChild(line);
+  return line;
 }
 
 function createSvgElement<K extends keyof SVGElementTagNameMap>(tagName: K): SVGElementTagNameMap[K] {

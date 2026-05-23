@@ -80,6 +80,10 @@ export class Stock {
   }
 }
 
+export class PartDimensions {
+  constructor(readonly diameter: number, readonly length: number) {}
+}
+
 export class Tool {
   constructor(
     readonly type: 'RECT'|'ROUND'|'ANG',
@@ -208,6 +212,13 @@ export class LatheCode {
     const l = this.getStockLength();
     const id = this.getStockInnerDiameter();
     return d > 0 && l > 0 ? new Stock(d, l, id) : null;
+  }
+
+  getPartDimensions(): PartDimensions | null {
+    const dimensions = this.getPartDimensionsInLatheUnits();
+    return dimensions
+      ? new PartDimensions(dimensions.diameter * this.unitsMultiplier, dimensions.length * this.unitsMultiplier)
+      : null;
   }
 
   getBoundingBox(): THREE.Vector3 {
@@ -371,6 +382,19 @@ export class LatheCode {
     return stockHole[1] * (stockHole[0] == 'ID' ? 1 : 2) * this.unitsMultiplier;
   }
 
+  private getPartDimensionsInLatheUnits(): PartDimensions | null {
+    const outside = getProfileLineDimensions(this.data[14]);
+    const inside = this.data[15] ? getProfileLineDimensions(this.data[15][2]) : null;
+    const stockDiameter = this.data[3] ? getStockDirectiveDiameterInLatheUnits(this.data[3]) : 0;
+    const diameter = outside?.maxRadius
+      ? outside.maxRadius * 2
+      : inside?.maxRadius && stockDiameter
+        ? stockDiameter
+        : (inside?.maxRadius || 0) * 2;
+    const length = Math.max(outside?.materialLength || 0, inside?.materialLength || 0);
+    return diameter > 0 && length > 0 ? new PartDimensions(diameter, length) : null;
+  }
+
   private getSetupLines(side: ProfileSide): string[] {
     const lines: string[] = [];
     const pushComments = (comments: CommentList) => lines.push(...comments.map(commentToString));
@@ -467,6 +491,8 @@ export class LatheCode {
       throw new Error('Scale factors must be positive numbers');
     }
 
+    const partDimensions = this.getPartDimensionsInLatheUnits();
+    const scaledPartDiameter = partDimensions ? scaleNumber(partDimensions.diameter, xScale) : null;
     const lines: string[] = [];
     const pushComments = (comments: CommentList) => lines.push(...comments.map(commentToString));
     const pushEntries = (entries: LatheEntry[]) => {
@@ -479,7 +505,7 @@ export class LatheCode {
     pushComments(this.data[0]);
     if (this.data[1]) lines.push(unitsDirectiveToString(this.data[1]));
     pushComments(this.data[2]);
-    if (this.data[3]) lines.push(stockDirectiveToString(scaleStockDirective(this.data[3], xScale)));
+    if (this.data[3]) lines.push(stockDirectiveToString(scaleStockDirective(this.data[3], xScale, scaledPartDiameter)));
     pushComments(this.data[4]);
     if (this.data[5]) lines.push(toolDirectiveToString(this.data[5]));
     pushComments(this.data[6]);
@@ -530,16 +556,47 @@ function reverseLine(line: LatheLine): string {
   return `L${line[1]}${line[2] ? ' ; ' + line[2] : ''}`;
 }
 
-function scaleStockDirective(directive: StockDirective, xScale: number): StockDirective {
+function getProfileLineDimensions(entries: LatheEntry[]): {maxRadius: number, materialLength: number} | null {
+  let maxRadius = 0;
+  let materialLength = 0;
+  for (const entry of entries) {
+    const line = entry[1];
+    if (isPartingLine(line)) continue;
+    materialLength += line[1];
+    if (isStraightLine(line)) {
+      maxRadius = Math.max(maxRadius, line[3] / (line[2] === 'D' ? 2 : 1));
+    } else if (isCurvedLine(line)) {
+      maxRadius = Math.max(
+        maxRadius,
+        line[3] / (line[2] === 'DS' ? 2 : 1),
+        line[5] / (line[4] === 'DE' ? 2 : 1),
+      );
+    }
+  }
+  return maxRadius > 0 && materialLength > 0 ? {maxRadius, materialLength} : null;
+}
+
+function getStockDirectiveDiameterInLatheUnits(directive: StockDirective): number {
   const stock = directive[2];
+  return stock[1] * (stock[0] === 'D' ? 1 : 2);
+}
+
+function scaleStockDirective(directive: StockDirective, xScale: number, scaledPartDiameter: number | null): StockDirective {
+  const stock = directive[2];
+  const stockHole = scaleNumericParam(stock[2], xScale);
+  const scaledStockDiameter = scaleNumber(getStockDirectiveDiameterInLatheUnits(directive), xScale);
+  const stockHoleDiameter = stockHole ? stockHole[1] * (stockHole[0] === 'ID' ? 1 : 2) : 0;
+  const stockDiameter = scaledPartDiameter !== null && scaledPartDiameter > stockHoleDiameter
+    ? scaledPartDiameter
+    : scaledStockDiameter;
   return [
     directive[0],
     directive[1],
     [
       stock[0],
-      scaleNumber(stock[1], xScale),
-      scaleNumericParam(stock[2], xScale),
-      scaleNumericParam(stock[3], xScale),
+      stock[0] === 'D' ? stockDiameter : scaleNumber(stockDiameter / 2, 1),
+      stockHole,
+      stock[3],
     ],
     directive[3],
   ];
@@ -552,7 +609,7 @@ function scaleLatheLine(line: LatheLine, xScale: number, zScale: number): string
   if (isStraightLine(line)) {
     return `L${numberToString(scaleNumber(line[1], zScale))} ${line[2]}${numberToString(scaleNumber(line[3], xScale))}${formatComment(line[4])}`;
   }
-  return `L${numberToString(scaleNumber(line[1], zScale))}${formatComment(line[2])}`;
+  return latheLineToString(line);
 }
 
 function scaleNumericParam<Name extends string>(param: NumericParam<Name> | null, scale: number): NumericParam<Name> | null {
@@ -561,7 +618,9 @@ function scaleNumericParam<Name extends string>(param: NumericParam<Name> | null
 
 function scaleNumber(value: number, scale: number): number {
   const multiplier = 10 ** SCALE_DECIMAL_PLACES;
-  return Math.round(value * scale * multiplier) / multiplier;
+  const rounded = Math.round(value * scale * multiplier) / multiplier;
+  const integer = Math.round(rounded);
+  return integer !== 0 && Math.abs(rounded - integer) <= 1 / multiplier ? integer : rounded;
 }
 
 function isPositiveFiniteNumber(value: number): boolean {

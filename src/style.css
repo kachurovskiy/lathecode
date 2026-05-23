@@ -134,11 +134,28 @@ button.startCard:hover {
   width: 100%;
 }
 
+.sampleDialogSection {
+  margin: 16px 0 28px;
+}
+
+.sampleDialogSectionTitle {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.sampleDialogSectionDescription {
+  max-width: 760px;
+  margin: 0 0 12px;
+  color: #444444;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
 .sampleDialogGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 12px;
-  margin: 12px 0;
+  margin: 0;
 }
 
 button.sampleDialogCard {
@@ -357,7 +374,7 @@ button.sampleDialogCard:hover {
 
 .manualToolDetails {
   border-top: 1px solid #dddddd;
-  margin-top: 18px;
+  margin: 18px 0 16px;
   padding-top: 12px;
 }
 
@@ -383,20 +400,32 @@ button.sampleDialogCard:hover {
 
 .manualToolTypeButton {
   border: 1px solid #cccccc;
+  border-radius: 3px;
   background-color: #ffffff;
   margin: 0;
 }
 
 .manualToolTypeButton + .manualToolTypeButton {
-  border-left: 0;
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.manualToolTypeButton:has(+ .manualToolTypeButton) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .manualToolTypeButton:hover {
+  position: relative;
+  z-index: 1;
   background-color: #f3f3f3;
 }
 
 .manualToolTypeButton.selected,
 .manualToolTypeButton.selected:hover {
+  position: relative;
+  z-index: 2;
   background-color: #fff7bf;
   border-color: #111111;
 }
@@ -438,10 +467,17 @@ button.sampleDialogCard:hover {
   fill-opacity: 0.9;
 }
 
-.crossSectionAxis,
 .crossSectionOutsideProfile,
 .crossSectionInsideProfile {
   display: none;
+}
+
+.crossSectionAxis {
+  fill: none;
+  stroke: #6f7880;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  pointer-events: none;
 }
 
 #sceneContainer canvas {
@@ -700,6 +736,10 @@ progress {
   max-width: 980px;
 }
 
+.setupDialog .settingsActions {
+  margin-top: 16px;
+}
+
 .setupIntro {
   max-width: 760px;
   margin: 0 0 14px;
@@ -753,6 +793,132 @@ progress {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.stockDiameterFields {
+  max-width: 420px;
+}
+
+.feedAnimationPanel {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  max-width: 760px;
+}
+
+.feedScaleRuler {
+  display: grid;
+  grid-template-columns: minmax(96px, 130px) minmax(180px, 1fr) minmax(96px, auto);
+  gap: 10px;
+  align-items: end;
+}
+
+.feedScaleRulerLabel {
+  color: #444444;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.feedScaleRulerTrack {
+  position: relative;
+  display: block;
+  height: 30px;
+  max-width: none;
+  border-bottom: 1px solid #555555;
+}
+
+.feedScaleTick {
+  position: absolute;
+  bottom: 0;
+  height: 8px;
+  border-left: 1px solid #777777;
+}
+
+.feedScaleTick.major {
+  height: 14px;
+  border-color: #333333;
+}
+
+.feedScaleTickLabel {
+  position: absolute;
+  left: 0;
+  bottom: 15px;
+  color: #444444;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.feedScaleRulerValue {
+  color: #444444;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.feedAnimationRow {
+  display: grid;
+  grid-template-columns: minmax(96px, 130px) minmax(180px, 1fr) minmax(96px, auto);
+  gap: 10px;
+  align-items: center;
+}
+
+.feedAnimationLabel {
+  font-weight: 600;
+}
+
+.feedAnimationTrack {
+  position: relative;
+  display: block;
+  height: 24px;
+  overflow: visible;
+}
+
+.feedAnimationTrack::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  border-top: 1px solid #c7c7c7;
+}
+
+.feedAnimationTravel {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: var(--feed-preview-travel, 16px);
+  border-top: 2px solid #8a8a8a;
+}
+
+.feedAnimationMarker {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #222222;
+  transform: translateX(0) translate(-50%, -50%);
+}
+
+.feedAnimationMarker.running {
+  animation: feedPreviewMove var(--feed-preview-duration, 1000ms) linear 1 forwards;
+}
+
+.feedAnimationValue {
+  color: #444444;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@keyframes feedPreviewMove {
+  from {
+    transform: translateX(0) translate(-50%, -50%);
+  }
+  to {
+    transform: translateX(var(--feed-preview-travel, 16px)) translate(-50%, -50%);
+  }
 }
 
 .setupChoiceGrid {
@@ -822,6 +988,12 @@ button.setupSegmentButton:last-child {
 @media (max-width: 760px) {
   .setupLayout {
     grid-template-columns: 1fr;
+  }
+
+  .feedScaleRuler,
+  .feedAnimationRow {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 

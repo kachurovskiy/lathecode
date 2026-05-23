@@ -220,22 +220,24 @@ describe('lathecode', () => {
     expect(new LatheCode('AXES RIGHT DOWN\nL1\nL2 R3\nL3 D0').getXDirection()).toEqual('DOWN');
   });
 
-  it('scales stock and profile dimensions without scaling machining settings', () => {
+  it('scales part dimensions without scaling stock allowance, machining settings, or parting slots', () => {
     expect(new LatheCode(`UNITS MM
 STOCK D10 ID2 A0.5 ; stock
 TOOL RECT R0.2 L2
 DEPTH CUT0.5 FINISH0.1
 FEED MOVE200 PASS50 PART10
 L2 D4 ; outside
+L1 ; parting
 L3 DS4 DE6 CONV
 INSIDE
 L1 R1
 L2 RS1 RE2 CONC`).scale(2, 3)).toEqual(`UNITS MM
-STOCK D20 ID4 A1 ; stock
+STOCK D12 ID4 A0.5 ; stock
 TOOL RECT R0.2 L2
 DEPTH CUT0.5 FINISH0.1
 FEED MOVE200 PASS50 PART10
 L6 D8 ; outside
+L1 ; parting
 L9 DS8 DE12 CONV
 INSIDE
 L3 R2
@@ -243,7 +245,11 @@ L6 RS2 RE4 CONC`);
   });
 
   it('rounds scaled dimensions to compact decimal output', () => {
-    expect(new LatheCode('STOCK D10 ID5\nTOOL RECT R0.2 L2\nL2 R1\nL1 RS1 RE2').scale(1 / 3)).toBe('STOCK D3.3333 ID1.6667\nTOOL RECT R0.2 L2\nL0.6667 R0.3333\nL0.3333 RS0.3333 RE0.6667');
+    expect(new LatheCode('STOCK D10 ID1\nTOOL RECT R0.2 L2\nL2 R1\nL1 RS1 RE2').scale(1 / 3)).toBe('STOCK D1.3333 ID0.3333\nTOOL RECT R0.2 L2\nL0.6667 R0.3333\nL0.3333 RS0.3333 RE0.6667');
+  });
+
+  it('snaps immaterial scaled decimal differences back to clean values', () => {
+    expect(new LatheCode('STOCK D10\nL1 D5').scale(1.00002, 1)).toBe('STOCK D5\nL1 D5');
   });
 
   it('reverses', () => {

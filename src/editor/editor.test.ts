@@ -102,6 +102,9 @@ describe('Editor', () => {
     container.querySelector<HTMLButtonElement>('.stockButton')!.click();
     expect(document.querySelector('.stockVisual')).not.toBeNull();
     expect(document.querySelector('input[name="stockAllowance"]')).toBeNull();
+    const stockDiameterFields = document.querySelector<HTMLElement>('.stockDiameterFields')!;
+    expect(stockDiameterFields.querySelector<HTMLInputElement>('input[name="stockDiameter"]')).not.toBeNull();
+    expect(stockDiameterFields.querySelector<HTMLInputElement>('input[name="stockInnerDiameter"]')).not.toBeNull();
     setInputValue('input[name="stockDiameter"]', '20');
     setInputValue('input[name="stockInnerDiameter"]', '4');
     clickDialogButton('Use stock');
@@ -117,6 +120,13 @@ describe('Editor', () => {
     container.querySelector<HTMLButtonElement>('.feedButton')!.click();
     expect(document.querySelector('.feedVisual')).toBeNull();
     expect(document.querySelector<HTMLFormElement>('.setupFeedDialog')!.textContent).toContain('in/min');
+    expect(document.querySelector<HTMLElement>('.feedScaleRuler')!.textContent).toContain('25.4 mm / 1 in');
+    expect(document.querySelectorAll('.feedAnimationRow').length).toBe(3);
+    expect(document.querySelector<HTMLElement>('.feedAnimationValue')!.textContent).toBe('7.874016 in/min');
+    const track = document.querySelector<HTMLElement>('.feedAnimationTrack')!;
+    expect(parseFloat(track.style.getPropertyValue('--feed-preview-travel'))).toBeGreaterThan(100);
+    expect(track.style.getPropertyValue('--feed-preview-duration'))
+      .toMatch(/ms$/);
     setInputValue('input[name="feedMove"]', '8');
     setInputValue('input[name="feedPass"]', '2');
     setInputValue('input[name="feedPart"]', '0.5');
@@ -148,6 +158,37 @@ describe('Editor', () => {
       'L2 R3');
   });
 
+  it('keeps feed preview speed proportional for slow feeds', () => {
+    const container = createEditorContainer('UNITS MM\nFEED MOVE8 PASS36 PART1\nSTOCK D10\nL2 R3');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.feedButton')!.click();
+
+    const tracks = Array.from(document.querySelectorAll<HTMLElement>('.feedAnimationTrack'));
+    const moveDuration = parseFloat(tracks[0].style.getPropertyValue('--feed-preview-duration'));
+    const passDuration = parseFloat(tracks[1].style.getPropertyValue('--feed-preview-duration'));
+
+    expect(moveDuration).toBeGreaterThan(60000);
+    expect(moveDuration / passDuration).toBeCloseTo(36 / 8, 1);
+  });
+
+  it('resets feed values to lathecode defaults in the current units', () => {
+    const container = createEditorContainer('UNITS IN\nFEED MOVE1 PASS1 PART1\nSTOCK D10\nL2 R3');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.feedButton')!.click();
+    clickDialogButton('Reset defaults');
+
+    expect(document.querySelector<HTMLInputElement>('input[name="feedMove"]')!.value).toBe('7.874016');
+    expect(document.querySelector<HTMLInputElement>('input[name="feedPass"]')!.value).toBe('1.968504');
+    expect(document.querySelector<HTMLInputElement>('input[name="feedPart"]')!.value).toBe('0.393701');
+
+    clickDialogButton('Use feed');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toContain('FEED MOVE7.874016 PASS1.968504 PART0.393701');
+  });
+
   it('scales lathecode by a factor', () => {
     const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
 
@@ -157,20 +198,21 @@ describe('Editor', () => {
     clickDialogButton('Scale lathecode');
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
-      .toBe('STOCK D20\nTOOL RECT R0.2 L2\nL10 R8');
+      .toBe('STOCK D16\nTOOL RECT R0.2 L2\nL10 R8');
   });
 
-  it('scales lathecode to target width and length', () => {
+  it('scales lathecode to target diameter and length', () => {
     const container = createEditorContainer('STOCK D10\nL5 R4');
 
     new Editor(container);
     container.querySelector<HTMLButtonElement>('.scaleButton')!.click();
-    setInputValue('input[name="targetWidth"]', '30');
+    expect(document.querySelector<HTMLFormElement>('.scaleDialog')!.textContent).toContain('Target diameter');
+    setInputValue('input[name="targetDiameter"]', '30');
     setInputValue('input[name="targetLength"]', '20');
     clickDialogButton('Scale lathecode');
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
-      .toBe('STOCK D30\nL20 R12');
+      .toBe('STOCK D30\nL20 R15');
   });
 
   it('scales uniformly to one target dimension', () => {
@@ -182,7 +224,7 @@ describe('Editor', () => {
     clickDialogButton('Scale lathecode');
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
-      .toBe('STOCK D40\nL20 R16');
+      .toBe('STOCK D32\nL20 R16');
   });
 
   it('flips inside-only profiles', () => {
@@ -226,6 +268,7 @@ describe('Editor', () => {
     new Editor(container);
     container.querySelector<HTMLButtonElement>('.toolButton')!.click();
     document.querySelector<HTMLDetailsElement>('.manualToolDetails')!.open = true;
+    expect(getComputedStyle(document.querySelector<HTMLDetailsElement>('.manualToolDetails')!).marginBottom).not.toBe('0px');
     document.querySelector<HTMLButtonElement>('.manualToolTypeButton[data-type="ROUND"]')!.click();
     setInputValue('.manualParamInput[data-param="R"]', '4');
     clickDialogButton('Use manual definition');
