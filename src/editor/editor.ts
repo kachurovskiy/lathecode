@@ -3,7 +3,7 @@ import { createFullScreenDialog } from '../common/dialog.ts';
 import { openToolDialog } from './tooldialog.ts';
 import StlImportWorker from './stlimportworker?worker&inline';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
-import { APP_SETTING_DEFINITIONS, AppSettingKey, AppSettings, DEFAULT_APP_SETTINGS, loadAppSettings, normalizeAppSettings, saveAppSettings } from '../common/settings.ts';
+import { APP_SETTING_DEFINITIONS, APP_SETTING_SECTIONS, AppSettingDefinition, AppSettingKey, AppSettings, AppSettingSectionDefinition, DEFAULT_APP_SETTINGS, loadAppSettings, normalizeAppSettings, saveAppSettings } from '../common/settings.ts';
 
 export class PlanEvent extends Event {
   constructor(readonly latheCode: LatheCode, readonly settings: AppSettings) {
@@ -213,60 +213,66 @@ export class Editor extends EventTarget {
     const form = document.createElement('form');
     form.className = 'settingsDialog';
 
-    const grid = document.createElement('div');
-    grid.className = 'settingsGrid';
-    form.appendChild(grid);
+    for (const sectionDefinition of APP_SETTING_SECTIONS) {
+      const section = document.createElement('section');
+      section.className = 'settingsSection';
+      section.dataset.settingSectionId = sectionDefinition.id;
 
-    for (const definition of APP_SETTING_DEFINITIONS) {
-      const field = document.createElement('label');
-      field.className = 'settingField';
+      const title = document.createElement('h3');
+      title.className = 'settingsSectionTitle';
+      title.textContent = sectionDefinition.label;
+      section.appendChild(title);
 
-      const heading = document.createElement('span');
-      heading.className = 'settingHeading';
-      heading.textContent = definition.label;
-      field.appendChild(heading);
+      const guidance = document.createElement('p');
+      guidance.className = 'settingsSectionGuide';
+      guidance.textContent = sectionDefinition.guidance;
+      section.appendChild(guidance);
 
-      const input = document.createElement('input');
-      input.className = 'settingInput';
-      input.name = definition.key;
-      input.type = 'number';
-      input.min = String(definition.min);
-      input.max = String(definition.max);
-      input.step = String(definition.step);
-      input.value = String(currentSettings[definition.key]);
-      field.appendChild(input);
+      const grid = document.createElement('div');
+      grid.className = 'settingsGrid';
+      section.appendChild(grid);
 
-      const guide = document.createElement('span');
-      guide.className = 'settingGuide';
-      guide.textContent = `${definition.guidance} Reasonable values: ${definition.reasonableValues} ${definition.unit}. Default: ${definition.defaultValue} ${definition.unit}.`;
-      field.appendChild(guide);
+      for (const definition of sectionDefinition.definitions) {
+        grid.appendChild(this.createSettingsField(definition, currentSettings));
+      }
 
-      grid.appendChild(field);
+      form.appendChild(section);
     }
 
     const actions = document.createElement('div');
     actions.className = 'settingsActions';
 
     const saveButton = document.createElement('button');
-    saveButton.type = 'submit';
+    saveButton.type = 'button';
     saveButton.textContent = 'Save settings';
     actions.appendChild(saveButton);
 
     const resetButton = document.createElement('button');
     resetButton.type = 'button';
     resetButton.textContent = 'Reset defaults';
-    resetButton.addEventListener('click', () => this.fillSettingsForm(form, DEFAULT_APP_SETTINGS));
     actions.appendChild(resetButton);
 
     form.appendChild(actions);
 
     const dialog = createFullScreenDialog(form, 'Settings');
-    form.addEventListener('submit', event => {
-      event.preventDefault();
+    const updateSectionVisibility = () => this.updateSettingsSectionVisibility(form);
+    const saveSettings = () => {
       const settings = this.readSettingsForm(form);
       saveAppSettings(settings);
       dialog.remove();
       this.dispatchEvent(new Event('change'));
+    };
+    updateSectionVisibility();
+    form.addEventListener('input', updateSectionVisibility);
+    form.addEventListener('change', updateSectionVisibility);
+    saveButton.addEventListener('click', saveSettings);
+    resetButton.addEventListener('click', () => {
+      this.fillSettingsForm(form, DEFAULT_APP_SETTINGS);
+      updateSectionVisibility();
+    });
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      saveSettings();
     });
   }
 
@@ -395,15 +401,69 @@ export class Editor extends EventTarget {
   private readSettingsForm(form: HTMLFormElement): AppSettings {
     const raw: Partial<Record<AppSettingKey, string>> = {};
     for (const definition of APP_SETTING_DEFINITIONS) {
-      const input = form.elements.namedItem(definition.key) as HTMLInputElement | null;
+      const input = form.elements.namedItem(definition.key) as HTMLInputElement | HTMLSelectElement | null;
       raw[definition.key] = input?.value ?? '';
     }
     return normalizeAppSettings(raw);
   }
 
+  private updateSettingsSectionVisibility(form: HTMLFormElement) {
+    const settings = this.readSettingsForm(form);
+    for (const sectionDefinition of APP_SETTING_SECTIONS) {
+      const section = form.querySelector<HTMLElement>(`.settingsSection[data-setting-section-id="${sectionDefinition.id}"]`);
+      if (section) section.hidden = !this.settingsSectionApplies(sectionDefinition, settings);
+    }
+  }
+
+  private settingsSectionApplies(sectionDefinition: AppSettingSectionDefinition, settings: AppSettings): boolean {
+    return !sectionDefinition.plannerEngines || sectionDefinition.plannerEngines.includes(settings.plannerEngine);
+  }
+
+  private createSettingsField(definition: AppSettingDefinition, currentSettings: AppSettings): HTMLLabelElement {
+    const field = document.createElement('label');
+    field.className = 'settingField';
+
+    const heading = document.createElement('span');
+    heading.className = 'settingHeading';
+    heading.textContent = definition.label;
+    field.appendChild(heading);
+
+    let input: HTMLInputElement | HTMLSelectElement;
+    if (definition.type === 'select') {
+      const select = document.createElement('select');
+      for (const optionDefinition of definition.options) {
+        const option = document.createElement('option');
+        option.value = optionDefinition.value;
+        option.textContent = optionDefinition.label;
+        select.appendChild(option);
+      }
+      input = select;
+    } else {
+      const numberInput = document.createElement('input');
+      numberInput.type = 'number';
+      numberInput.min = String(definition.min);
+      numberInput.max = String(definition.max);
+      numberInput.step = String(definition.step);
+      input = numberInput;
+    }
+    input.className = 'settingInput';
+    input.name = definition.key;
+    input.value = String(currentSettings[definition.key]);
+    field.appendChild(input);
+
+    const guide = document.createElement('span');
+    guide.className = 'settingGuide';
+    guide.textContent = definition.type === 'select'
+      ? `${definition.guidance} Default: ${definition.options.find(option => option.value === definition.defaultValue)?.label ?? definition.defaultValue}.`
+      : `${definition.guidance} Reasonable values: ${definition.reasonableValues} ${definition.unit}. Default: ${definition.defaultValue} ${definition.unit}.`;
+    field.appendChild(guide);
+
+    return field;
+  }
+
   private fillSettingsForm(form: HTMLFormElement, settings: AppSettings) {
     for (const definition of APP_SETTING_DEFINITIONS) {
-      const input = form.elements.namedItem(definition.key) as HTMLInputElement | null;
+      const input = form.elements.namedItem(definition.key) as HTMLInputElement | HTMLSelectElement | null;
       if (input) input.value = String(settings[definition.key]);
     }
   }

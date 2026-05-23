@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@turf/boolean-valid": "^7.2.0",
+    "clipper2-ts": "^2.0.1-16",
     "color": "^4.2.3",
     "polygon-clipping": "^0.15.7",
     "three": "^0.173.0"

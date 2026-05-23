@@ -133,14 +133,18 @@ export function createMovesCanvas(moves: Move[], width: number, height: number, 
     minYMm = Math.min(move.yStartMm, move.yStartMm + move.yDeltaMm, minYMm);
     maxYMm = Math.max(move.yStartMm, move.yStartMm + move.yDeltaMm, maxYMm);
   });
-  const coeff = Math.min(width / (maxXMm - minXMm), height / (maxYMm - minYMm));
+  const xSpanMm = maxXMm - minXMm;
+  const ySpanMm = maxYMm - minYMm;
+  const xCoeff = xSpanMm > 0 ? width / xSpanMm : Infinity;
+  const yCoeff = ySpanMm > 0 ? height / ySpanMm : Infinity;
+  const coeff = Number.isFinite(Math.min(xCoeff, yCoeff)) ? Math.min(xCoeff, yCoeff) : 1;
   const xToPx = (xMm: number): number => { return (maxXMm - xMm) * coeff; };
   const yToPx = (yMm: number): number => { return (maxYMm - yMm) * coeff; };
 
   const canvas = document.createElement('canvas');
   canvas.className = 'moves';
   canvas.width = width;
-  canvas.height = Math.ceil(coeff * (maxYMm - minYMm));
+  canvas.height = Math.max(1, Math.ceil(coeff * ySpanMm));
 
   const context = canvas.getContext('2d')!;
   context.lineWidth = 1;

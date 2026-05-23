@@ -323,14 +323,35 @@ progress {
 }
 
 .settingsDialog {
-  max-width: 900px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+}
+
+.settingsSection {
+  margin: 18px 0 24px;
+  width: 100%;
+}
+
+.settingsSectionTitle {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.settingsSectionGuide {
+  margin: 0;
+  color: #444444;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .settingsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 420px));
   gap: 14px;
+  justify-content: start;
   margin: 12px 0;
+  width: 100%;
 }
 
 .settingField {
@@ -340,6 +361,8 @@ progress {
   border: 1px solid #dddddd;
   padding: 12px;
   box-sizing: border-box;
+  max-width: 420px;
+  width: 100%;
 }
 
 .settingHeading {

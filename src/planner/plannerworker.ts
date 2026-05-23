@@ -5,6 +5,7 @@ import { Move } from '../common/move';
 import { AppSettings, normalizeAppSettings } from '../common/settings';
 import { PlannerBitmap, PlannerCell } from './bitmap';
 import { Rasterizer } from './rasterizer';
+import { VectorPlannerWorker } from './vectorplanner';
 
 export class ToWorkerMessage {
   constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number, readonly settings?: Partial<AppSettings>) {}
@@ -26,13 +27,30 @@ class Pass {
 type PlannerWorkerPostMessage = (message: FromWorkerMessage | {progressMessage?: string, error?: string, moves?: PixelMove[] | Move[]}) => void;
 type PlannerRasterizer = Pick<Rasterizer, 'createPartBitmap' | 'createToolBitmap'>;
 
-type PlannerWorkerOptions = {
+export type PlannerWorkerOptions = {
   rasterizer?: PlannerRasterizer,
   postMessage?: PlannerWorkerPostMessage,
   optimizeMoves?: typeof optimizePlannerMoves,
 };
 
 export class PlannerWorker {
+  constructor(latheCode: LatheCode, settings: number | Partial<AppSettings> = {}, options: PlannerWorkerOptions = {}) {
+    const normalizedSettings = typeof settings === 'number'
+      ? normalizeAppSettings({pxPerMm: settings})
+      : normalizeAppSettings(settings);
+
+    if (normalizedSettings.plannerEngine === 'vector') {
+      new VectorPlannerWorker(latheCode, normalizedSettings, {
+        postMessage: options.postMessage,
+      });
+      return;
+    }
+
+    new PixelPlannerWorker(latheCode, normalizedSettings, options);
+  }
+}
+
+class PixelPlannerWorker {
   private rasterizer: PlannerRasterizer;
   private canvas: PlannerBitmap;
   private tool: PlannerBitmap;

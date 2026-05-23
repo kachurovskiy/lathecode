@@ -8,7 +8,7 @@ import * as polygonClipping from "polygon-clipping";
 import { cutPolygonLower, getPolygonArea, mirrorPolygonY, moveIntoNonNegativeX, removeConsecutiveDuplicatePoints, removeTinyAreaPolygons, repairPointsGoingBack, scaleAndRoundPolygon, segmentToMoves } from "../common/pixelutils";
 import { LatheCode } from "../common/lathecode";
 import { booleanValid } from '@turf/boolean-valid';
-import { AppSettings, DEFAULT_APP_SETTINGS, loadAppSettings, normalizeAppSettings } from "../common/settings";
+import { type AppSettings, DEFAULT_APP_SETTINGS, loadAppSettings, normalizeAppSettings } from "../common/settings";
 
 type CoordinatePlane = "xy" | "xz" | "yz";
 
@@ -20,11 +20,11 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (pr
 
   // We don't know how the mesh is oriented and along which axis is intended to be rotated so we try all options and let user choose.
   callback("Calculating xy section...");
-  const projectionsX = projectOrCut(geometry, "xy", new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), callback);
+  const projectionsX = projectOrCut(geometry, "xy", new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), callback, normalizedSettings);
   callback("Calculating yz section...");
-  const projectionsY = projectOrCut(geometry, "yz", new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), callback);
+  const projectionsY = projectOrCut(geometry, "yz", new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), callback, normalizedSettings);
   callback("Calculating xz section...");
-  const projectionsZ = projectOrCut(geometry, "xz", new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), callback);
+  const projectionsZ = projectOrCut(geometry, "xz", new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), callback, normalizedSettings);
   callback("Post-processing sections...");
 
   let latheCodes = [
@@ -46,7 +46,7 @@ export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (pr
     const wellSizedLatheCodes = latheCodes.filter(lc => {
       const lcSize = lc.getBoundingBox();
       const diff = Math.abs(lcSize.x - size.x) / size.x + Math.abs(lcSize.y - size.y) / size.y + Math.abs(lcSize.z - size.z) / size.z;
-      return diff < 0.2;
+      return diff < normalizedSettings.stlSizeMatchTolerance;
     });
     if (wellSizedLatheCodes.length) {
       latheCodes = wellSizedLatheCodes;
@@ -63,12 +63,14 @@ export function projectOrCut(
   planeNormal: THREE.Vector3,
   planePoint: THREE.Vector3,
   progressCallback: (progressMessage: string) => void,
+  settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS,
 ): Pixel[][] {
-  const cutLoops = cutMeshWithPlane(geometry, plane, planeNormal, planePoint);
+  const normalizedSettings = normalizeAppSettings(settings);
+  const cutLoops = cutMeshWithPlane(geometry, plane, planeNormal, planePoint, normalizedSettings);
   if (cutLoops.length > 0) return cutLoops;
 
   try {
-    return projectOnPlane(geometry, plane, progressCallback);
+    return projectOnPlane(geometry, plane, progressCallback, normalizedSettings);
   } catch (e) {
     console.log(`Failed projecting on plane ${plane}: ${e}`);
     return [];
@@ -80,7 +82,7 @@ function sectionLoopsToLatheCodes(sectionLoops: Pixel[][], settings: AppSettings
   projections = projections.map(projection => scaleAndRoundPolygon(projection, settings.pxPerMm));
   projections = projections.map(projection => removeConsecutiveDuplicatePoints(projection));
   projections = projections.map(projection => moveIntoNonNegativeX(mirrorPolygonY(cutPolygonLower(projection))));
-  projections = projections.filter(projection => projection.length > 2 && getPolygonArea(projection) > 0.001);
+  projections = projections.filter(projection => projection.length > 2 && getPolygonArea(projection) > settings.stlProjectionMinimumAreaPx2);
   return projections.map(projection => materialPolygonToLatheCodeOrNull(projection, settings)).filter(lc => lc !== null) as LatheCode[];
 }
 
@@ -100,7 +102,7 @@ function materialPolygonToLatheCodeOrNull(polygon: Pixel[], settings: AppSetting
   const maxOuterRadiusPx = Math.max(...outer.map(p => p.y));
   const maxInnerRadiusPx = inner.length ? Math.max(...inner.map(p => p.y)) : 0;
   const hasInnerProfile = maxInnerRadiusPx > 0;
-  const constantInnerRadiusPx = hasInnerProfile ? getConstantRadiusPx(inner) : null;
+  const constantInnerRadiusPx = hasInnerProfile ? getConstantRadiusPx(inner, settings) : null;
   let text = outerText;
 
   if (constantInnerRadiusPx !== null && constantInnerRadiusPx > 0) {
@@ -180,10 +182,10 @@ function profileChainToLatheText(chain: Pixel[], settings: AppSettings): string 
     .join('\n');
 }
 
-function getConstantRadiusPx(chain: Pixel[]): number | null {
+function getConstantRadiusPx(chain: Pixel[], settings: AppSettings): number | null {
   const minY = Math.min(...chain.map(p => p.y));
   const maxY = Math.max(...chain.map(p => p.y));
-  return maxY - minY <= 1 ? Math.round((minY + maxY) / 2) : null;
+  return maxY - minY <= settings.stlConstantRadiusTolerancePx ? Math.round((minY + maxY) / 2) : null;
 }
 
 function formatMm(num: number): string {
@@ -202,22 +204,25 @@ function deduplicateLatheCodes(latheCodes: LatheCode[]): LatheCode[] {
   return result;
 }
 
-function r5(num: number): number {
-  return Math.round(num * 1e5);
+function roundProjectionCoordinate(num: number, projectionScale: number): number {
+  return Math.round(num * projectionScale);
 }
 
 export function projectOnPlane(
   geometry: THREE.BufferGeometry<THREE.NormalBufferAttributes>,
   plane: CoordinatePlane,
   progressCallback: (progressMessage: string) => void,
+  settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS,
 ): Pixel[][] {
+  const normalizedSettings = normalizeAppSettings(settings);
+  const projectionScale = normalizedSettings.stlProjectionScale;
   const positions = geometry.attributes.position.array;
   const projectedPolygons: Polygon[] = [];
   for (let i = 0; i < positions.length; i += 9) {
     // Directly access the coordinates from positions array
-    const x1 = r5(positions[i]), y1 = r5(positions[i + 1]), z1 = r5(positions[i + 2]);
-    const x2 = r5(positions[i + 3]), y2 = r5(positions[i + 4]), z2 = r5(positions[i + 5]);
-    const x3 = r5(positions[i + 6]), y3 = r5(positions[i + 7]), z3 = r5(positions[i + 8]);
+    const x1 = roundProjectionCoordinate(positions[i], projectionScale), y1 = roundProjectionCoordinate(positions[i + 1], projectionScale), z1 = roundProjectionCoordinate(positions[i + 2], projectionScale);
+    const x2 = roundProjectionCoordinate(positions[i + 3], projectionScale), y2 = roundProjectionCoordinate(positions[i + 4], projectionScale), z2 = roundProjectionCoordinate(positions[i + 5], projectionScale);
+    const x3 = roundProjectionCoordinate(positions[i + 6], projectionScale), y3 = roundProjectionCoordinate(positions[i + 7], projectionScale), z3 = roundProjectionCoordinate(positions[i + 8], projectionScale);
 
     let projectedTriangle: Pair[] = [];
 
@@ -239,7 +244,7 @@ export function projectOnPlane(
   progressCallback(`Merging ${projectedPolygons.length} polygons for plane ${plane}, please wait ${estimatePolygonClippingTime(projectedPolygons.length)} seconds...`);
   const result = (polygonClipping as unknown as any).default.union(projectedPolygons);
   return result.map((polygon: Polygon) =>
-    polygon[0].map(([x, y]) => new Pixel(x / 1e5, y / 1e5))
+    polygon[0].map(([x, y]) => new Pixel(x / projectionScale, y / projectionScale))
   );
 }
 
@@ -255,10 +260,12 @@ function cutMeshWithPlane(
   plane: CoordinatePlane,
   planeNormal: THREE.Vector3,
   planePoint: THREE.Vector3,
+  settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS,
 ): Pixel[][] {
+  const normalizedSettings = normalizeAppSettings(settings);
   const intersectionEdges: Map<string, THREE.Vector3[]> = new Map();
   const coplanarEdges: Map<string, THREE.Vector3[]> = new Map();
-  const EPS = 1e-6;
+  const EPS = normalizedSettings.stlCutPlaneToleranceMm;
 
   function edgeKey(a: THREE.Vector3, b: THREE.Vector3): string {
     const aKey = pointKey(a);

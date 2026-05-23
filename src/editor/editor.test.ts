@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Editor, PlanEvent, wrapStlText } from './editor';
-import { APP_SETTING_DEFINITIONS, DEFAULT_APP_SETTINGS } from '../common/settings';
+import { APP_SETTING_DEFINITIONS, APP_SETTING_SECTIONS, DEFAULT_APP_SETTINGS, type PlannerEngine } from '../common/settings';
 
 describe('Editor', () => {
   beforeEach(() => {
@@ -47,11 +47,22 @@ describe('Editor', () => {
     new Editor(container);
     container.querySelector<HTMLButtonElement>('.settingsButton')!.click();
 
-    const dialog = document.querySelector('.settingsDialog')!;
+    const dialog = document.querySelector<HTMLFormElement>('.settingsDialog')!;
     expect(dialog.textContent).toContain('Reasonable values');
+    for (const section of APP_SETTING_SECTIONS) {
+      expect(getSettingsSection(section.id).textContent).toContain(section.label);
+    }
     expect(dialog.querySelectorAll<HTMLInputElement>('.settingInput').length).toBe(APP_SETTING_DEFINITIONS.length);
+    expectVisibleSettingsSections(['planning', 'pixelPlanner', 'stlImport', 'preview']);
+    expect(getVisibleSettingInputCount(dialog)).toBe(expectedVisibleSettingInputCount('pixel'));
     expect(dialog.querySelector<HTMLInputElement>('input[name="pxPerMm"]')!.value).toBe('750');
     expect(dialog.querySelector<HTMLInputElement>('input[name="smoothingEpsilonPx"]')!.value).toBe('1.25');
+    expect(dialog.querySelector<HTMLSelectElement>('select[name="plannerEngine"]')!.value).toBe('pixel');
+
+    setInputValue('select[name="plannerEngine"]', 'vector');
+
+    expectVisibleSettingsSections(['planning', 'vectorPlanner', 'geometry', 'stlImport', 'preview']);
+    expect(getVisibleSettingInputCount(dialog)).toBe(expectedVisibleSettingInputCount('vector'));
   });
 
   it('persists settings and sends them with plan events', async () => {
@@ -64,14 +75,24 @@ describe('Editor', () => {
 
     container.querySelector<HTMLButtonElement>('.settingsButton')!.click();
     setInputValue('input[name="pxPerMm"]', '750');
+    setInputValue('select[name="plannerEngine"]', 'vector');
     setInputValue('input[name="smoothingEpsilonPx"]', '1.25');
+    setInputValue('input[name="vectorMinimumRoughChipAreaMm2"]', '0.02');
     clickDialogButton('Save settings');
     container.querySelector<HTMLButtonElement>('.planButton')!.click();
     await waitForAsyncClick();
 
     expect(localStorage.getItem('pxPerMm')).toBe('750');
+    expect(localStorage.getItem('plannerEngine')).toBe('vector');
     expect(localStorage.getItem('smoothingEpsilonPx')).toBe('1.25');
-    expect(plannedSettings).toEqual([{...DEFAULT_APP_SETTINGS, pxPerMm: 750, smoothingEpsilonPx: 1.25}]);
+    expect(localStorage.getItem('vectorMinimumRoughChipAreaMm2')).toBe('0.02');
+    expect(plannedSettings).toEqual([{
+      ...DEFAULT_APP_SETTINGS,
+      pxPerMm: 750,
+      plannerEngine: 'vector',
+      smoothingEpsilonPx: 1.25,
+      vectorMinimumRoughChipAreaMm2: 0.02,
+    }]);
   });
 
   it('flips inside-only profiles', () => {
@@ -189,14 +210,40 @@ function createEditorContainer(value: string): HTMLElement {
 function clickDialogButton(text: string) {
   const button = Array.from(document.querySelectorAll('button')).find(button => button.textContent === text);
   if (!button) throw new Error(`Button not found: ${text}`);
-  button.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+  button.click();
 }
 
 function setInputValue(selector: string, value: string) {
-  const input = document.querySelector<HTMLInputElement>(selector);
+  const input = document.querySelector<HTMLInputElement | HTMLSelectElement>(selector);
   if (!input) throw new Error(`Input not found: ${selector}`);
   input.value = value;
   input.dispatchEvent(new Event('input', {bubbles: true}));
+  input.dispatchEvent(new Event('change', {bubbles: true}));
+}
+
+function getSettingsSection(sectionId: string): HTMLElement {
+  const section = document.querySelector<HTMLElement>(`.settingsSection[data-setting-section-id="${sectionId}"]`);
+  if (!section) throw new Error(`Settings section not found: ${sectionId}`);
+  return section;
+}
+
+function expectVisibleSettingsSections(visibleSectionIds: string[]) {
+  const visible = new Set(visibleSectionIds);
+  for (const section of APP_SETTING_SECTIONS) {
+    expect(getSettingsSection(section.id).hidden).toBe(!visible.has(section.id));
+  }
+}
+
+function getVisibleSettingInputCount(dialog: HTMLElement): number {
+  return Array.from(dialog.querySelectorAll('.settingInput'))
+    .filter(input => !input.closest<HTMLElement>('.settingsSection')!.hidden)
+    .length;
+}
+
+function expectedVisibleSettingInputCount(plannerEngine: PlannerEngine): number {
+  return APP_SETTING_SECTIONS
+    .filter(section => !section.plannerEngines || section.plannerEngines.includes(plannerEngine))
+    .reduce((count, section) => count + section.definitions.length, 0);
 }
 
 function expectManualParamVisibility(visibleParams: string[]) {
