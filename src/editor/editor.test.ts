@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Editor, PlanEvent, wrapStlText } from './editor';
-import { DEFAULT_APP_SETTINGS } from '../common/settings';
+import { DEFAULT_APP_SETTINGS, DEFAULT_OPENROUTER_MODEL } from '../common/settings';
 
 describe('Editor', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     localStorage.clear();
     document.body.innerHTML = '';
   });
@@ -285,6 +287,43 @@ describe('Editor', () => {
     expect(angledContainer.querySelector<HTMLButtonElement>('.partingButton')!.hidden).toBe(true);
   });
 
+  it('modifies the current lathecode through OpenRouter', async () => {
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
+    const fetchMock = mockOpenRouterLatheCodeResponse('STOCK D12\nTOOL RECT R0.2 L2\nL5 R5');
+    vi.stubGlobal('fetch', fetchMock);
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.llmModifyButton')!.click();
+    document.querySelector<HTMLTextAreaElement>('.llmTextArea')!.value = 'increase the outside diameter to 10 mm';
+    clickDialogButton('Modify lathecode');
+    await waitForAsyncWork();
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('STOCK D12\nTOOL RECT R0.2 L2\nL5 R5');
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.model).toBe(DEFAULT_OPENROUTER_MODEL);
+    expect(request.messages[1].content).toContain('increase the outside diameter to 10 mm');
+    expect(request.messages[1].content).toContain('STOCK D10');
+  });
+
+  it('asks for an OpenRouter key before showing the LLM modification prompt', () => {
+    const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.llmModifyButton')!.click();
+
+    expect(document.querySelector('.openRouterKeyDialog')).not.toBeNull();
+    expect(document.querySelector('.llmTextArea')).toBeNull();
+
+    setInputValue('input[name="openRouterApiKey"]', 'sk-or-test');
+    clickDialogButton('Save key');
+
+    expect(localStorage.getItem('openRouterApiKey')).toBe('sk-or-test');
+    expect(document.querySelector('.openRouterKeyDialog')).toBeNull();
+    expect(document.querySelector('.llmTextArea')).not.toBeNull();
+  });
+
   it('replaces the tool line from the tool dialog', () => {
     const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL2 R3');
 
@@ -384,6 +423,7 @@ function createEditorContainer(value: string): HTMLElement {
     <button class="saveButton"></button>
     <button class="scaleButton"></button>
     <button class="partingButton"></button>
+    <button class="llmModifyButton"></button>
   `;
   container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value = value;
   document.body.appendChild(container);
@@ -417,4 +457,28 @@ function expectManualParamVisibility(visibleParams: string[]) {
 
 function waitForAsyncClick(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+type FetchMock = ReturnType<typeof vi.fn>;
+
+function mockOpenRouterLatheCodeResponse(latheCode: string): FetchMock {
+  return vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    json: async () => ({
+      choices: [{message: {content: latheCode}}],
+    }),
+  });
+}
+
+function getOpenRouterRequest(fetchMock: FetchMock): any {
+  const init = fetchMock.mock.calls[0][1] as RequestInit;
+  return JSON.parse(init.body as string);
+}
+
+async function waitForAsyncWork() {
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 0));
 }

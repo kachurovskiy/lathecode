@@ -1,6 +1,8 @@
 export const PX_PER_MM_OPTIONS = [10, 50, 100, 250, 500, 750, 1000] as const;
 export const PX_PER_MM_STORAGE_KEY = 'pxPerMm';
 export const PLANNER_ENGINE_OPTIONS = ['pixel', 'vector'] as const;
+export const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-v3.2';
+export const DEFAULT_OPENROUTER_VISION_MODEL = 'google/gemini-3.1-flash-lite-preview';
 
 export type PlannerEngine = typeof PLANNER_ENGINE_OPTIONS[number];
 
@@ -45,6 +47,9 @@ export type AppSettings = {
   stlConstantRadiusTolerancePx: number,
   stlSizeMatchTolerance: number,
   showNanoElsH4Controls: boolean,
+  openRouterApiKey: string,
+  openRouterModel: string,
+  openRouterVisionModel: string,
 };
 
 export type AppSettingKey = keyof AppSettings;
@@ -81,7 +86,19 @@ export type BooleanAppSettingDefinition = BaseAppSettingDefinition & {
   defaultValue: boolean,
 };
 
-export type AppSettingDefinition = NumericAppSettingDefinition | SelectAppSettingDefinition | BooleanAppSettingDefinition;
+export type TextAppSettingDefinition = BaseAppSettingDefinition & {
+  type: 'text',
+  defaultValue: string,
+  inputType?: 'text' | 'password',
+  placeholder?: string,
+  allowEmpty?: boolean,
+};
+
+export type AppSettingDefinition =
+  NumericAppSettingDefinition
+  | SelectAppSettingDefinition
+  | BooleanAppSettingDefinition
+  | TextAppSettingDefinition;
 
 export type AppSettingSectionDefinition = {
   id: string,
@@ -132,6 +149,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   stlConstantRadiusTolerancePx: 1,
   stlSizeMatchTolerance: 0.2,
   showNanoElsH4Controls: false,
+  openRouterApiKey: '',
+  openRouterModel: DEFAULT_OPENROUTER_MODEL,
+  openRouterVisionModel: DEFAULT_OPENROUTER_VISION_MODEL,
 };
 
 export const DEFAULT_PX_PER_MM = DEFAULT_APP_SETTINGS.pxPerMm;
@@ -722,18 +742,55 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
       },
     ],
   },
+  {
+    id: 'llm',
+    label: 'LLM',
+    guidance: 'OpenRouter settings used by prompt, drawing, and editor modification actions.',
+    definitions: [
+      {
+        key: 'openRouterApiKey',
+        type: 'text',
+        label: 'OpenRouter API key',
+        storageKey: 'openRouterApiKey',
+        defaultValue: DEFAULT_APP_SETTINGS.openRouterApiKey,
+        inputType: 'password',
+        placeholder: 'sk-or-...',
+        allowEmpty: true,
+        guidance: 'Stored locally in this browser and sent only to OpenRouter requests started from this page.',
+      },
+      {
+        key: 'openRouterModel',
+        type: 'text',
+        label: 'OpenRouter text model',
+        storageKey: 'openRouterModel',
+        defaultValue: DEFAULT_APP_SETTINGS.openRouterModel,
+        placeholder: DEFAULT_OPENROUTER_MODEL,
+        guidance: 'Model used for text prompts and editor modifications.',
+      },
+      {
+        key: 'openRouterVisionModel',
+        type: 'text',
+        label: 'OpenRouter vision model',
+        storageKey: 'openRouterVisionModel',
+        defaultValue: DEFAULT_APP_SETTINGS.openRouterVisionModel,
+        placeholder: DEFAULT_OPENROUTER_VISION_MODEL,
+        guidance: 'Model used for technical drawing image uploads. DeepSeek V3.2 is text-only on OpenRouter, so image input needs a vision-capable model.',
+      },
+    ],
+  },
 ];
 
 export const APP_SETTING_DEFINITIONS: readonly AppSettingDefinition[] = APP_SETTING_SECTIONS.flatMap(section => section.definitions);
 
 type RawAppSettingValue = number | string | boolean | null | undefined;
+type AppSettingValue = number | PlannerEngine | boolean | string;
 
 export function parsePxPerMm(value: number | string | null | undefined): number {
   return parseNumericAppSetting(getNumericAppSettingDefinition('pxPerMm'), value);
 }
 
 export function normalizeAppSettings(values: Partial<Record<AppSettingKey, RawAppSettingValue>> = {}): AppSettings {
-  const settings = {...DEFAULT_APP_SETTINGS} as Record<AppSettingKey, number | PlannerEngine | boolean>;
+  const settings = {...DEFAULT_APP_SETTINGS} as Record<AppSettingKey, AppSettingValue>;
   for (const definition of APP_SETTING_DEFINITIONS) {
     settings[definition.key] = parseAppSetting(definition, values[definition.key]);
   }
@@ -756,9 +813,10 @@ export function saveAppSettings(settings: Partial<AppSettings>, storage: Storage
   return normalized;
 }
 
-function parseAppSetting(definition: AppSettingDefinition, value: RawAppSettingValue): number | PlannerEngine | boolean {
+function parseAppSetting(definition: AppSettingDefinition, value: RawAppSettingValue): AppSettingValue {
   if (definition.type === 'select') return parseSelectAppSetting(definition, value);
   if (definition.type === 'boolean') return parseBooleanAppSetting(definition, value);
+  if (definition.type === 'text') return parseTextAppSetting(definition, value);
   return parseNumericAppSetting(definition, value);
 }
 
@@ -782,6 +840,14 @@ function parseBooleanAppSetting(definition: BooleanAppSettingDefinition, value: 
   if (value === 'true' || value === '1') return true;
   if (value === 'false' || value === '0') return false;
   return definition.defaultValue;
+}
+
+function parseTextAppSetting(definition: TextAppSettingDefinition, value: RawAppSettingValue): string {
+  if (value === null || value === undefined) return definition.defaultValue;
+  if (typeof value === 'boolean') return definition.defaultValue;
+  const textValue = String(value).trim();
+  if (!textValue && !definition.allowEmpty) return definition.defaultValue;
+  return textValue;
 }
 
 function getNumericAppSettingDefinition(key: AppSettingKey): NumericAppSettingDefinition {

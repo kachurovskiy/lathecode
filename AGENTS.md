@@ -33,6 +33,7 @@ Project guidance for future coding agents working in this repository.
 
 ## Tests And Validation
 
+- Do not start dev server when done
 - Run `npm run build` after TypeScript changes.
 - Run targeted Vitest suites for planner changes, then run `npm test -- --run` to regenerate and validate fixtures.
 - When a fixture changes unexpectedly, inspect both the `.gcode.txt` and the corresponding `.moves.png` / `.part.png` especially if runtime or move area are much increased

@@ -5,6 +5,8 @@ import { openSetupDialog, type SetupDialogKind } from './setupdialog.ts';
 import StlImportWorker from './stlimportworker?worker&inline';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
 import { AppSettings, loadAppSettings } from '../common/settings.ts';
+import { modifyLatheCodeWithPrompt } from '../llm/openrouter.ts';
+import { hasOpenRouterApiKey, openOpenRouterKeyDialog } from '../llm/openrouterkeydialog.ts';
 
 export class PlanEvent extends Event {
   constructor(readonly latheCode: LatheCode, readonly settings: AppSettings) {
@@ -29,6 +31,7 @@ export class Editor extends EventTarget {
   private flipButton: HTMLButtonElement;
   private scaleButton: HTMLButtonElement;
   private partingButton: HTMLButtonElement;
+  private llmModifyButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
 
@@ -78,10 +81,12 @@ export class Editor extends EventTarget {
     this.saveButton = container.querySelector<HTMLButtonElement>('.saveButton')!;
     this.scaleButton = container.querySelector<HTMLButtonElement>('.scaleButton')!;
     this.partingButton = container.querySelector<HTMLButtonElement>('.partingButton')!;
+    this.llmModifyButton = container.querySelector<HTMLButtonElement>('.llmModifyButton')!;
 
     this.saveButton.addEventListener('click', () => this.saveLatheCode());
     this.scaleButton.addEventListener('click', () => this.openScaleDialog());
     this.partingButton.addEventListener('click', () => this.togglePartingLine());
+    this.llmModifyButton.addEventListener('click', () => this.openLlmEntryDialog(() => this.openLlmModifyDialog()));
 
     const savedDraft = localStorage.getItem('latheCode');
     if (savedDraft?.trim()) {
@@ -259,6 +264,72 @@ export class Editor extends EventTarget {
 
     dialog = createFullScreenDialog(form, 'Scale');
     factorInput.focus();
+  }
+
+  private openLlmEntryDialog(openDialog: () => void) {
+    if (hasOpenRouterApiKey()) {
+      openDialog();
+      return;
+    }
+    openOpenRouterKeyDialog(openDialog);
+  }
+
+  private openLlmModifyDialog() {
+    const form = document.createElement('form');
+    form.className = 'llmDialog settingsDialog';
+
+    const grid = document.createElement('div');
+    grid.className = 'settingsGrid';
+    form.appendChild(grid);
+
+    const field = document.createElement('label');
+    field.className = 'settingField llmTextAreaField';
+    const heading = document.createElement('span');
+    heading.className = 'settingHeading';
+    heading.textContent = 'Modification';
+    field.appendChild(heading);
+
+    const input = document.createElement('textarea');
+    input.className = 'settingInput llmTextArea';
+    input.placeholder = 'Example: make the front face rounded and add a 6 mm bore through the part...';
+    field.appendChild(input);
+
+    const guide = document.createElement('span');
+    guide.className = 'settingGuide';
+    guide.textContent = 'Describe the change to apply to the current editor contents.';
+    field.appendChild(guide);
+    grid.appendChild(field);
+
+    const error = document.createElement('div');
+    error.className = 'toolDialogError';
+    form.appendChild(error);
+
+    const actions = document.createElement('div');
+    actions.className = 'settingsActions';
+    const applyButton = document.createElement('button');
+    applyButton.type = 'submit';
+    applyButton.textContent = 'Modify lathecode';
+    actions.appendChild(applyButton);
+    form.appendChild(actions);
+
+    let dialog: HTMLDivElement;
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const modification = input.value.trim();
+      if (!modification) {
+        error.textContent = 'Enter a modification request';
+        return;
+      }
+      runLlmEditorAction(applyButton, error, async () => {
+        const text = await modifyLatheCodeWithPrompt(this.latheCodeInput.value, modification);
+        this.latheCodeInput.value = text;
+        this.update();
+        dialog.remove();
+      });
+    });
+
+    dialog = createFullScreenDialog(form, 'Ask LLM');
+    input.focus();
   }
 
   private createScaleNumberInput(name: string, placeholder: string): HTMLInputElement {
@@ -498,4 +569,25 @@ function formatScaleValue(value: number): string {
   const rounded = Math.round(value * 1e6) / 1e6;
   if (Number.isInteger(rounded)) return rounded.toFixed(0);
   return rounded.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+async function runLlmEditorAction(
+  button: HTMLButtonElement,
+  error: HTMLElement,
+  action: () => Promise<void>,
+) {
+  const originalText = button.textContent || '';
+  error.textContent = '';
+  button.disabled = true;
+  button.textContent = 'Modifying...';
+  document.body.style.cursor = 'wait';
+  try {
+    await action();
+  } catch (e) {
+    error.textContent = e instanceof Error ? e.message : String(e);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+    document.body.style.cursor = 'default';
+  }
 }

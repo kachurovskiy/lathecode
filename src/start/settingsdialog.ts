@@ -127,6 +127,11 @@ function createSettingsField(definition: AppSettingDefinition, currentSettings: 
     checkboxInput.type = 'checkbox';
     checkboxInput.checked = Boolean(currentSettings[definition.key]);
     input = checkboxInput;
+  } else if (definition.type === 'text') {
+    const textInput = document.createElement('input');
+    textInput.type = definition.inputType ?? 'text';
+    textInput.placeholder = definition.placeholder ?? '';
+    input = textInput;
   } else {
     const numberInput = document.createElement('input');
     numberInput.type = 'number';
@@ -148,6 +153,10 @@ function createSettingsField(definition: AppSettingDefinition, currentSettings: 
     guide.textContent = `${definition.guidance} Default: ${definition.options.find(option => option.value === definition.defaultValue)?.label ?? definition.defaultValue}.`;
   } else if (definition.type === 'boolean') {
     guide.textContent = `${definition.guidance} Default: ${definition.defaultValue ? 'on' : 'off'}.`;
+  } else if (definition.type === 'text') {
+    guide.textContent = definition.defaultValue
+      ? `${definition.guidance} Default: ${definition.defaultValue}.`
+      : definition.guidance;
   } else {
     guide.textContent = `${definition.guidance} Reasonable values: ${definition.reasonableValues} ${definition.unit}. Default: ${definition.defaultValue} ${definition.unit}.`;
   }

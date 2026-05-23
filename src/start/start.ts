@@ -1,4 +1,6 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
+import { createLatheCodeFromDrawing, createLatheCodeFromPrompt, readImageFileAsDataUrl } from '../llm/openrouter.ts';
+import { hasOpenRouterApiKey, openOpenRouterKeyDialog } from '../llm/openrouterkeydialog.ts';
 import { openSettingsDialog } from './settingsdialog.ts';
 import { beginLatheCodePreviewSession, createLatheCodePreview, prioritizeVisibleLatheCodePreviews } from './preview.ts';
 import { getStartSampleSections } from './samples.ts';
@@ -20,6 +22,8 @@ export class StartStlEvent extends Event {
 export class StartPanel extends EventTarget {
   private savedPanel: HTMLElement;
   private sampleCatalogButton: HTMLButtonElement;
+  private startPromptButton: HTMLButtonElement;
+  private startDrawingButton: HTMLButtonElement;
   private loadButton: HTMLButtonElement;
   private loadSelect: HTMLSelectElement;
   private deleteButton: HTMLButtonElement;
@@ -35,6 +39,8 @@ export class StartPanel extends EventTarget {
 
     this.savedPanel = container.querySelector<HTMLElement>('.startPanel')!;
     this.sampleCatalogButton = container.querySelector<HTMLButtonElement>('.sampleCatalogButton')!;
+    this.startPromptButton = container.querySelector<HTMLButtonElement>('.startPromptButton')!;
+    this.startDrawingButton = container.querySelector<HTMLButtonElement>('.startDrawingButton')!;
     this.loadButton = container.querySelector<HTMLButtonElement>('.loadButton')!;
     this.loadSelect = container.querySelector<HTMLSelectElement>('.loadSelect')!;
     this.deleteButton = container.querySelector<HTMLButtonElement>('.deleteButton')!;
@@ -46,6 +52,8 @@ export class StartPanel extends EventTarget {
     this.exportButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.exportButton'));
 
     this.sampleCatalogButton.addEventListener('click', () => this.openSampleDialog());
+    this.startPromptButton.addEventListener('click', () => this.openLlmEntryDialog(() => this.openPromptDialog()));
+    this.startDrawingButton.addEventListener('click', () => this.openLlmEntryDialog(() => this.openDrawingDialog()));
     this.loadButton.addEventListener('click', () => this.loadLatheCode());
     this.deleteButton.addEventListener('click', () => this.deleteLatheCode());
     this.startStlButton.addEventListener('click', () => this.openStlFilePicker());
@@ -65,6 +73,163 @@ export class StartPanel extends EventTarget {
     });
 
     this.updateSavedLatheCodes();
+  }
+
+  private openLlmEntryDialog(openDialog: () => void) {
+    if (hasOpenRouterApiKey()) {
+      openDialog();
+      return;
+    }
+    openOpenRouterKeyDialog(() => {
+      this.dispatchEvent(new Event('settingschange'));
+      this.updateSavedLatheCodes();
+      openDialog();
+    });
+  }
+
+  private openPromptDialog() {
+    const form = document.createElement('form');
+    form.className = 'llmDialog settingsDialog';
+
+    const grid = document.createElement('div');
+    grid.className = 'settingsGrid';
+    form.appendChild(grid);
+
+    const promptInput = createTextAreaField(
+      'Part prompt',
+      'Describe the turned part, dimensions, material shape, tooling preference, and units.',
+      'Example: 20 mm long brass knob, 18 mm max diameter, rounded dome front, 6 mm stem...');
+    grid.appendChild(promptInput.field);
+
+    const error = createLlmError();
+    form.appendChild(error);
+
+    const actions = document.createElement('div');
+    actions.className = 'settingsActions';
+    const submitButton = document.createElement('button');
+    submitButton.type = 'submit';
+    submitButton.textContent = 'Create lathecode';
+    actions.appendChild(submitButton);
+    form.appendChild(actions);
+
+    let dialog: HTMLDivElement;
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const description = promptInput.input.value.trim();
+      if (!description) {
+        error.textContent = 'Enter a part prompt';
+        return;
+      }
+      runLlmDialogAction(submitButton, 'Creating...', error, async () => {
+        const text = await createLatheCodeFromPrompt(description);
+        dialog.remove();
+        this.dispatchEvent(new StartLatheCodeEvent(text));
+      });
+    });
+
+    dialog = createFullScreenDialog(form, 'From prompt');
+    promptInput.input.focus();
+  }
+
+  private openDrawingDialog() {
+    const form = document.createElement('form');
+    form.className = 'llmDialog settingsDialog';
+    let files: File[] = [];
+
+    const grid = document.createElement('div');
+    grid.className = 'settingsGrid';
+    form.appendChild(grid);
+
+    const fileField = document.createElement('label');
+    fileField.className = 'settingField';
+    const fileHeading = document.createElement('span');
+    fileHeading.className = 'settingHeading';
+    fileHeading.textContent = 'Drawing images';
+    fileField.appendChild(fileHeading);
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+    fileInput.multiple = true;
+    fileInput.className = 'settingInput';
+    fileField.appendChild(fileInput);
+
+    const pasteTarget = document.createElement('div');
+    pasteTarget.className = 'llmPasteTarget';
+    pasteTarget.tabIndex = 0;
+    pasteTarget.textContent = 'Paste drawing images here';
+    fileField.appendChild(pasteTarget);
+
+    const selectedFiles = document.createElement('div');
+    selectedFiles.className = 'llmSelectedFiles';
+    fileField.appendChild(selectedFiles);
+
+    const fileGuide = document.createElement('span');
+    fileGuide.className = 'settingGuide';
+    fileGuide.textContent = 'Upload or paste local PNG, JPEG, WebP, or GIF technical drawing images.';
+    fileField.appendChild(fileGuide);
+    grid.appendChild(fileField);
+
+    const notesInput = createTextAreaField(
+      'Drawing notes',
+      'Add missing scale, units, dimensions, or details that are not clear in the drawing.',
+      'Example: all dimensions are mm; central bore is 8 mm through...');
+    grid.appendChild(notesInput.field);
+
+    const error = createLlmError();
+    form.appendChild(error);
+
+    const actions = document.createElement('div');
+    actions.className = 'settingsActions';
+    const submitButton = document.createElement('button');
+    submitButton.type = 'submit';
+    submitButton.textContent = 'Create lathecode';
+    actions.appendChild(submitButton);
+    form.appendChild(actions);
+
+    const updateSelectedFiles = () => {
+      selectedFiles.textContent = files.length
+        ? `Selected: ${files.map(file => file.name).join(', ')}`
+        : 'No images selected';
+    };
+    const addFiles = (incomingFiles: readonly File[]) => {
+      const imageFiles = incomingFiles.filter(file => file.type.startsWith('image/'));
+      files = mergeImageFiles(files, imageFiles);
+      updateSelectedFiles();
+    };
+    const handlePaste = (event: ClipboardEvent) => {
+      const pastedFiles = getClipboardImageFiles(event.clipboardData);
+      if (!pastedFiles.length) return;
+      event.preventDefault();
+      addFiles(pastedFiles);
+      error.textContent = '';
+      pasteTarget.focus();
+    };
+
+    fileInput.addEventListener('change', () => addFiles(Array.from(fileInput.files ?? [])));
+    pasteTarget.addEventListener('paste', handlePaste);
+    form.addEventListener('paste', handlePaste);
+    updateSelectedFiles();
+
+    let dialog: HTMLDivElement;
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      addFiles(Array.from(fileInput.files ?? []));
+      if (!files.length) {
+        error.textContent = 'Select at least one drawing image';
+        return;
+      }
+      runLlmDialogAction(submitButton, 'Reading...', error, async () => {
+        const images = await Promise.all(files.map(readImageFileAsDataUrl));
+        submitButton.textContent = 'Creating...';
+        const text = await createLatheCodeFromDrawing(images, notesInput.input.value);
+        dialog.remove();
+        this.dispatchEvent(new StartLatheCodeEvent(text));
+      });
+    });
+
+    dialog = createFullScreenDialog(form, 'From technical drawing');
+    fileInput.focus();
   }
 
   updateSavedLatheCodes() {
@@ -312,5 +477,85 @@ function updateSampleExpandButtons(controls: readonly SampleExpandControl[]) {
     control.sampleCards.forEach((card, index) => {
       card.hidden = !isExpanded && index >= INITIAL_SAMPLE_CARD_COUNT;
     });
+  }
+}
+
+function createTextAreaField(labelText: string, guideText: string, placeholder: string): {field: HTMLLabelElement, input: HTMLTextAreaElement} {
+  const field = document.createElement('label');
+  field.className = 'settingField llmTextAreaField';
+
+  const heading = document.createElement('span');
+  heading.className = 'settingHeading';
+  heading.textContent = labelText;
+  field.appendChild(heading);
+
+  const input = document.createElement('textarea');
+  input.className = 'settingInput llmTextArea';
+  input.placeholder = placeholder;
+  field.appendChild(input);
+
+  const guide = document.createElement('span');
+  guide.className = 'settingGuide';
+  guide.textContent = guideText;
+  field.appendChild(guide);
+
+  return {field, input};
+}
+
+function createLlmError(): HTMLDivElement {
+  const error = document.createElement('div');
+  error.className = 'toolDialogError';
+  return error;
+}
+
+function getClipboardImageFiles(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  const files: File[] = [];
+  for (const item of Array.from(data.items ?? [])) {
+    if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+    const file = item.getAsFile();
+    if (file) files.push(file);
+  }
+  for (const file of Array.from(data.files ?? [])) {
+    if (file.type.startsWith('image/')) files.push(file);
+  }
+  return files;
+}
+
+function mergeImageFiles(existingFiles: readonly File[], incomingFiles: readonly File[]): File[] {
+  const files = existingFiles.concat();
+  const keys = new Set(files.map(getFileKey));
+  for (const file of incomingFiles) {
+    const key = getFileKey(file);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    files.push(file);
+  }
+  return files;
+}
+
+function getFileKey(file: File): string {
+  return `${file.name}:${file.type}:${file.size}:${file.lastModified}`;
+}
+
+async function runLlmDialogAction(
+  button: HTMLButtonElement,
+  pendingText: string,
+  error: HTMLElement,
+  action: () => Promise<void>,
+) {
+  const originalText = button.textContent || '';
+  error.textContent = '';
+  button.disabled = true;
+  button.textContent = pendingText;
+  document.body.style.cursor = 'wait';
+  try {
+    await action();
+  } catch (e) {
+    error.textContent = e instanceof Error ? e.message : String(e);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+    document.body.style.cursor = 'default';
   }
 }

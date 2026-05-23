@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LatheCode } from '../common/lathecode';
 import { approximateSegments } from '../common/lathegeometry';
 import { geometryBounds } from '../common/polygon';
-import { APP_SETTING_DEFINITIONS, APP_SETTING_SECTIONS, type PlannerEngine } from '../common/settings';
+import {
+  APP_SETTING_DEFINITIONS,
+  APP_SETTING_SECTIONS,
+  DEFAULT_OPENROUTER_MODEL,
+  DEFAULT_OPENROUTER_VISION_MODEL,
+  type PlannerEngine,
+} from '../common/settings';
 import { createToolFootprintGeometry } from '../common/toolgeometry';
 import { createLatheCodePreview } from './preview';
 import { SAMPLE_SECTIONS, START_SAMPLE_DEFINITIONS } from './samples';
@@ -10,6 +16,8 @@ import { StartLatheCodeEvent, StartPanel } from './start';
 
 describe('StartPanel', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     localStorage.clear();
     document.body.innerHTML = '';
   });
@@ -480,7 +488,7 @@ describe('StartPanel', () => {
       expect(getSettingsSection(section.id).textContent).toContain(section.label);
     }
     expect(dialog.querySelectorAll<HTMLInputElement>('.settingInput').length).toBe(APP_SETTING_DEFINITIONS.length);
-    expectVisibleSettingsSections(['planning', 'pixelPlanner', 'stlImport', 'preview', 'gcodeOutput']);
+    expectVisibleSettingsSections(['planning', 'pixelPlanner', 'stlImport', 'preview', 'gcodeOutput', 'llm']);
     expect(getVisibleSettingInputCount(dialog)).toBe(expectedVisibleSettingInputCount('pixel'));
     expect(dialog.querySelector<HTMLInputElement>('input[name="pxPerMm"]')!.value).toBe('750');
     expect(dialog.querySelector<HTMLInputElement>('input[name="smoothingEpsilonPx"]')!.value).toBe('1.25');
@@ -490,7 +498,7 @@ describe('StartPanel', () => {
     expect(h4ControlsInput.checked).toBe(false);
 
     setInputValue('select[name="plannerEngine"]', 'vector');
-    expectVisibleSettingsSections(['planning', 'vectorPlanner', 'geometry', 'stlImport', 'preview', 'gcodeOutput']);
+    expectVisibleSettingsSections(['planning', 'vectorPlanner', 'geometry', 'stlImport', 'preview', 'gcodeOutput', 'llm']);
     expect(getVisibleSettingInputCount(dialog)).toBe(expectedVisibleSettingInputCount('vector'));
 
     setInputValue('input[name="pxPerMm"]', '800');
@@ -515,6 +523,119 @@ describe('StartPanel', () => {
     expect(container.querySelector<HTMLButtonElement>('.exportButton')!.hidden).toBe(true);
     expect(createObjectUrl).not.toHaveBeenCalled();
   });
+
+  it('creates lathecode from a text prompt through OpenRouter', async () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    const fetchMock = mockOpenRouterLatheCodeResponse('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
+    vi.stubGlobal('fetch', fetchMock);
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startPromptButton')!.click();
+    expect(document.querySelector('.openRouterKeyDialog')).not.toBeNull();
+    expect(document.querySelector('.llmTextArea')).toBeNull();
+    setInputValue('input[name="openRouterApiKey"]', 'sk-or-test');
+    clickDialogButton('Save key');
+
+    document.querySelector<HTMLTextAreaElement>('.llmTextArea')!.value = 'a 5 mm long brass knob';
+    clickDialogButton('Create lathecode');
+    await waitForAsyncWork();
+
+    expect(started).toEqual(['STOCK D10\nTOOL RECT R0.2 L2\nL5 R4']);
+    expect(localStorage.getItem('openRouterApiKey')).toBe('sk-or-test');
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.model).toBe(DEFAULT_OPENROUTER_MODEL);
+    expect(request.messages[1].content).toContain('a 5 mm long brass knob');
+  });
+
+  it('asks for an OpenRouter key before showing drawing file inputs', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
+
+    expect(document.querySelector('.openRouterKeyDialog')).not.toBeNull();
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+
+    setInputValue('input[name="openRouterApiKey"]', 'sk-or-test');
+    clickDialogButton('Save key');
+
+    expect(document.querySelector('.openRouterKeyDialog')).toBeNull();
+    expect(document.querySelector('input[type="file"]')).not.toBeNull();
+  });
+
+  it('sends technical drawing uploads to the configured vision model', async () => {
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    const fetchMock = mockOpenRouterLatheCodeResponse('STOCK D12\nTOOL RECT R0.2 L2\nL6 R5');
+    vi.stubGlobal('fetch', fetchMock);
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(fileInput, 'files', {
+      value: [new File(['drawing'], 'drawing.png', {type: 'image/png'})],
+      configurable: true,
+    });
+    clickDialogButton('Create lathecode');
+    await waitForAsyncWork();
+
+    expect(started).toEqual(['STOCK D12\nTOOL RECT R0.2 L2\nL6 R5']);
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.model).toBe(DEFAULT_OPENROUTER_VISION_MODEL);
+    expect(request.messages[1].content[0].text).toContain('drawing.png');
+    expect(request.messages[1].content[1]).toMatchObject({
+      type: 'image_url',
+      image_url: {url: expect.stringMatching(/^data:image\/png;base64,/)},
+    });
+  });
+
+  it('accepts pasted technical drawing images', async () => {
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    const fetchMock = mockOpenRouterLatheCodeResponse('STOCK D14\nTOOL RECT R0.2 L2\nL7 R6');
+    vi.stubGlobal('fetch', fetchMock);
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
+    const pastedFile = new File(['drawing'], 'pasted.png', {type: 'image/png'});
+    const pasteEvent = new Event('paste', {bubbles: true}) as ClipboardEvent;
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        items: [{
+          kind: 'file',
+          type: 'image/png',
+          getAsFile: () => pastedFile,
+        }],
+        files: [],
+      },
+      configurable: true,
+    });
+    document.querySelector<HTMLElement>('.llmPasteTarget')!.dispatchEvent(pasteEvent);
+    expect(document.querySelector<HTMLElement>('.llmSelectedFiles')!.textContent).toContain('pasted.png');
+
+    clickDialogButton('Create lathecode');
+    await waitForAsyncWork();
+
+    expect(started).toEqual(['STOCK D14\nTOOL RECT R0.2 L2\nL7 R6']);
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.messages[1].content[0].text).toContain('pasted.png');
+    expect(request.messages[1].content[1]).toMatchObject({
+      type: 'image_url',
+      image_url: {url: expect.stringMatching(/^data:image\/png;base64,/)},
+    });
+  });
 });
 
 function createStartContainer(): HTMLElement {
@@ -523,6 +644,8 @@ function createStartContainer(): HTMLElement {
     <section class="startSection">
       <button class="sampleCatalogButton"></button>
       <button class="startStlButton"></button>
+      <button class="startPromptButton"></button>
+      <button class="startDrawingButton"></button>
       <div class="startPanel">
         <select class="loadSelect"></select>
         <button class="loadButton"></button>
@@ -557,6 +680,30 @@ function setInputValue(selector: string, value: string) {
   input.value = value;
   input.dispatchEvent(new Event('input', {bubbles: true}));
   input.dispatchEvent(new Event('change', {bubbles: true}));
+}
+
+type FetchMock = ReturnType<typeof vi.fn>;
+
+function mockOpenRouterLatheCodeResponse(latheCode: string): FetchMock {
+  return vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    json: async () => ({
+      choices: [{message: {content: latheCode}}],
+    }),
+  });
+}
+
+function getOpenRouterRequest(fetchMock: FetchMock): any {
+  const init = fetchMock.mock.calls[0][1] as RequestInit;
+  return JSON.parse(init.body as string);
+}
+
+async function waitForAsyncWork() {
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 0));
 }
 
 function getSettingsSection(sectionId: string): HTMLElement {

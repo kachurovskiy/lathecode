@@ -22,6 +22,14 @@
             <strong>Import STL</strong>
             <span>Project a mesh into lathecode using the STL importer.</span>
           </button>
+          <button class="startCard startPromptButton" title="Generate lathecode from a text prompt">
+            <strong>From prompt</strong>
+            <span>Ask OpenRouter to create editable lathecode from dimensions and part intent.</span>
+          </button>
+          <button class="startCard startDrawingButton" title="Generate lathecode from technical drawing images">
+            <strong>From drawing</strong>
+            <span>Upload drawing images and convert the visible turned profile into lathecode.</span>
+          </button>
         </div>
         <div class="startPanel">
           <h3>Saved in this browser</h3>
@@ -86,6 +94,7 @@ L3</textarea>
         <div class="editorToolbarGroup" aria-label="Shape edits">
           <button class="flipButton" title="Turn the part 180 degrees">Flip</button>
           <button class="scaleButton" title="Scale stock and profile dimensions">Scale</button>
+          <button class="llmModifyButton" title="Ask OpenRouter to modify the current lathecode">Ask LLM</button>
           <button class="partingButton" title="Add or remove a tool-width parting line at the end" hidden>Add parting</button>
         </div>
         <div class="editorToolbarGroup" aria-label="Files">

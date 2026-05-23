@@ -774,6 +774,49 @@ progress {
   margin: 0;
 }
 
+.llmDialog .settingsGrid {
+  grid-template-columns: minmax(260px, 620px);
+}
+
+.llmTextAreaField {
+  max-width: 620px;
+}
+
+.llmTextArea {
+  min-height: 140px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+.llmPasteTarget {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #9a9a9a;
+  background-color: #fafafa;
+  color: #444444;
+  text-align: center;
+}
+
+.llmPasteTarget:focus {
+  outline: 2px solid #4c85ff;
+  outline-offset: 2px;
+}
+
+.llmSelectedFiles {
+  color: #333333;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.openRouterKeyDialog > a {
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
 .setupDialog {
   max-width: 980px;
 }
