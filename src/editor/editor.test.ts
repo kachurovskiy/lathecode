@@ -88,6 +88,62 @@ describe('Editor', () => {
     expect(container.querySelector<HTMLButtonElement>('.insidePlanButton')!.hidden).toBe(true);
   });
 
+  it('undoes and redoes valid lathecode texts seen in the editor session', () => {
+    const container = createEditorContainer('STOCK D10\nL2 R3');
+
+    new Editor(container);
+    const input = container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!;
+    const historyToolbarGroup = container.querySelector<HTMLElement>('.historyToolbarGroup')!;
+    const undoButton = container.querySelector<HTMLButtonElement>('.undoButton')!;
+    const redoButton = container.querySelector<HTMLButtonElement>('.redoButton')!;
+
+    expect(historyToolbarGroup.hidden).toBe(true);
+    expect(undoButton.hidden).toBe(true);
+    expect(redoButton.hidden).toBe(true);
+
+    setInputValue('.latheCodeInput', 'STOCK D10\nL2 R4');
+    expect(historyToolbarGroup.hidden).toBe(false);
+    expect(undoButton.hidden).toBe(false);
+    expect(redoButton.hidden).toBe(true);
+
+    setInputValue('.latheCodeInput', 'STOCK D10\nBROKEN');
+    expect(container.querySelector('.errorContainer')!.textContent).toContain('Unexpected line');
+    expect(undoButton.hidden).toBe(false);
+
+    undoButton.click();
+    expect(input.value).toBe('STOCK D10\nL2 R4');
+    expect(container.querySelector('.errorContainer')!.textContent).toBe('');
+
+    undoButton.click();
+    expect(input.value).toBe('STOCK D10\nL2 R3');
+    expect(undoButton.hidden).toBe(true);
+    expect(redoButton.hidden).toBe(false);
+
+    redoButton.click();
+    expect(input.value).toBe('STOCK D10\nL2 R4');
+  });
+
+  it('clears redo history after a new valid edit from an undone state', () => {
+    const container = createEditorContainer('STOCK D10\nL2 R3');
+
+    new Editor(container);
+    const input = container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!;
+    const undoButton = container.querySelector<HTMLButtonElement>('.undoButton')!;
+    const redoButton = container.querySelector<HTMLButtonElement>('.redoButton')!;
+
+    setInputValue('.latheCodeInput', 'STOCK D10\nL2 R4');
+    undoButton.click();
+    expect(input.value).toBe('STOCK D10\nL2 R3');
+    expect(redoButton.hidden).toBe(false);
+
+    setInputValue('.latheCodeInput', 'STOCK D10\nL2 R5');
+
+    expect(input.value).toBe('STOCK D10\nL2 R5');
+    expect(redoButton.hidden).toBe(true);
+    undoButton.click();
+    expect(input.value).toBe('STOCK D10\nL2 R3');
+  });
+
   it('updates setup directives from dedicated editor dialogs', () => {
     const container = createEditorContainer('STOCK D10\nL2 R3');
 
@@ -415,6 +471,10 @@ function createEditorContainer(value: string): HTMLElement {
     <button class="modeButton"></button>
     <button class="axesButton"></button>
     <button class="toolButton"></button>
+    <div class="editorToolbarGroup historyToolbarGroup">
+      <button class="undoButton"></button>
+      <button class="redoButton"></button>
+    </div>
     <button class="flipButton"></button>
     <button class="stlButton"></button>
     <button class="planButton"></button>

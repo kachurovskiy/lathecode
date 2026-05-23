@@ -26,6 +26,9 @@ export class Editor extends EventTarget {
   private planButton: HTMLButtonElement;
   private outsidePlanButton: HTMLButtonElement;
   private insidePlanButton: HTMLButtonElement;
+  private historyToolbarGroup: HTMLElement | null;
+  private undoButton: HTMLButtonElement;
+  private redoButton: HTMLButtonElement;
   private saveButton: HTMLButtonElement;
   private toolButton: HTMLButtonElement;
   private flipButton: HTMLButtonElement;
@@ -34,6 +37,8 @@ export class Editor extends EventTarget {
   private llmModifyButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
+  private validTextHistory: string[] = [];
+  private validTextHistoryIndex = -1;
 
   constructor(container: HTMLElement, options: {deferInitialUpdate?: boolean} = {}) {
     super();
@@ -41,6 +46,9 @@ export class Editor extends EventTarget {
     this.planButton = container.querySelector<HTMLButtonElement>('.planButton')!;
     this.outsidePlanButton = container.querySelector<HTMLButtonElement>('.outsidePlanButton')!;
     this.insidePlanButton = container.querySelector<HTMLButtonElement>('.insidePlanButton')!;
+    this.historyToolbarGroup = container.querySelector<HTMLElement>('.historyToolbarGroup');
+    this.undoButton = container.querySelector<HTMLButtonElement>('.undoButton')!;
+    this.redoButton = container.querySelector<HTMLButtonElement>('.redoButton')!;
     this.errorContainer = container.querySelector('.errorContainer')!;
     this.statusContainer = container.querySelector('.statusContainer')!;
     this.latheCodeInput = container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!;
@@ -67,6 +75,8 @@ export class Editor extends EventTarget {
     this.planButton.addEventListener('click', () => this.planLatheCode());
     this.outsidePlanButton.addEventListener('click', () => this.planLatheCode('outside'));
     this.insidePlanButton.addEventListener('click', () => this.planLatheCode('inside'));
+    this.undoButton.addEventListener('click', () => this.undoValidText());
+    this.redoButton.addEventListener('click', () => this.redoValidText());
 
     this.toolButton = container.querySelector<HTMLButtonElement>('.toolButton')!;
     this.toolButton.addEventListener('click', () => this.openToolDialog());
@@ -94,6 +104,7 @@ export class Editor extends EventTarget {
       this.update();
     } else if (options.deferInitialUpdate) {
       this.updatePlanningButtons(null);
+      this.updateHistoryButtons();
     } else {
       this.update();
     }
@@ -133,10 +144,12 @@ export class Editor extends EventTarget {
     return loadAppSettings();
   }
 
-  private update() {
+  private update(options: {recordHistory?: boolean} = {}) {
+    const recordHistory = options.recordHistory ?? true;
     try {
       localStorage.setItem('latheCode', this.latheCodeInput.value);
       this.latheCode = new LatheCode(this.latheCodeInput.value);
+      if (recordHistory) this.recordValidText(this.latheCodeInput.value);
       this.updatePlanningButtons(this.latheCode);
       this.errorContainer.textContent = '';
     } catch (error: any) {
@@ -144,7 +157,46 @@ export class Editor extends EventTarget {
       this.updatePlanningButtons(null);
       this.errorContainer.textContent = error.message;
     }
+    this.updateHistoryButtons();
     this.dispatchEvent(new Event('change'));
+  }
+
+  private recordValidText(text: string) {
+    if (this.validTextHistory[this.validTextHistoryIndex] === text) return;
+
+    this.validTextHistory.splice(this.validTextHistoryIndex + 1);
+    const lastText = this.validTextHistory[this.validTextHistory.length - 1];
+    if (lastText !== text) this.validTextHistory.push(text);
+    this.validTextHistoryIndex = this.validTextHistory.length - 1;
+  }
+
+  private updateHistoryButtons() {
+    const textIsCurrentHistoryEntry = this.latheCodeInput.value === this.validTextHistory[this.validTextHistoryIndex];
+    const canUndo = this.validTextHistoryIndex >= 0
+      && (!textIsCurrentHistoryEntry || this.validTextHistoryIndex > 0);
+    const canRedo = this.validTextHistoryIndex < this.validTextHistory.length - 1;
+    this.undoButton.hidden = !canUndo;
+    this.redoButton.hidden = !canRedo;
+    if (this.historyToolbarGroup) this.historyToolbarGroup.hidden = !canUndo && !canRedo;
+  }
+
+  private undoValidText() {
+    const textIsCurrentHistoryEntry = this.latheCodeInput.value === this.validTextHistory[this.validTextHistoryIndex];
+    const targetIndex = textIsCurrentHistoryEntry
+      ? this.validTextHistoryIndex - 1
+      : this.validTextHistoryIndex;
+    this.restoreValidText(targetIndex);
+  }
+
+  private redoValidText() {
+    this.restoreValidText(this.validTextHistoryIndex + 1);
+  }
+
+  private restoreValidText(index: number) {
+    if (index < 0 || index >= this.validTextHistory.length) return;
+    this.validTextHistoryIndex = index;
+    this.latheCodeInput.value = this.validTextHistory[index];
+    this.update({recordHistory: false});
   }
 
   private updatePlanningButtons(latheCode: LatheCode | null) {
