@@ -32,6 +32,24 @@ describe('VectorPlannerWorker', () => {
     expect(Math.min(...moves.flatMap(move => [move.yStartMm, move.yStartMm + move.yDeltaMm]))).toBeCloseTo(-1.5);
   });
 
+  it('keeps outside-only GCode for mixed tube profiles out of the bore', () => {
+    const mixedLatheCode = new LatheCode(`STOCK D24 ID10
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE190 PASS38 PART9
+MODE TURN
+L24 D18
+
+INSIDE
+L24 D12`);
+    const outsideLatheCode = mixedLatheCode.getLatheCodeForProfile('outside')!;
+    const moves = planLatheCode(outsideLatheCode);
+
+    expect(outsideLatheCode.getText()).toContain('STOCK D24\n');
+    expect(outsideLatheCode.getText()).not.toContain('ID10');
+    expect(Math.max(...moves.flatMap(move => [move.yStartMm, move.yStartMm + move.yDeltaMm]))).toBeLessThanOrEqual(0);
+  });
+
   it('keeps roughing moves outside the finish allowance on sloped profiles', () => {
     const finishMm = 0.2;
     const stockLengthMm = 10;

@@ -1,7 +1,9 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
 import { openSettingsDialog } from './settingsdialog.ts';
-import { createLatheCodePreview, preloadLatheCodePreviews } from './preview.ts';
-import { getStartSampleDefinitions, getStartSampleSections } from './samples.ts';
+import { beginLatheCodePreviewSession, createLatheCodePreview, prioritizeVisibleLatheCodePreviews } from './preview.ts';
+import { getStartSampleSections } from './samples.ts';
+
+const INITIAL_SAMPLE_CARD_COUNT = 7;
 
 export class StartLatheCodeEvent extends Event {
   constructor(readonly text: string) {
@@ -50,7 +52,6 @@ export class StartPanel extends EventTarget {
     this.overflowButton.addEventListener('click', () => this.toggleOverflowMenu());
     this.settingsButtons.forEach(button => button.addEventListener('click', () => {
       openSettingsDialog(() => {
-        this.preloadSamples();
         this.dispatchEvent(new Event('settingschange'));
       });
     }));
@@ -64,7 +65,6 @@ export class StartPanel extends EventTarget {
     });
 
     this.updateSavedLatheCodes();
-    this.preloadSamples();
   }
 
   updateSavedLatheCodes() {
@@ -95,9 +95,11 @@ export class StartPanel extends EventTarget {
   }
 
   private openSampleDialog() {
+    const stopPreviewSession = beginLatheCodePreviewSession();
     const container = document.createElement('div');
     container.className = 'sampleDialog';
     const sections = getStartSampleSections();
+    const expandControls: SampleExpandControl[] = [];
 
     const nav = document.createElement('nav');
     nav.className = 'sampleDialogNav';
@@ -133,6 +135,7 @@ export class StartPanel extends EventTarget {
       grid.className = 'sampleDialogGrid';
       sectionElement.appendChild(grid);
 
+      const sampleCards: HTMLButtonElement[] = [];
       for (const sample of section.samples) {
         const button = document.createElement('button');
         button.className = 'sampleDialogCard sampleButton';
@@ -148,36 +151,51 @@ export class StartPanel extends EventTarget {
         description.textContent = sample.description;
         button.appendChild(description);
 
-        const meta = document.createElement('small');
-        meta.textContent = sample.meta;
-        button.appendChild(meta);
-
         button.addEventListener('click', () => {
           dialog.remove();
           this.dispatchEvent(new StartLatheCodeEvent(sample.text));
         });
         grid.appendChild(button);
+        sampleCards.push(button);
       }
 
-      const expandButton = document.createElement('button');
-      expandButton.className = 'sampleDialogExpandButton';
-      expandButton.type = 'button';
-      expandButton.textContent = `Show all ${section.samples.length}`;
-      expandButton.setAttribute('aria-expanded', 'false');
-      expandButton.addEventListener('click', () => {
-        const isExpanded = sectionElement.classList.toggle('expanded');
-        sectionElement.classList.toggle('collapsed', !isExpanded);
-        expandButton.textContent = isExpanded ? 'Show one row' : `Show all ${section.samples.length}`;
-        expandButton.setAttribute('aria-expanded', String(isExpanded));
+      const showMoreCard = document.createElement('button');
+      showMoreCard.className = 'sampleDialogMoreCard';
+      showMoreCard.type = 'button';
+      showMoreCard.textContent = `Show ${Math.max(section.samples.length - INITIAL_SAMPLE_CARD_COUNT, 0)} more`;
+      showMoreCard.setAttribute('aria-expanded', 'false');
+      showMoreCard.addEventListener('click', () => {
+        sectionElement.classList.add('expanded');
+        sectionElement.classList.remove('collapsed');
+        updateExpandButtons();
       });
-      sectionElement.appendChild(expandButton);
+      grid.appendChild(showMoreCard);
+      expandControls.push({ sectionElement, sampleCards, showMoreCard });
     }
 
-    dialog = createFullScreenDialog(container, 'Samples');
-  }
-
-  private preloadSamples() {
-    preloadLatheCodePreviews(getStartSampleDefinitions().map(sample => sample.text));
+    const updateExpandButtons = () => {
+      updateSampleExpandButtons(expandControls);
+      prioritizeVisibleLatheCodePreviews();
+    };
+    let viewportWatcherDisposed = false;
+    const prioritizeViewportPreviews = () => prioritizeVisibleLatheCodePreviews();
+    const disposeViewportWatcher = () => {
+      if (viewportWatcherDisposed) return;
+      viewportWatcherDisposed = true;
+      stopPreviewSession();
+      dialog.removeEventListener('scroll', prioritizeViewportPreviews);
+      window.removeEventListener('resize', prioritizeViewportPreviews);
+    };
+    dialog = createFullScreenDialog(container, 'Samples', disposeViewportWatcher);
+    const removeDialog = dialog.remove.bind(dialog);
+    dialog.remove = () => {
+      disposeViewportWatcher();
+      removeDialog();
+    };
+    dialog.addEventListener('scroll', prioritizeViewportPreviews, {passive: true});
+    window.addEventListener('resize', prioritizeViewportPreviews);
+    updateExpandButtons();
+    window.setTimeout(prioritizeViewportPreviews, 0);
   }
 
   private loadLatheCode() {
@@ -274,5 +292,25 @@ export class StartPanel extends EventTarget {
   private isRelevantLocalStorageKey(key: string): boolean {
     const value = localStorage.getItem(key);
     return !!value && value.indexOf('\n') >= 0;
+  }
+}
+
+type SampleExpandControl = {
+  sectionElement: HTMLElement;
+  sampleCards: HTMLButtonElement[];
+  showMoreCard: HTMLButtonElement;
+};
+
+function updateSampleExpandButtons(controls: readonly SampleExpandControl[]) {
+  for (const control of controls) {
+    const isExpanded = control.sectionElement.classList.contains('expanded');
+    const hiddenSampleCount = Math.max(control.sampleCards.length - INITIAL_SAMPLE_CARD_COUNT, 0);
+
+    control.showMoreCard.hidden = hiddenSampleCount === 0 || isExpanded;
+    control.showMoreCard.textContent = `Show ${hiddenSampleCount} more`;
+    control.showMoreCard.setAttribute('aria-expanded', String(isExpanded));
+    control.sampleCards.forEach((card, index) => {
+      card.hidden = !isExpanded && index >= INITIAL_SAMPLE_CARD_COUNT;
+    });
   }
 }

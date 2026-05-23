@@ -35,7 +35,9 @@ describe('StartPanel', () => {
       'Curious / "Can a Lathe Do That?" Designs',
       'Multi-Part Sets',
       'Morse Taper & Arbor Adapters',
-      'Bolt, Screw & Fastener Blanks',
+      'Metric Hex Bolts - DIN 933',
+      'Imperial Hex Bolts',
+      'Screw & Fastener Blanks',
       'Shafts, Axles & Journals',
       'Mandrels, Expanding Blanks & Workholding',
       'Bushings, Bearings & Spacers - Practical Set',
@@ -49,13 +51,21 @@ describe('StartPanel', () => {
     expect(sectionLinks[0].getAttribute('href')).toBe(`#sample-section-${SAMPLE_SECTIONS[0].id}`);
     const firstSection = document.querySelector<HTMLElement>('.sampleDialogSection')!;
     expect(firstSection.classList.contains('collapsed')).toBe(true);
-    const firstExpandButton = firstSection.querySelector<HTMLButtonElement>('.sampleDialogExpandButton')!;
-    expect(firstExpandButton.textContent).toBe(`Show all ${SAMPLE_SECTIONS[0].samples.length}`);
-    firstExpandButton.click();
-    expect(firstSection.classList.contains('expanded')).toBe(true);
-    expect(firstSection.classList.contains('collapsed')).toBe(false);
-    expect(firstExpandButton.textContent).toBe('Show one row');
-    const sampleCards = document.querySelectorAll<HTMLButtonElement>('.sampleDialogCard');
+    expect(firstSection.querySelector<HTMLButtonElement>('.sampleDialogExpandButton')).toBeNull();
+    const firstSectionCards = Array.from(firstSection.querySelectorAll<HTMLButtonElement>('.sampleButton'));
+    expect(firstSectionCards.filter(card => !card.hidden).length).toBe(SAMPLE_SECTIONS[0].samples.length);
+    expect(firstSection.querySelector<HTMLButtonElement>('.sampleDialogMoreCard')!.hidden).toBe(true);
+    const expandableSection = document.querySelectorAll<HTMLElement>('.sampleDialogSection')[1];
+    const showMoreCard = expandableSection.querySelector<HTMLButtonElement>('.sampleDialogMoreCard')!;
+    expect(showMoreCard.textContent).toBe(`Show ${SAMPLE_SECTIONS[1].samples.length - 7} more`);
+    const expandableSectionCards = Array.from(expandableSection.querySelectorAll<HTMLButtonElement>('.sampleButton'));
+    expect(expandableSectionCards.filter(card => !card.hidden).length).toBe(7);
+    showMoreCard.click();
+    expect(expandableSection.classList.contains('expanded')).toBe(true);
+    expect(expandableSection.classList.contains('collapsed')).toBe(false);
+    expect(showMoreCard.hidden).toBe(true);
+    expect(expandableSectionCards.every(card => !card.hidden)).toBe(true);
+    const sampleCards = document.querySelectorAll<HTMLButtonElement>('.sampleButton');
     expect(sampleCards.length).toBe(START_SAMPLE_DEFINITIONS.length);
     expect(Array.from(sampleCards).map(card => card.querySelector('strong')?.textContent)).toEqual(
       expect.arrayContaining([
@@ -63,7 +73,6 @@ describe('StartPanel', () => {
         'Two-Step Shoulder',
         'Tapered Peg',
         'Ball-on-a-Stick',
-        'Lens Button',
         'Three-Part Batch',
         'Plain Spacer Tube',
         'Flanged Bushing',
@@ -118,10 +127,37 @@ describe('StartPanel', () => {
         'M6 x 25 Hex Bolt',
         'M8 x 40 Hex Bolt',
         'M10 x 50 Hex Bolt',
-        '1/4-20 x 1 in Hex Bolt',
-        '5/16-18 x 1.25 in Hex Bolt',
-        '3/8-16 x 1.5 in Hex Bolt',
+        'M12 x 60 Hex Bolt',
+        'M14 x 70 Hex Bolt',
+        'M16 x 80 Hex Bolt',
+        'M18 x 90 Hex Bolt',
+        'M20 x 100 Hex Bolt',
+        'M22 x 110 Hex Bolt',
+        'M24 x 120 Hex Bolt',
+        'M27 x 140 Hex Bolt',
+        'M30 x 150 Hex Bolt',
+        'M33 x 160 Hex Bolt',
+        'M36 x 180 Hex Bolt',
+        'M42 x 200 Hex Bolt',
+        'M48 x 240 Hex Bolt',
         '1/2-13 x 2 in Hex Bolt',
+        '9/16-12 x 2.25 in Hex Bolt',
+        '5/8-11 x 2.5 in Hex Bolt',
+        '3/4-10 x 3 in Hex Bolt',
+        '7/8-9 x 3.5 in Hex Bolt',
+        '1-8 x 4 in Hex Bolt',
+        '1-1/8-8 x 4.5 in Hex Bolt',
+        '1-1/4-8 x 5 in Hex Bolt',
+        '1-3/8-8 x 5.5 in Hex Bolt',
+        '1-1/2-8 x 6 in Hex Bolt',
+        '1-5/8-8 x 6.5 in Hex Bolt',
+        '1-3/4-8 x 7 in Hex Bolt',
+        '1-7/8-8 x 7.5 in Hex Bolt',
+        '2-8 x 8 in Hex Bolt',
+        '2-1/4-8 x 9 in Hex Bolt',
+        '2-1/2-8 x 10 in Hex Bolt',
+        '2-3/4-8 x 11 in Hex Bolt',
+        '3-8 x 12 in Hex Bolt',
         'Shoulder Bolt Blank',
         'Fully Threaded Rod Blank',
         'Pan-Head Screw Blank',
@@ -202,7 +238,7 @@ describe('StartPanel', () => {
         'Flat Belt Pulley Blank',
         'V-Belt Pulley Blank',
         'Round-Belt Pulley',
-        'Mini Pulley Set',
+        'Multi-Groove Belt Pulley',
         'Toy Wheel Blank',
         'Model Train Wheel Blank',
         'Flywheel Blank',
@@ -254,7 +290,7 @@ describe('StartPanel', () => {
     });
 
     container.querySelector<HTMLButtonElement>('.sampleCatalogButton')!.click();
-    const sampleIds = Array.from(document.querySelectorAll<HTMLButtonElement>('.sampleDialogCard'))
+    const sampleIds = Array.from(document.querySelectorAll<HTMLButtonElement>('.sampleButton'))
       .map(button => button.dataset.sample!);
     document.querySelector<HTMLButtonElement>('.dialogCloseButton')!.click();
 
@@ -282,6 +318,82 @@ describe('StartPanel', () => {
     expect(preview.classList.contains('samplePreview')).toBe(true);
     expect(preview.querySelector('.samplePreviewCanvas, .samplePreviewUnavailable')).not.toBeNull();
     expect(preview.querySelector('.samplePreviewFallback')).toBeNull();
+  });
+
+  it('uses DIN 933 across-corners diameters for metric hex bolt heads', () => {
+    const expectedHeads = [
+      {id: 'm3-x-12-hex-bolt', bodyLength: '1.2', chamferLength: '0.4', diameter: '6.01', flatDiameter: '5.5'},
+      {id: 'm4-x-16-hex-bolt', bodyLength: '1.8', chamferLength: '0.5', diameter: '7.66', flatDiameter: '7'},
+      {id: 'm5-x-20-hex-bolt', bodyLength: '2.3', chamferLength: '0.6', diameter: '8.79', flatDiameter: '8'},
+      {id: 'm6-x-25-hex-bolt', bodyLength: '2.6', chamferLength: '0.7', diameter: '11.05', flatDiameter: '10'},
+      {id: 'm8-x-40-hex-bolt', bodyLength: '3.5', chamferLength: '0.9', diameter: '14.38', flatDiameter: '13'},
+      {id: 'm10-x-50-hex-bolt', bodyLength: '4.4', chamferLength: '1', diameter: '18.9', flatDiameter: '17'},
+      {id: 'm12-x-60-hex-bolt', bodyLength: '5.1', chamferLength: '1.2', diameter: '21.1', flatDiameter: '19'},
+      {id: 'm14-x-70-hex-bolt', bodyLength: '6', chamferLength: '1.4', diameter: '24.49', flatDiameter: '22'},
+      {id: 'm16-x-80-hex-bolt', bodyLength: '6.8', chamferLength: '1.6', diameter: '26.75', flatDiameter: '24'},
+      {id: 'm18-x-90-hex-bolt', bodyLength: '7.9', chamferLength: '1.8', diameter: '30.14', flatDiameter: '27'},
+      {id: 'm20-x-100-hex-bolt', bodyLength: '8.5', chamferLength: '2', diameter: '33.53', flatDiameter: '30'},
+      {id: 'm22-x-110-hex-bolt', bodyLength: '9.6', chamferLength: '2.2', diameter: '35.72', flatDiameter: '32'},
+      {id: 'm24-x-120-hex-bolt', bodyLength: '10.2', chamferLength: '2.4', diameter: '39.98', flatDiameter: '36'},
+      {id: 'm27-x-140-hex-bolt', bodyLength: '11.6', chamferLength: '2.7', diameter: '45.2', flatDiameter: '41'},
+      {id: 'm30-x-150-hex-bolt', bodyLength: '12.7', chamferLength: '3', diameter: '50.85', flatDiameter: '46'},
+      {id: 'm33-x-160-hex-bolt', bodyLength: '14.4', chamferLength: '3.3', diameter: '55.37', flatDiameter: '50'},
+      {id: 'm36-x-180-hex-bolt', bodyLength: '15.3', chamferLength: '3.6', diameter: '60.79', flatDiameter: '55'},
+      {id: 'm42-x-200-hex-bolt', bodyLength: '17.6', chamferLength: '4.2', diameter: '71.3', flatDiameter: '65'},
+      {id: 'm48-x-240-hex-bolt', bodyLength: '20.4', chamferLength: '4.8', diameter: '82.6', flatDiameter: '75'},
+    ];
+
+    for (const expected of expectedHeads) {
+      const sample = START_SAMPLE_DEFINITIONS.find(entry => entry.id === expected.id);
+      expect(sample).toBeDefined();
+      if (!sample) continue;
+
+      expect(sample.text.split(/\r?\n/)).toContain(`STOCK D${expected.diameter}`);
+      const profileLines = sample.text.split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.startsWith('L'));
+      expect(profileLines.at(-3)).toBe(`L${expected.chamferLength} DS${expected.flatDiameter} DE${expected.diameter}`);
+      expect(profileLines.at(-2)).toBe(`L${expected.bodyLength} D${expected.diameter}`);
+      expect(profileLines.at(-1)).toBe(`L${expected.chamferLength} DS${expected.diameter} DE${expected.flatDiameter}`);
+    }
+  });
+
+  it('uses ASME B18.2.1 T-6 dimensions for imperial hex bolt heads', () => {
+    const expectedHeads = [
+      {id: 'half-13-x-2-hex-bolt', bodyDiameter: '0.499', headBodyLength: '0.273', chamferLength: '0.025', headDiameter: '0.866', flatDiameter: '0.75'},
+      {id: 'nine-sixteenths-12-x-2-25-hex-bolt', bodyDiameter: '0.561', headBodyLength: '0.321', chamferLength: '0.025', headDiameter: '0.938', flatDiameter: '0.812'},
+      {id: 'five-eighths-11-x-2-5-hex-bolt', bodyDiameter: '0.623', headBodyLength: '0.353', chamferLength: '0.025', headDiameter: '1.083', flatDiameter: '0.938'},
+      {id: 'three-quarters-10-x-3-hex-bolt', bodyDiameter: '0.748', headBodyLength: '0.433', chamferLength: '0.025', headDiameter: '1.299', flatDiameter: '1.125'},
+      {id: 'seven-eighths-9-x-3-5-hex-bolt', bodyDiameter: '0.873', headBodyLength: '0.493', chamferLength: '0.035', headDiameter: '1.516', flatDiameter: '1.312'},
+      {id: 'one-8-x-4-hex-bolt', bodyDiameter: '0.998', headBodyLength: '0.557', chamferLength: '0.035', headDiameter: '1.732', flatDiameter: '1.5'},
+      {id: 'one-and-one-eighth-8-x-4-5-hex-bolt', bodyDiameter: '1.123', headBodyLength: '0.648', chamferLength: '0.035', headDiameter: '1.949', flatDiameter: '1.688'},
+      {id: 'one-and-one-quarter-8-x-5-hex-bolt', bodyDiameter: '1.248', headBodyLength: '0.743', chamferLength: '0.035', headDiameter: '2.165', flatDiameter: '1.875'},
+      {id: 'one-and-three-eighths-8-x-5-5-hex-bolt', bodyDiameter: '1.373', headBodyLength: '0.808', chamferLength: '0.035', headDiameter: '2.382', flatDiameter: '2.062'},
+      {id: 'one-and-one-half-8-x-6-hex-bolt', bodyDiameter: '1.498', headBodyLength: '0.904', chamferLength: '0.035', headDiameter: '2.598', flatDiameter: '2.25'},
+      {id: 'one-and-five-eighths-8-x-6-5-hex-bolt', bodyDiameter: '1.623', headBodyLength: '0.968', chamferLength: '0.035', headDiameter: '2.815', flatDiameter: '2.438'},
+      {id: 'one-and-three-quarters-8-x-7-hex-bolt', bodyDiameter: '1.748', headBodyLength: '1.064', chamferLength: '0.035', headDiameter: '3.031', flatDiameter: '2.625'},
+      {id: 'one-and-seven-eighths-8-x-7-5-hex-bolt', bodyDiameter: '1.873', headBodyLength: '1.128', chamferLength: '0.035', headDiameter: '3.248', flatDiameter: '2.812'},
+      {id: 'two-8-x-8-hex-bolt', bodyDiameter: '1.998', headBodyLength: '1.193', chamferLength: '0.035', headDiameter: '3.464', flatDiameter: '3'},
+      {id: 'two-and-one-quarter-8-x-9-hex-bolt', bodyDiameter: '2.248', headBodyLength: '1.353', chamferLength: '0.035', headDiameter: '3.897', flatDiameter: '3.375'},
+      {id: 'two-and-one-half-8-x-10-hex-bolt', bodyDiameter: '2.498', headBodyLength: '1.513', chamferLength: '0.035', headDiameter: '4.33', flatDiameter: '3.75'},
+      {id: 'two-and-three-quarters-8-x-11-hex-bolt', bodyDiameter: '2.748', headBodyLength: '1.674', chamferLength: '0.035', headDiameter: '4.763', flatDiameter: '4.125'},
+      {id: 'three-8-x-12-hex-bolt', bodyDiameter: '2.997', headBodyLength: '1.865', chamferLength: '0.035', headDiameter: '5.196', flatDiameter: '4.5'},
+    ];
+
+    for (const expected of expectedHeads) {
+      const sample = START_SAMPLE_DEFINITIONS.find(entry => entry.id === expected.id);
+      expect(sample).toBeDefined();
+      if (!sample) continue;
+
+      expect(sample.text.split(/\r?\n/)).toContain(`STOCK D${expected.headDiameter}`);
+      const profileLines = sample.text.split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.startsWith('L'));
+      expect(profileLines[1]).toMatch(new RegExp(`\\sD${expected.bodyDiameter}$`));
+      expect(profileLines.at(-3)).toBe(`L${expected.chamferLength} DS${expected.flatDiameter} DE${expected.headDiameter}`);
+      expect(profileLines.at(-2)).toBe(`L${expected.headBodyLength} D${expected.headDiameter}`);
+      expect(profileLines.at(-1)).toBe(`L${expected.chamferLength} DS${expected.headDiameter} DE${expected.flatDiameter}`);
+    }
   });
 
   it('loads and deletes saved lathecodes from browser storage', () => {
@@ -601,6 +713,9 @@ function expectInsideProfileClearOfOutside(sampleId: string, latheCode: LatheCod
     if (!insideRange || !outsideRange) continue;
 
     const outsideLimit = outsideRange.min;
+    if (insideRange.max > outsideLimit + PROFILE_EPSILON_MM) {
+      throw new Error(`${sampleId} inside profile crosses outside profile at Z${formatNumberForMessage(z)}: inside R${formatNumberForMessage(insideRange.max)}, outside R${formatNumberForMessage(outsideLimit)}`);
+    }
     if (outsideLimit <= stock.innerRadius + PROFILE_EPSILON_MM) continue;
 
     const wall = outsideLimit - insideRange.max;
@@ -669,7 +784,7 @@ function getProfileCheckZValues(inside: ProfilePoint[], outside: ProfilePoint[],
   for (let i = 0; i < uniqueBoundaries.length - 1; i++) {
     mids.push((uniqueBoundaries[i] + uniqueBoundaries[i + 1]) / 2);
   }
-  return [...uniqueBoundaries, ...mids].sort((a, b) => a - b);
+  return mids.sort((a, b) => a - b);
 }
 
 function getRadiusRangeAtZ(points: ProfilePoint[], z: number): RadiusRange | null {

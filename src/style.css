@@ -132,37 +132,30 @@ button.startCard:hover {
 
 .sampleDialog {
   width: 100%;
+  --sample-card-width: 200px;
+  --sample-card-height: 318px;
 }
 
 .sampleDialogNav {
-  position: sticky;
-  top: 0;
-  z-index: 1;
   display: flex;
-  gap: 6px;
-  margin: 0 -4px 14px;
-  padding: 6px 4px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 14px;
+  padding: 6px 0;
+  overflow: visible;
   background-color: #ffffff;
   border-bottom: 1px solid #eeeeee;
 }
 
 .sampleDialogNav a {
-  flex: 0 0 auto;
-  padding: 5px 8px;
-  border: 1px solid #d0d0d0;
-  border-radius: 3px;
-  background-color: #f7f7f7;
-  color: #222222;
-  font-size: 13px;
-  line-height: 1.2;
-  text-decoration: none;
-  white-space: nowrap;
+  color: #0645ad;
+  font-size: 14px;
+  line-height: 1.35;
+  text-decoration: underline;
 }
 
 .sampleDialogNav a:hover {
-  background-color: #eeeeee;
-  border-color: #b8b8b8;
+  color: #0b0080;
 }
 
 .sampleDialogSection {
@@ -185,21 +178,20 @@ button.startCard:hover {
 
 .sampleDialogGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  grid-template-columns: repeat(auto-fill, var(--sample-card-width));
   gap: 9px;
   margin: 0;
 }
 
-.sampleDialogSection.collapsed .sampleDialogGrid {
-  max-height: 252px;
-  overflow: hidden;
-}
-
-button.sampleDialogCard {
+button.sampleDialogCard,
+button.sampleDialogMoreCard {
   display: flex;
   box-sizing: border-box;
-  height: 252px;
-  min-height: 252px;
+  width: var(--sample-card-width);
+  min-width: var(--sample-card-width);
+  max-width: var(--sample-card-width);
+  height: var(--sample-card-height);
+  min-height: var(--sample-card-height);
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
@@ -214,10 +206,20 @@ button.sampleDialogCard {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+button.sampleDialogMoreCard {
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  background-color: #ffffff;
+  color: #333333;
+  font-weight: 600;
+  text-align: center;
+}
+
 .samplePreview {
   display: grid;
   place-items: center;
-  width: min(142px, 100%);
+  width: 100%;
   aspect-ratio: 1 / 1;
   align-self: center;
   overflow: hidden;
@@ -251,10 +253,15 @@ button.sampleDialogCard {
   font-size: 13px;
 }
 
-button.sampleDialogCard:hover {
+button.sampleDialogCard:hover,
+button.sampleDialogMoreCard:hover {
   background-color: #ffffff;
   border-color: #b8b8b8;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+button.sampleDialogMoreCard:hover {
+  background-color: #ffffff;
 }
 
 .sampleDialogCard strong {
@@ -270,27 +277,6 @@ button.sampleDialogCard:hover {
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-}
-
-.sampleDialogCard small {
-  margin-top: auto;
-  color: #666666;
-  font-size: 11px;
-}
-
-.sampleDialogExpandButton {
-  min-height: 28px;
-  margin: 8px 0 0;
-  padding: 4px 9px;
-  border: 1px solid #c8c8c8;
-  background-color: #f6f6f6;
-  color: #222222;
-  font-size: 13px;
-}
-
-.sampleDialogExpandButton:hover {
-  background-color: #eeeeee;
-  border-color: #adadad;
 }
 
 .errorContainer:not(:empty) {

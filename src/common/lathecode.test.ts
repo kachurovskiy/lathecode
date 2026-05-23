@@ -180,6 +180,12 @@ describe('lathecode', () => {
     expect(latheCode.getLatheCodeForProfile('outside')?.getText()).toBe('STOCK D10\nTOOL RECT R0.2 L2\nL2 R4');
   });
 
+  it('drops stock ID from outside-only lathecode split from a mixed profile', () => {
+    const latheCode = new LatheCode('STOCK D24 ID10\nTOOL ANG R0.15 L2.2 A120 NA55\nL24 D18\nINSIDE\nL24 D12');
+
+    expect(latheCode.getLatheCodeForProfile('outside')?.getText()).toBe('STOCK D24\nTOOL ANG R0.15 L2.2 A120 NA55\nL24 D18');
+  });
+
   it('creates inside-only lathecode from a mixed profile', () => {
     const latheCode = new LatheCode('STOCK D10\nTOOL RECT R0.2 L2\nL2 R4\nINSIDE\nL2 R2');
 

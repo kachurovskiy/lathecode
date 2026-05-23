@@ -13,6 +13,10 @@ describe('GCode', () => {
     new GCode(container);
 
     expect(container.querySelector<HTMLButtonElement>('.copyGcodeButton')!.hidden).toBe(false);
+    const h5Link = container.querySelector<HTMLAnchorElement>('.nanoElsH5Link')!;
+    expect(h5Link.textContent).toBe('Run on NanoEls H5');
+    expect(h5Link.href).toBe('https://github.com/kachurovskiy/nanoels/tree/main/h5');
+    expect(h5Link.target).toBe('_blank');
     expect(container.querySelector<HTMLElement>('.h4Controls')!.hidden).toBe(true);
   });
 
@@ -55,11 +59,12 @@ function createGCodeContainer(): HTMLElement {
     <progress max="1" style="display: none;"></progress>
     <div class="gcodeActions">
       <button class="copyGcodeButton">Copy</button>
+      <a class="whatLink nanoElsH5Link" href="https://github.com/kachurovskiy/nanoels/tree/main/h5" target="_blank" rel="noopener noreferrer">Run on NanoEls H5</a>
       <span class="h4Controls" hidden>
         <button class="sendButton">Run on H4</button>
         <button class="saveGcodeButton">Save to H4</button>
         <button class="stopButton" style="display: none;">Stop</button>
-        <a class="whatLink" href="https://github.com/kachurovskiy/nanoels/tree/main/h4" target="_blank">What is NanoEls H4?</a>
+        <a class="whatLink" href="https://github.com/kachurovskiy/nanoels/tree/main/h4" target="_blank" rel="noopener noreferrer">What is NanoEls H4?</a>
       </span>
     </div>
   `;

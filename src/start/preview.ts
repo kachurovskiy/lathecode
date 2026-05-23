@@ -13,7 +13,9 @@ const PREVIEW_RENDER_DELAY_MS = 80;
 const PREVIEW_FIT_PADDING = 1.08;
 
 let sharedRenderer: THREE.WebGLRenderer | null = null;
-let queueRunning = false;
+let queueTimer: number | null = null;
+let nextPreviewJobSequence = 0;
+let activePreviewSessions = 0;
 const previewCache = new Map<string, HTMLCanvasElement | 'unavailable'>();
 const previewQueue: PreviewJob[] = [];
 const previewSubscribers = new Map<string, Set<HTMLDivElement>>();
@@ -22,12 +24,18 @@ type PreviewJob = {
   cacheKey: string,
   text: string,
   partRevolutionDegrees: number,
+  sequence: number,
 };
 
-export function preloadLatheCodePreviews(texts: readonly string[]) {
-  if (!canRenderPreview()) return;
-  const settings = loadAppSettings();
-  texts.forEach(text => enqueuePreview(text, settings.partRevolutionDegrees));
+export function beginLatheCodePreviewSession(): () => void {
+  activePreviewSessions++;
+  let disposed = false;
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    activePreviewSessions = Math.max(0, activePreviewSessions - 1);
+    if (!activePreviewSessions) cancelPendingPreviewJobs();
+  };
 }
 
 export function createLatheCodePreview(text: string): HTMLDivElement {
@@ -56,36 +64,76 @@ export function createLatheCodePreview(text: string): HTMLDivElement {
     preview.appendChild(createPreviewUnavailable());
   } else {
     preview.appendChild(createPreviewFallback('Preview loading'));
-    subscribePreview(cacheKey, preview);
-    enqueuePreview(text, partRevolutionDegrees);
+    if (isPreviewSessionActive()) {
+      subscribePreview(cacheKey, preview);
+      enqueuePreview(text, partRevolutionDegrees);
+    }
   }
 
   return preview;
 }
 
+export function prioritizeVisibleLatheCodePreviews() {
+  if (!isPreviewSessionActive()) return;
+  if (!previewQueue.length) return;
+  const priorities = new Map<string, number>();
+  for (const job of previewQueue) {
+    priorities.set(job.cacheKey, getPreviewJobPriority(job.cacheKey));
+  }
+  previewQueue.sort((a, b) =>
+    (priorities.get(b.cacheKey) ?? 0) - (priorities.get(a.cacheKey) ?? 0)
+    || a.sequence - b.sequence);
+  if ((priorities.get(previewQueue[0].cacheKey) ?? 0) > 0) acceleratePreviewQueue();
+}
+
 function enqueuePreview(text: string, partRevolutionDegrees: number) {
+  if (!isPreviewSessionActive()) return;
   const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees);
   if (previewCache.has(cacheKey) || previewQueue.some(job => job.cacheKey === cacheKey)) return;
-  previewQueue.push({cacheKey, text, partRevolutionDegrees});
+  previewQueue.push({cacheKey, text, partRevolutionDegrees, sequence: nextPreviewJobSequence++});
   schedulePreviewQueue();
 }
 
 function schedulePreviewQueue() {
-  if (queueRunning) return;
-  queueRunning = true;
-  window.setTimeout(processNextPreview, PREVIEW_RENDER_DELAY_MS);
+  if (!isPreviewSessionActive()) return;
+  if (queueTimer !== null) return;
+  queueTimer = window.setTimeout(processNextPreview, getPreviewQueueDelayMs());
+}
+
+function acceleratePreviewQueue() {
+  if (!isPreviewSessionActive()) return;
+  if (!previewQueue.length) return;
+  if (queueTimer !== null) window.clearTimeout(queueTimer);
+  queueTimer = window.setTimeout(processNextPreview, 0);
 }
 
 function processNextPreview() {
+  queueTimer = null;
+  if (!isPreviewSessionActive()) return;
+  prioritizeVisibleLatheCodePreviews();
   const job = previewQueue.shift();
-  if (!job) {
-    queueRunning = false;
-    return;
-  }
+  if (!job) return;
 
   previewCache.set(job.cacheKey, renderPreviewJob(job));
   publishPreview(job.cacheKey);
-  window.setTimeout(processNextPreview, PREVIEW_RENDER_DELAY_MS);
+  if (previewQueue.length) schedulePreviewQueue();
+}
+
+function isPreviewSessionActive(): boolean {
+  return activePreviewSessions > 0;
+}
+
+function cancelPendingPreviewJobs() {
+  if (queueTimer !== null) {
+    window.clearTimeout(queueTimer);
+    queueTimer = null;
+  }
+  previewQueue.length = 0;
+  previewSubscribers.clear();
+}
+
+function getPreviewQueueDelayMs() {
+  return previewSubscribers.size > 0 ? 0 : PREVIEW_RENDER_DELAY_MS;
 }
 
 function renderPreviewJob(job: PreviewJob): HTMLCanvasElement | 'unavailable' {
@@ -139,6 +187,8 @@ function subscribePreview(cacheKey: string, preview: HTMLDivElement) {
   const subscribers = previewSubscribers.get(cacheKey) ?? new Set<HTMLDivElement>();
   subscribers.add(preview);
   previewSubscribers.set(cacheKey, subscribers);
+  prioritizeVisibleLatheCodePreviews();
+  acceleratePreviewQueue();
 }
 
 function publishPreview(cacheKey: string) {
@@ -151,6 +201,37 @@ function publishPreview(cacheKey: string) {
       : createPreviewUnavailable());
   });
   previewSubscribers.delete(cacheKey);
+}
+
+function getPreviewJobPriority(cacheKey: string): number {
+  const subscribers = previewSubscribers.get(cacheKey);
+  if (!subscribers) return 0;
+
+  let hasVisibleSubscriber = false;
+  for (const preview of Array.from(subscribers)) {
+    if (!preview.isConnected) continue;
+    if (!isElementVisible(preview)) continue;
+    hasVisibleSubscriber = true;
+    if (isElementInViewport(preview)) return 2;
+  }
+
+  return hasVisibleSubscriber ? 1 : 0;
+}
+
+function isElementVisible(element: HTMLElement): boolean {
+  if (element.closest('[hidden]')) return false;
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function isElementInViewport(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  return rect.bottom > 0
+    && rect.right > 0
+    && rect.top < viewportHeight
+    && rect.left < viewportWidth;
 }
 
 function cloneCanvas(source: HTMLCanvasElement): HTMLCanvasElement {

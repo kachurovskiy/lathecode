@@ -402,7 +402,7 @@ export class LatheCode {
     if (this.data[1]) lines.push(unitsDirectiveToString(this.data[1]));
     pushComments(this.data[2]);
     if (this.data[3]) {
-      lines.push(stockDirectiveToString(this.data[3]));
+      lines.push(stockDirectiveToString(this.data[3], {includeHole: side !== 'outside'}));
     } else if (side === 'inside') {
       const stock = this.getStock();
       if (stock) lines.push(`STOCK D${numberToString(stock.diameter)}`);
@@ -640,9 +640,10 @@ function unitsDirectiveToString(directive: UnitsDirective): string {
   return `UNITS ${directive[2]}${formatComment(directive[3])}`;
 }
 
-function stockDirectiveToString(directive: StockDirective): string {
+function stockDirectiveToString(directive: StockDirective, options: {includeHole?: boolean} = {}): string {
+  const includeHole = options.includeHole ?? true;
   const stock = directive[2];
-  const stockHole = stock[2] ? ` ${stock[2][0]}${numberToString(stock[2][1])}` : '';
+  const stockHole = includeHole && stock[2] ? ` ${stock[2][0]}${numberToString(stock[2][1])}` : '';
   const allowance = stock[3] ? ` ${stock[3][0]}${numberToString(stock[3][1])}` : '';
   return `STOCK ${stock[0]}${numberToString(stock[1])}${stockHole}${allowance}${formatComment(directive[3])}`;
 }
