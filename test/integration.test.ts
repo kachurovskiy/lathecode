@@ -73,8 +73,10 @@ async function setLatheCodeInput(page: Page, value: string) {
 }
 
 async function openStarterLatheCode(page: Page) {
+  const starterSampleSelector = '.sampleButton[data-sample="hello-cylinder"]';
   await page.click('.sampleCatalogButton');
-  await page.click('.sampleButton[data-sample="starter"]');
+  await page.waitForSelector(starterSampleSelector, { visible: true });
+  await page.click(starterSampleSelector);
   await page.waitForSelector('#editorContainer:not([hidden])', { visible: true });
 }
 
