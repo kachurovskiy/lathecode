@@ -7,6 +7,7 @@ import { FromStlWorkerMessage } from './stlimportworker.ts';
 import { AppSettings, loadAppSettings } from '../common/settings.ts';
 import { modifyLatheCodeWithPrompt } from '../llm/openrouter.ts';
 import { hasOpenRouterApiKey, openOpenRouterKeyDialog } from '../llm/openrouterkeydialog.ts';
+import { createPrivacyDisclosure, openRouterActionPrivacyText } from '../llm/privacy.ts';
 
 export class PlanEvent extends Event {
   constructor(readonly latheCode: LatheCode, readonly settings: AppSettings) {
@@ -351,6 +352,8 @@ export class Editor extends EventTarget {
     guide.textContent = 'Describe the change to apply to the current editor contents.';
     field.appendChild(guide);
     grid.appendChild(field);
+    form.appendChild(createPrivacyDisclosure(openRouterActionPrivacyText(
+      'This sends your modification request and current editor lathecode from this browser to OpenRouter.')));
 
     const error = document.createElement('div');
     error.className = 'toolDialogError';

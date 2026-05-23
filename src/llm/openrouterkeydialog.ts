@@ -1,5 +1,6 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
 import { loadAppSettings, saveAppSettings } from '../common/settings.ts';
+import { OPENROUTER_API_KEY_PRIVACY } from './privacy.ts';
 
 export function hasOpenRouterApiKey(): boolean {
   return loadAppSettings().openRouterApiKey.trim().length > 0;
@@ -11,7 +12,7 @@ export function openOpenRouterKeyDialog(onSave: () => void) {
 
   const intro = document.createElement('p');
   intro.className = 'setupIntro';
-  intro.textContent = 'LLM features use your own OpenRouter API key. The key is saved locally in this browser and is sent only to OpenRouter when you use an LLM action.';
+  intro.textContent = OPENROUTER_API_KEY_PRIVACY;
   form.appendChild(intro);
 
   const link = document.createElement('a');

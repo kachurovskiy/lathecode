@@ -49,6 +49,21 @@ L2`,
     expect(request.messages[0].content).toContain('proceed left toward the chuck side');
   });
 
+  it('requires provider routing that does not retain user inputs', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D10\nL2 R3',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createLatheCodeFromPrompt('simple cylinder');
+
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.provider).toEqual({
+      data_collection: 'deny',
+      zdr: true,
+    });
+  });
+
   it('normalizes commented setup directives and lone DS diameter lines', async () => {
     vi.stubGlobal('fetch', mockOpenRouterResponses([
       `;UNITS MM
@@ -111,5 +126,11 @@ function mockOpenRouterResponses(contents: string[]) {
 function getOpenRouterRequest(fetchMock: ReturnType<typeof mockOpenRouterResponses>) {
   const body = fetchMock.mock.calls[0]?.[1]?.body;
   if (typeof body !== 'string') throw new Error('OpenRouter request body not found');
-  return JSON.parse(body) as {messages: {content: string}[]};
+  return JSON.parse(body) as {
+    messages: {content: string}[],
+    provider?: {
+      data_collection?: string,
+      zdr?: boolean,
+    },
+  };
 }

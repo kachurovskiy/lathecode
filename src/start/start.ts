@@ -1,11 +1,14 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
 import { createLatheCodeFromDrawing, createLatheCodeFromPrompt, readImageFileAsDataUrl } from '../llm/openrouter.ts';
 import { hasOpenRouterApiKey, openOpenRouterKeyDialog } from '../llm/openrouterkeydialog.ts';
+import { createPrivacyDisclosure, openRouterActionPrivacyText } from '../llm/privacy.ts';
 import { openSettingsDialog } from './settingsdialog.ts';
 import { beginLatheCodePreviewSession, createLatheCodePreview, prioritizeVisibleLatheCodePreviews } from './preview.ts';
 import { getStartSampleSections } from './samples.ts';
 
 const INITIAL_SAMPLE_CARD_COUNT = 7;
+const BACKUP_PRIVACY_DISCLOSURE =
+  'Backup JSON is handled locally. Exports may include saved lathecodes, settings, and any OpenRouter API key stored in this browser.';
 
 export class StartLatheCodeEvent extends Event {
   constructor(readonly text: string) {
@@ -50,6 +53,8 @@ export class StartPanel extends EventTarget {
     this.overflowMenu = container.querySelector<HTMLElement>('.overflowMenu')!;
     this.settingsButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.settingsButton'));
     this.exportButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.exportButton'));
+
+    this.addBackupPrivacyDisclosure();
 
     this.sampleCatalogButton.addEventListener('click', () => this.openSampleDialog());
     this.startPromptButton.addEventListener('click', () => this.openLlmEntryDialog(() => this.openPromptDialog()));
@@ -100,6 +105,8 @@ export class StartPanel extends EventTarget {
       'Describe the turned part, dimensions, material shape, tooling preference, and units.',
       'Example: 20 mm long brass knob, 18 mm max diameter, rounded dome front, 6 mm stem...');
     grid.appendChild(promptInput.field);
+    form.appendChild(createPrivacyDisclosure(openRouterActionPrivacyText(
+      'This sends your part prompt from this browser to OpenRouter.')));
 
     const error = createLlmError();
     form.appendChild(error);
@@ -175,6 +182,8 @@ export class StartPanel extends EventTarget {
       'Add missing scale, units, dimensions, or details that are not clear in the drawing.',
       'Example: all dimensions are mm; central bore is 8 mm through...');
     grid.appendChild(notesInput.field);
+    form.appendChild(createPrivacyDisclosure(openRouterActionPrivacyText(
+      'This sends selected drawing images and notes from this browser to OpenRouter.')));
 
     const error = createLlmError();
     form.appendChild(error);
@@ -393,6 +402,14 @@ export class StartPanel extends EventTarget {
 
   private closeOverflowMenu() {
     this.overflowMenu.hidden = true;
+  }
+
+  private addBackupPrivacyDisclosure() {
+    if (this.overflowMenu.querySelector('.backupPrivacyDisclosure')) return;
+    const disclosure = document.createElement('p');
+    disclosure.className = 'backupPrivacyDisclosure';
+    disclosure.textContent = BACKUP_PRIVACY_DISCLOSURE;
+    this.overflowMenu.prepend(disclosure);
   }
 
   private exportLocalStorage() {

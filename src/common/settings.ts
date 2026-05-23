@@ -745,7 +745,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
   {
     id: 'llm',
     label: 'LLM',
-    guidance: 'OpenRouter settings used by prompt, drawing, and editor modification actions.',
+    guidance: 'OpenRouter settings used by prompt, drawing, and editor modification actions. LLM actions send only the data needed for that action from this browser to OpenRouter.',
     definitions: [
       {
         key: 'openRouterApiKey',
@@ -756,7 +756,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
         inputType: 'password',
         placeholder: 'sk-or-...',
         allowEmpty: true,
-        guidance: 'Stored locally in this browser and sent only to OpenRouter requests started from this page.',
+        guidance: 'Stored locally in this browser. LLM requests use OpenRouter provider filters that deny data-collecting and non-ZDR endpoints.',
       },
       {
         key: 'openRouterModel',

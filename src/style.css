@@ -763,6 +763,26 @@ progress {
   line-height: 1.35;
 }
 
+.privacyDisclosure {
+  max-width: 760px;
+  margin: 0 0 14px;
+  color: #444444;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.llmDialog .privacyDisclosure {
+  max-width: 620px;
+}
+
+.backupPrivacyDisclosure {
+  max-width: 260px;
+  margin: 0 0 8px;
+  color: #444444;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .settingsActions {
   display: flex;
   flex-wrap: wrap;

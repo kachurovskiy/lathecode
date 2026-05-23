@@ -440,6 +440,8 @@ describe('StartPanel', () => {
     expect(menu.contains(importButton)).toBe(true);
     expect(exportButton.textContent).toBe('Export Backup');
     expect(importButton.textContent).toBe('Import Backup');
+    expect(menu.querySelector<HTMLElement>('.backupPrivacyDisclosure')!.textContent)
+      .toContain('OpenRouter API key');
     expect(menu.hidden).toBe(true);
 
     container.querySelector<HTMLButtonElement>('.overflowButton')!.click();
@@ -536,9 +538,15 @@ describe('StartPanel', () => {
 
     container.querySelector<HTMLButtonElement>('.startPromptButton')!.click();
     expect(document.querySelector('.openRouterKeyDialog')).not.toBeNull();
+    expect(document.querySelector<HTMLElement>('.openRouterKeyDialog')!.textContent)
+      .toContain('stored locally in this browser');
+    expect(document.querySelector<HTMLElement>('.openRouterKeyDialog')!.textContent)
+      .toContain('zero data retention');
     expect(document.querySelector('.llmTextArea')).toBeNull();
     setInputValue('input[name="openRouterApiKey"]', 'sk-or-test');
     clickDialogButton('Save key');
+    expect(document.querySelector<HTMLElement>('.llmDialog .privacyDisclosure')!.textContent)
+      .toContain('part prompt');
 
     document.querySelector<HTMLTextAreaElement>('.llmTextArea')!.value = 'a 5 mm long brass knob';
     clickDialogButton('Create lathecode');
@@ -565,6 +573,8 @@ describe('StartPanel', () => {
 
     expect(document.querySelector('.openRouterKeyDialog')).toBeNull();
     expect(document.querySelector('input[type="file"]')).not.toBeNull();
+    expect(document.querySelector<HTMLElement>('.llmDialog .privacyDisclosure')!.textContent)
+      .toContain('drawing images and notes');
   });
 
   it('sends technical drawing uploads to the configured vision model', async () => {
@@ -579,6 +589,8 @@ describe('StartPanel', () => {
     });
 
     container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
+    expect(document.querySelector<HTMLElement>('.llmDialog .privacyDisclosure')!.textContent)
+      .toContain('drawing images and notes');
     const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]')!;
     Object.defineProperty(fileInput, 'files', {
       value: [new File(['drawing'], 'drawing.png', {type: 'image/png'})],

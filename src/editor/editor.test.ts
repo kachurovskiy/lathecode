@@ -351,6 +351,8 @@ describe('Editor', () => {
 
     new Editor(container);
     container.querySelector<HTMLButtonElement>('.llmModifyButton')!.click();
+    expect(document.querySelector<HTMLElement>('.llmDialog .privacyDisclosure')!.textContent)
+      .toContain('current editor lathecode');
     document.querySelector<HTMLTextAreaElement>('.llmTextArea')!.value = 'increase the outside diameter to 10 mm';
     clickDialogButton('Modify lathecode');
     await waitForAsyncWork();

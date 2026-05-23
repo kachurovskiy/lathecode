@@ -9,6 +9,10 @@ import {
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_REPAIR_ATTEMPTS = 3;
+const OPENROUTER_PROVIDER_PRIVACY = {
+  data_collection: 'deny',
+  zdr: true,
+} as const;
 
 export type TechnicalDrawingImage = {
   name: string,
@@ -190,7 +194,8 @@ async function sendOpenRouterChatCompletion(
     'Content-Type': 'application/json',
     'X-Title': 'lathecode',
   };
-  if (window.location.href) headers['HTTP-Referer'] = window.location.href;
+  const referer = getOpenRouterReferer();
+  if (referer) headers['HTTP-Referer'] = referer;
 
   const response = await fetch(OPENROUTER_CHAT_URL, {
     method: 'POST',
@@ -198,6 +203,7 @@ async function sendOpenRouterChatCompletion(
     body: JSON.stringify({
       model,
       messages,
+      provider: OPENROUTER_PROVIDER_PRIVACY,
       temperature: 0.2,
       max_completion_tokens: 4096,
       stream: false,
@@ -213,6 +219,11 @@ async function sendOpenRouterChatCompletion(
   const text = extractAssistantText(content);
   if (!text.trim()) throw new Error('OpenRouter returned an empty response');
   return text;
+}
+
+function getOpenRouterReferer(): string | undefined {
+  const origin = window.location.origin;
+  return origin && origin !== 'null' ? origin : undefined;
 }
 
 async function readOpenRouterResponse(response: Response): Promise<OpenRouterResponse> {
