@@ -1,5 +1,24 @@
 import * as THREE from "three";
-import {parser} from './parser.js'
+import {
+  parseLatheCode,
+  type AxesDirective,
+  type CommentList,
+  type CurvedLine,
+  type DepthDirective,
+  type FeedDirective,
+  type LatheEntry,
+  type LatheLine,
+  type ModeDirective,
+  type ModeType,
+  type NumericParam,
+  type ParserData,
+  type StockDirective,
+  type StraightLine,
+  type ToolDirective,
+  type UnitsDirective,
+  type XDirection,
+  type ZDirection,
+} from './latheparser.ts';
 
 export class Point {
   constructor(readonly x: number, readonly z: number) {}
@@ -113,69 +132,6 @@ const UNITS: {
 };
 const SCALE_DECIMAL_PLACES = 4;
 
-type UnitType = keyof typeof UNITS;
-type ToolType = 'RECT'|'ROUND'|'ANG';
-type ModeType = 'FACE'|'TURN';
-type ZDirection = 'LEFT'|'RIGHT';
-type XDirection = 'UP'|'DOWN';
-type RadiusDiameterType = 'R'|'D';
-type StockHoleType = 'IR'|'ID';
-type SegmentStartType = 'DS'|'RS';
-type SegmentEndType = 'DE'|'RE';
-type CurveType = 'CONV'|'CONC';
-type CommentList = string[];
-type NumericParam<Name extends string> = [Name, number];
-
-type UnitsDirective = ['UNITS', null, UnitType, string];
-type StockDirective = ['STOCK', null, [RadiusDiameterType, number, NumericParam<StockHoleType> | null, NumericParam<'A'> | null], string];
-type ToolDirective = ['TOOL', null, ToolType, null, [
-  NumericParam<'R'> | null,
-  NumericParam<'L'> | null,
-  NumericParam<'H'> | null,
-  NumericParam<'A'> | null,
-  NumericParam<'NA'> | null,
-], string];
-type DepthDirective = ['DEPTH', null, [
-  NumericParam<'CUT'> | null,
-  NumericParam<'FINISH'> | null,
-], string];
-type FeedDirective = ['FEED', null, [
-  NumericParam<'MOVE'> | null,
-  NumericParam<'PASS'> | null,
-  NumericParam<'PART'> | null,
-], string];
-type ModeDirective = ['MODE', null, ModeType, string];
-type AxesDirective = ['AXES', null, [ZDirection, null, XDirection], string];
-
-type PartingLine = ['L', number, string];
-type StraightLine = ['L', number, RadiusDiameterType, number, string];
-type CurvedLine = ['L', number, SegmentStartType, number, SegmentEndType, number, CurveType | null, string];
-type LatheLine = PartingLine | StraightLine | CurvedLine;
-type LatheEntry = [CommentList, LatheLine];
-type InsideBlock = [CommentList, ['INSIDE', string], LatheEntry[]];
-
-type ParserData = [
-  CommentList,
-  UnitsDirective | null,
-  CommentList,
-  StockDirective | null,
-  CommentList,
-  ToolDirective | null,
-  CommentList,
-  DepthDirective | null,
-  CommentList,
-  FeedDirective | null,
-  CommentList,
-  ModeDirective | null,
-  CommentList,
-  AxesDirective | null,
-  LatheEntry[],
-  InsideBlock | null,
-  CommentList,
-];
-
-const typedParser = parser as unknown as { parse(input: string): ParserData };
-
 export class LatheCode {
   private data: ParserData;
   private unitsMultiplier = 1;
@@ -186,7 +142,7 @@ export class LatheCode {
   private insideSegments: Segment[];
 
   constructor(private text: string) {
-    this.data = typedParser.parse(text + '\n');
+    this.data = parseLatheCode(text + '\n');
     this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2]] : 1;
     // console.log('this.data', this.data);
     const stockInnerRadius = this.getStockInnerDiameter() / 2;
