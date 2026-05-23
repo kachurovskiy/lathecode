@@ -23,7 +23,7 @@ Each sample card includes a `Copy Codex Prompt` button with a prefilled investig
 
 Samples with both outside and inside profiles generate one artifact set for each side. This suite is intentionally excluded from normal `npm test` because it plans the full sample catalog.
 
-Useful environment variables:
+The default planner resolution is 100 px/mm. Useful environment variables:
 
 ```sh
 SAMPLE_TOOLPATH_FILTER=hello-cylinder npm run test:sample-toolpaths
