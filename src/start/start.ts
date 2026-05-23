@@ -97,12 +97,26 @@ export class StartPanel extends EventTarget {
   private openSampleDialog() {
     const container = document.createElement('div');
     container.className = 'sampleDialog';
+    const sections = getStartSampleSections();
+
+    const nav = document.createElement('nav');
+    nav.className = 'sampleDialogNav';
+    nav.setAttribute('aria-label', 'Sample sections');
+    container.appendChild(nav);
+
+    for (const section of sections) {
+      const link = document.createElement('a');
+      link.href = `#sample-section-${section.id}`;
+      link.textContent = section.title;
+      nav.appendChild(link);
+    }
 
     let dialog: HTMLDivElement;
-    for (const section of getStartSampleSections()) {
+    for (const section of sections) {
       const sectionElement = document.createElement('section');
-      sectionElement.className = 'sampleDialogSection';
+      sectionElement.className = 'sampleDialogSection collapsed';
       sectionElement.dataset.sampleSection = section.id;
+      sectionElement.id = `sample-section-${section.id}`;
       container.appendChild(sectionElement);
 
       const sectionTitle = document.createElement('h2');
@@ -144,6 +158,19 @@ export class StartPanel extends EventTarget {
         });
         grid.appendChild(button);
       }
+
+      const expandButton = document.createElement('button');
+      expandButton.className = 'sampleDialogExpandButton';
+      expandButton.type = 'button';
+      expandButton.textContent = `Show all ${section.samples.length}`;
+      expandButton.setAttribute('aria-expanded', 'false');
+      expandButton.addEventListener('click', () => {
+        const isExpanded = sectionElement.classList.toggle('expanded');
+        sectionElement.classList.toggle('collapsed', !isExpanded);
+        expandButton.textContent = isExpanded ? 'Show one row' : `Show all ${section.samples.length}`;
+        expandButton.setAttribute('aria-expanded', String(isExpanded));
+      });
+      sectionElement.appendChild(expandButton);
     }
 
     dialog = createFullScreenDialog(container, 'Samples');

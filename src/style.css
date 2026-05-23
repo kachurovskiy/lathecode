@@ -134,42 +134,82 @@ button.startCard:hover {
   width: 100%;
 }
 
+.sampleDialogNav {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+  margin: 0 -4px 14px;
+  padding: 6px 4px;
+  overflow-x: auto;
+  background-color: #ffffff;
+  border-bottom: 1px solid #eeeeee;
+}
+
+.sampleDialogNav a {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 3px;
+  background-color: #f7f7f7;
+  color: #222222;
+  font-size: 13px;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sampleDialogNav a:hover {
+  background-color: #eeeeee;
+  border-color: #b8b8b8;
+}
+
 .sampleDialogSection {
-  margin: 16px 0 28px;
+  scroll-margin-top: 60px;
+  margin: 14px 0 24px;
 }
 
 .sampleDialogSectionTitle {
   margin: 0 0 4px;
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .sampleDialogSectionDescription {
   max-width: 760px;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   color: #444444;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
 .sampleDialogGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 9px;
   margin: 0;
+}
+
+.sampleDialogSection.collapsed .sampleDialogGrid {
+  max-height: 252px;
+  overflow: hidden;
 }
 
 button.sampleDialogCard {
   display: flex;
-  min-height: 340px;
+  box-sizing: border-box;
+  height: 252px;
+  min-height: 252px;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
-  padding: 14px;
+  padding: 10px;
   border: 1px solid #d7d7d7;
   background-color: #ffffff;
   color: #000000;
+  overflow: hidden;
   text-align: left;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -177,7 +217,7 @@ button.sampleDialogCard {
 .samplePreview {
   display: grid;
   place-items: center;
-  width: min(216px, 100%);
+  width: min(142px, 100%);
   aspect-ratio: 1 / 1;
   align-self: center;
   overflow: hidden;
@@ -218,19 +258,39 @@ button.sampleDialogCard:hover {
 }
 
 .sampleDialogCard strong {
-  font-size: 17px;
+  font-size: 15px;
+  line-height: 1.2;
 }
 
 .sampleDialogCard span {
+  display: -webkit-box;
+  overflow: hidden;
   color: #444444;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .sampleDialogCard small {
   margin-top: auto;
   color: #666666;
-  font-size: 12px;
+  font-size: 11px;
+}
+
+.sampleDialogExpandButton {
+  min-height: 28px;
+  margin: 8px 0 0;
+  padding: 4px 9px;
+  border: 1px solid #c8c8c8;
+  background-color: #f6f6f6;
+  color: #222222;
+  font-size: 13px;
+}
+
+.sampleDialogExpandButton:hover {
+  background-color: #eeeeee;
+  border-color: #adadad;
 }
 
 .errorContainer:not(:empty) {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LatheCode } from '../common/lathecode';
+import { approximateSegments } from '../common/lathegeometry';
 import { geometryBounds } from '../common/polygon';
 import { APP_SETTING_DEFINITIONS, APP_SETTING_SECTIONS, type PlannerEngine } from '../common/settings';
 import { createToolFootprintGeometry } from '../common/toolgeometry';
@@ -32,7 +33,28 @@ describe('StartPanel', () => {
       'Curvy Showpieces',
       'Toys, Desk Trinkets & Funny Shapes',
       'Curious / "Can a Lathe Do That?" Designs',
+      'Multi-Part Sets',
+      'Morse Taper & Arbor Adapters',
+      'Bolt, Screw & Fastener Blanks',
+      'Shafts, Axles & Journals',
+      'Mandrels, Expanding Blanks & Workholding',
+      'Bushings, Bearings & Spacers - Practical Set',
+      'Plumbing, Fluid & Nozzle Shapes',
+      'Measurement, Gauges & Calibration',
+      'Pulleys, Wheels & Rotating Blanks',
+      'Handles, Knobs & Control Parts',
     ]);
+    const sectionLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('.sampleDialogNav a'));
+    expect(sectionLinks.map(link => link.textContent)).toEqual(SAMPLE_SECTIONS.map(section => section.title));
+    expect(sectionLinks[0].getAttribute('href')).toBe(`#sample-section-${SAMPLE_SECTIONS[0].id}`);
+    const firstSection = document.querySelector<HTMLElement>('.sampleDialogSection')!;
+    expect(firstSection.classList.contains('collapsed')).toBe(true);
+    const firstExpandButton = firstSection.querySelector<HTMLButtonElement>('.sampleDialogExpandButton')!;
+    expect(firstExpandButton.textContent).toBe(`Show all ${SAMPLE_SECTIONS[0].samples.length}`);
+    firstExpandButton.click();
+    expect(firstSection.classList.contains('expanded')).toBe(true);
+    expect(firstSection.classList.contains('collapsed')).toBe(false);
+    expect(firstExpandButton.textContent).toBe('Show one row');
     const sampleCards = document.querySelectorAll<HTMLButtonElement>('.sampleDialogCard');
     expect(sampleCards.length).toBe(START_SAMPLE_DEFINITIONS.length);
     expect(Array.from(sampleCards).map(card => card.querySelector('strong')?.textContent)).toEqual(
@@ -71,6 +93,140 @@ describe('StartPanel', () => {
         'Morse-Code Bead: SOS',
         'Rocket Nozzle Cross-Section',
         '"Not a Vase" Vase',
+        'Washer Assortment',
+        'Spacer Assortment',
+        'Bead Bracelet Set',
+        'Chess Pawns x4',
+        'Stacking Toy Rings',
+        'Rocket Fleet',
+        'Calibration Rod Set',
+        'Desk Totem Kit',
+        'MT0 External Taper Plug',
+        'MT2 External Taper Plug',
+        'MT5 Stub Taper',
+        'MT2 Internal Socket Blank',
+        'Deep MT2 Test Socket',
+        'MT3 Outside to MT2 Inside',
+        'MT2 Drill-Chuck Arbor Blank',
+        'MT2 Faceplate Arbor Blank',
+        'Drawbar MT2 Blank',
+        'Taper Gauge Male/Female Pair',
+        'Miniature Morse Taper Teaching Set',
+        'M3 x 12 Hex Bolt',
+        'M4 x 16 Hex Bolt',
+        'M5 x 20 Hex Bolt',
+        'M6 x 25 Hex Bolt',
+        'M8 x 40 Hex Bolt',
+        'M10 x 50 Hex Bolt',
+        '1/4-20 x 1 in Hex Bolt',
+        '5/16-18 x 1.25 in Hex Bolt',
+        '3/8-16 x 1.5 in Hex Bolt',
+        '1/2-13 x 2 in Hex Bolt',
+        'Shoulder Bolt Blank',
+        'Fully Threaded Rod Blank',
+        'Pan-Head Screw Blank',
+        'Thumb-Screw Blank',
+        'Threaded Spacer Stud',
+        'Solid Rivet Blank',
+        'Grooved Pin Blank',
+        'Round Nut Blank',
+        'Acorn Nut Blank',
+        'Decorative Screw Cap',
+        'Straight Shaft Blank',
+        'Shaft with Center Relief',
+        'Shaft with Parting Grooves',
+        'Two-Diameter Motor Shaft',
+        'Eccentric-Free Cam Blank',
+        'Toy Wheel Axle',
+        'Miniature Train Axle Blank',
+        'Dual Bearing Seat',
+        'Retaining-Ring Groove Shaft',
+        'End-Capped Journal',
+        'Plain Mandrel',
+        'Taper Mandrel',
+        'Saw Arbor Blank',
+        'Faceplate Stub Arbor',
+        'Collet Arbor Blank',
+        'Expanding Plug Blank',
+        'Threaded Workholding Plug Placeholder',
+        'Dead Center Blank',
+        'Center Adapter Sleeve',
+        'Mini Center Set',
+        'Inner Race Spacer',
+        'Stepped Bearing Spacer',
+        'Preload Spacer Pair',
+        'Bearing Stack Kit',
+        'Press-Fit Bushing',
+        'Oilite-Style Bushing Blank',
+        'V-Groove Roller',
+        'Cable Roller',
+        'O-Ring Groove Shaft',
+        'Seal Driver Cup',
+        'Labyrinth Seal Demo',
+        'Single Hose Barb Blank',
+        'Double Hose Barb Blank',
+        'Reducing Hose Nipple',
+        'Beaded Tube End',
+        'Hose Barb Pitch Sampler',
+        'Converging Nozzle',
+        'Rocket Nozzle Demo',
+        'Spray Nozzle Blank',
+        'Funnel Adapter',
+        'Pipe Plug Blank',
+        'Blank-Off Button',
+        'Compression Ferrule',
+        'Olive Ferrule',
+        'Flared Tube Seat',
+        'Cone Washer Pair',
+        'Diameter Step Gauge',
+        'Go/No-Go Plug Gauge',
+        'Go/No-Go Ring Gauge',
+        'Morse Taper Plug Gauge',
+        'Morse Taper Ring Gauge',
+        '60-Degree Cone Gauge',
+        'Pipe-Taper Visual Gauge',
+        'Chamfer Angle Sampler',
+        'Matched Taper Fit Demo',
+        'Thin-Wall Tube Demo',
+        'Counterbore Depth Demo',
+        'Internal Chamfer Demo',
+        'Bore Relief Demo',
+        'Sectioned Nozzle Profile',
+        'Facing Test Puck',
+        'Turning Test Bar',
+        'Taper Test Bar',
+        'Radius Test Button',
+        'Groove Width Test',
+        'Parting Test Rod',
+        'Finish Comparator Rod',
+        'Flat Belt Pulley Blank',
+        'V-Belt Pulley Blank',
+        'Round-Belt Pulley',
+        'Mini Pulley Set',
+        'Toy Wheel Blank',
+        'Model Train Wheel Blank',
+        'Flywheel Blank',
+        'Handwheel Blank, Round Only',
+        'Wire Spool',
+        'Cable Drum',
+        'Fishing-Reel Spool Blank',
+        'Miniature Winch Drum',
+        'Mushroom Knob',
+        'Ball Knob',
+        'Tapered Control Knob',
+        'Pointerless Dial Knob',
+        'Thumb Nut Blank',
+        'Decorative Bead Knob',
+        'File Handle Blank',
+        'Tool Handle Ferrule',
+        'Screwdriver Handle Blank',
+        'Crank Handle Roller',
+        'Pull Handle Standoff',
+        'Rod End Cap',
+        'Furniture Glide Foot',
+        'Domed Screw Cover',
+        'Rubber-Bumper Shape',
+        'Ferrule Cap',
       ]),
     );
     for (const card of sampleCards) {
@@ -107,6 +263,8 @@ describe('StartPanel', () => {
       document.querySelector<HTMLButtonElement>(`.sampleButton[data-sample="${sampleId}"]`)!.click();
       const latheCode = new LatheCode(started.at(-1)!);
       expect(latheCode.getText()).toMatch(/^TOOL\s/m);
+      expectProfilesStayWithinStock(sampleId, latheCode);
+      expectInsideProfileClearOfOutside(sampleId, latheCode);
       expectChuckSideMass(latheCode);
       expectInsideToolFitsBore(latheCode);
       expectBarePartingLineWidthsMatchTool(latheCode);
@@ -391,6 +549,67 @@ type GrooveProfileLine = {
   raw: string,
 };
 
+type ProfilePoint = ReturnType<typeof approximateSegments>[number];
+
+type RadiusRange = {
+  min: number,
+  max: number,
+};
+
+const PROFILE_EPSILON_MM = 0.001;
+const PROFILE_SAMPLE_CHORD_MM = 0.05;
+
+function expectProfilesStayWithinStock(sampleId: string, latheCode: LatheCode) {
+  const stock = latheCode.getStock();
+  expect(stock).not.toBeNull();
+  if (!stock) return;
+
+  for (const [label, segments] of [
+    ['outside', latheCode.getOutsideProfileSegments()],
+    ['inside', latheCode.getInsideProfileSegments()],
+  ] as const) {
+    for (const point of approximateSegments(segments, PROFILE_SAMPLE_CHORD_MM)) {
+      if (point.z < -PROFILE_EPSILON_MM || point.z > stock.length + PROFILE_EPSILON_MM) {
+        throw new Error(`${sampleId} ${label} profile extends beyond stock length at Z${formatNumberForMessage(point.z)} for stock L${formatNumberForMessage(stock.length)}`);
+      }
+      if (point.x > stock.radius + PROFILE_EPSILON_MM) {
+        throw new Error(`${sampleId} ${label} profile exceeds stock OD at R${formatNumberForMessage(point.x)} for stock R${formatNumberForMessage(stock.radius)}`);
+      }
+      if (point.x < stock.innerRadius - PROFILE_EPSILON_MM) {
+        throw new Error(`${sampleId} ${label} profile crosses stock ID at R${formatNumberForMessage(point.x)} for stock IR${formatNumberForMessage(stock.innerRadius)}`);
+      }
+    }
+  }
+}
+
+function expectInsideProfileClearOfOutside(sampleId: string, latheCode: LatheCode) {
+  const stock = latheCode.getStock();
+  expect(stock).not.toBeNull();
+  if (!stock || !latheCode.getInsideProfileSegments().length) return;
+
+  const inside = approximateSegments(latheCode.getInsideProfileSegments(), PROFILE_SAMPLE_CHORD_MM);
+  if (!inside.length) return;
+
+  const outside = approximateSegments(latheCode.getOutsideProfileSegments(), PROFILE_SAMPLE_CHORD_MM);
+  const minZ = Math.max(getProfileMinZ(inside), outside.length ? getProfileMinZ(outside) : 0);
+  const maxZ = Math.min(getProfileMaxZ(inside), outside.length ? getProfileMaxZ(outside) : stock.length);
+  if (maxZ < minZ) return;
+
+  for (const z of getProfileCheckZValues(inside, outside, minZ, maxZ)) {
+    const insideRange = getRadiusRangeAtZ(inside, z);
+    const outsideRange = outside.length ? getRadiusRangeAtZ(outside, z) : {min: stock.radius, max: stock.radius};
+    if (!insideRange || !outsideRange) continue;
+
+    const outsideLimit = outsideRange.min;
+    if (outsideLimit <= stock.innerRadius + PROFILE_EPSILON_MM) continue;
+
+    const wall = outsideLimit - insideRange.max;
+    if (wall <= PROFILE_EPSILON_MM) {
+      throw new Error(`${sampleId} inside profile touches or crosses outside profile at Z${formatNumberForMessage(z)}: inside R${formatNumberForMessage(insideRange.max)}, outside R${formatNumberForMessage(outsideLimit)}`);
+    }
+  }
+}
+
 function expectRectangularGroovesReachableByTool(sampleId: string, latheCode: LatheCode) {
   const tool = latheCode.getTool();
   if (tool.type !== 'RECT') return;
@@ -429,6 +648,57 @@ function expectRectangularGroovesReachableByTool(sampleId: string, latheCode: La
 
 function formatNumberForMessage(value: number): string {
   return String(Math.round(value * 1000) / 1000);
+}
+
+function getProfileMinZ(points: ProfilePoint[]): number {
+  return Math.min(...points.map(point => point.z));
+}
+
+function getProfileMaxZ(points: ProfilePoint[]): number {
+  return Math.max(...points.map(point => point.z));
+}
+
+function getProfileCheckZValues(inside: ProfilePoint[], outside: ProfilePoint[], minZ: number, maxZ: number): number[] {
+  const boundaries = [...inside, ...outside]
+    .map(point => point.z)
+    .filter(z => z >= minZ - PROFILE_EPSILON_MM && z <= maxZ + PROFILE_EPSILON_MM)
+    .map(z => Math.min(maxZ, Math.max(minZ, z)))
+    .sort((a, b) => a - b);
+  const uniqueBoundaries = boundaries.filter((z, index) => index === 0 || Math.abs(z - boundaries[index - 1]) > PROFILE_EPSILON_MM);
+  const mids: number[] = [];
+  for (let i = 0; i < uniqueBoundaries.length - 1; i++) {
+    mids.push((uniqueBoundaries[i] + uniqueBoundaries[i + 1]) / 2);
+  }
+  return [...uniqueBoundaries, ...mids].sort((a, b) => a - b);
+}
+
+function getRadiusRangeAtZ(points: ProfilePoint[], z: number): RadiusRange | null {
+  const radii: number[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const minZ = Math.min(a.z, b.z);
+    const maxZ = Math.max(a.z, b.z);
+    if (z < minZ - PROFILE_EPSILON_MM || z > maxZ + PROFILE_EPSILON_MM) continue;
+
+    const zDelta = b.z - a.z;
+    if (Math.abs(zDelta) <= PROFILE_EPSILON_MM) {
+      if (Math.abs(z - a.z) <= PROFILE_EPSILON_MM) {
+        radii.push(a.x, b.x);
+      }
+      continue;
+    }
+
+    const t = (z - a.z) / zDelta;
+    if (t < -PROFILE_EPSILON_MM || t > 1 + PROFILE_EPSILON_MM) continue;
+    radii.push(a.x + (b.x - a.x) * Math.min(1, Math.max(0, t)));
+  }
+
+  if (!radii.length) return null;
+  return {
+    min: Math.min(...radii),
+    max: Math.max(...radii),
+  };
 }
 
 function getUnitMultiplier(text: string): number {
