@@ -1,6 +1,17 @@
+html {
+  box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
 body {
-  font-family: Roboto;
-  padding: 0 20px;
+  font-family: Roboto, Arial, sans-serif;
+  margin: 0;
+  padding: 0 20px 20px;
 }
 
 [hidden] {
@@ -9,9 +20,10 @@ body {
 
 .vcont {
   display: grid;
-  grid-template-columns: repeat(auto-fit, 500px);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 500px), 500px));
   grid-auto-rows: auto;
-  grid-gap: 20px;
+  gap: 20px;
+  align-items: start;
 }
 
 .vcont pre {
@@ -32,7 +44,10 @@ body {
 .latheCodeInput {
   width: 100%;
   height: 100%;
-  box-sizing: border-box;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 16px;
+  line-height: 1.35;
+  resize: vertical;
 }
 .startSection {
   width: 100%;
@@ -48,13 +63,14 @@ body {
 
 .startGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
 
 button.startCard {
   display: flex;
+  width: 100%;
   min-height: 120px;
   flex-direction: column;
   align-items: flex-start;
@@ -113,6 +129,7 @@ button.startCard:hover {
   z-index: 10;
   display: flex;
   min-width: 150px;
+  max-width: calc(100vw - 32px);
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
@@ -309,6 +326,7 @@ button.sampleDialogMoreCard:hover {
   right: 0;
   bottom: 0;
   z-index: 20;
+  box-sizing: border-box;
   overflow: auto;
   background-color: white;
   padding: 8px 30px;
@@ -340,7 +358,7 @@ button.sampleDialogMoreCard:hover {
 
 .toolPresetGallery {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
   margin: 12px 0;
 }
@@ -399,7 +417,7 @@ button.sampleDialogMoreCard:hover {
 
 .toolSecondaryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
   margin: 12px 0;
 }
@@ -479,7 +497,9 @@ button.sampleDialogMoreCard:hover {
 
 #crossSectionContainer,
 #sceneContainer {
-  width: 500px;
+  width: 100%;
+  max-width: 500px;
+  min-width: 0;
 }
 
 #crossSectionContainer[hidden],
@@ -525,6 +545,11 @@ button.sampleDialogMoreCard:hover {
 
 #sceneContainer canvas {
   display: block;
+  width: 100% !important;
+  max-width: 500px;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+  touch-action: none;
 }
 
 .selectorContainer {
@@ -544,6 +569,7 @@ button.sampleDialogMoreCard:hover {
 
 #gcodeContainer {
   margin: 12px 0;
+  min-width: 0;
 }
 
 #plannerContainer .canvasContainer {
@@ -590,9 +616,12 @@ button.sampleDialogMoreCard:hover {
 }
 
 #gcodeContainer textarea {
-  box-sizing: border-box;
   height: 400px;
   width: 100%;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 16px;
+  line-height: 1.35;
+  resize: vertical;
 }
 
 button {
@@ -607,6 +636,7 @@ button {
   border-radius: 3px;
   border: 1px solid #bdbdbd;
   cursor: pointer;
+  touch-action: manipulation;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 button:hover {
@@ -634,12 +664,14 @@ button:disabled {
   flex-wrap: wrap;
   gap: 0;
   align-items: center;
+  max-width: 100%;
 }
 
 .editorToolbarGroup button {
   margin: 0;
   min-height: 32px;
   border-radius: 3px;
+  white-space: normal;
 }
 
 .editorToolbarGroup button:not([hidden]) + button:not([hidden]) {
@@ -662,6 +694,25 @@ button:disabled {
 
 progress {
   display: block;
+}
+
+.gcodeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.gcodeActions button,
+.gcodeActions .whatLink {
+  margin: 0;
+}
+
+.h4Controls:not([hidden]) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .senderError {
@@ -690,6 +741,7 @@ progress {
 .save-group .saveNameInput,
 .load-group .loadSelect {
   flex-grow: 1;
+  min-width: 0;
 }
 
 .load-group .loadSelect {
@@ -721,7 +773,7 @@ progress {
 
 .settingsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 420px));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 420px));
   gap: 14px;
   justify-content: start;
   margin: 12px 0;
@@ -737,6 +789,7 @@ progress {
   box-sizing: border-box;
   max-width: 420px;
   width: 100%;
+  min-width: 0;
 }
 
 .settingHeading {
@@ -795,7 +848,7 @@ progress {
 }
 
 .llmDialog .settingsGrid {
-  grid-template-columns: minmax(260px, 620px);
+  grid-template-columns: minmax(0, 620px);
 }
 
 .llmTextAreaField {
@@ -854,7 +907,7 @@ progress {
 
 .setupLayout {
   display: grid;
-  grid-template-columns: minmax(260px, 380px) minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
   margin: 12px 0;
@@ -890,7 +943,7 @@ progress {
 
 .setupControls {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 12px;
 }
 
@@ -1028,7 +1081,7 @@ progress {
 
 .setupChoiceGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
   gap: 10px;
 }
 
@@ -1102,6 +1155,166 @@ button.setupSegmentButton:last-child {
   }
 }
 
+@media (max-width: 600px) {
+  body {
+    padding: 0 12px 16px;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    line-height: 1.2;
+  }
+
+  .vcont {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .inputContainer {
+    height: clamp(260px, 52vh, 420px);
+  }
+
+  #gcodeContainer textarea {
+    height: min(48vh, 340px);
+    min-height: 260px;
+  }
+
+  .startGrid {
+    grid-template-columns: 1fr;
+  }
+
+  button.startCard {
+    min-height: 0;
+  }
+
+  .load-group {
+    align-items: stretch;
+  }
+
+  .load-group .loadSelect {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .load-group button {
+    flex: 1 1 calc(50% - 5px);
+    min-height: 44px;
+    margin: 0;
+  }
+
+  .toolbar input[type="text"],
+  .toolbar select {
+    max-width: none;
+  }
+
+  .editorToolbar {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .editorToolbarGroup {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .editorToolbarGroup button {
+    flex: 0 0 auto;
+    min-width: 68px;
+    min-height: 40px;
+    padding: 7px 12px;
+    font-size: 15px;
+  }
+
+  .editorToolbarGroup button:not([hidden]) + button:not([hidden]) {
+    margin-left: 0;
+    border-radius: 3px;
+  }
+
+  .editorToolbarGroup button:not([hidden]):has(+ button:not([hidden])) {
+    border-radius: 3px;
+  }
+
+  .fullScreenDialog {
+    padding: 8px 12px 16px;
+  }
+
+  .sampleDialogNav {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin: 0 -12px 14px;
+    padding: 8px 12px;
+    overflow-x: auto;
+  }
+
+  .sampleDialogNav a {
+    white-space: nowrap;
+  }
+
+  .sampleDialogGrid {
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  }
+
+  button.sampleDialogCard,
+  button.sampleDialogMoreCard {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .settingField {
+    padding: 10px;
+  }
+
+  .settingsActions {
+    align-items: stretch;
+  }
+
+  .settingsActions button {
+    min-height: 44px;
+  }
+
+  .movesScrubber {
+    grid-template-columns: 1fr;
+  }
+
+  .movesScrubberOutput {
+    justify-self: start;
+  }
+
+  .gcodeActions {
+    align-items: stretch;
+  }
+
+  .gcodeActions button,
+  .gcodeActions .whatLink {
+    flex: 1 1 140px;
+    text-align: center;
+  }
+
+  .h4Controls:not([hidden]) {
+    display: flex;
+    width: 100%;
+  }
+
+  .setupSegmented {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  button.setupSegmentButton,
+  button.setupSegmentButton:first-child,
+  button.setupSegmentButton:last-child {
+    min-width: 0;
+    margin-left: 0;
+    border-radius: 3px;
+  }
+}
+
 .toolbar input[type="text"],
 .toolbar select {
   max-width: 200px;
@@ -1139,4 +1352,11 @@ button.setupSegmentButton:last-child {
   width: 100%;
   margin: 0;
   text-align: left;
+}
+
+@media (max-width: 600px) {
+  .toolbar input[type="text"],
+  .toolbar select {
+    max-width: none;
+  }
 }
