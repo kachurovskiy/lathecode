@@ -177,8 +177,16 @@ export function optimizeTravel(moves: PixelMove[], travelRetractionSide: TravelR
 }
 
 function getSafeTravelY(moves: PixelMove[], travelRetractionSide: TravelRetractionSide): number {
-  const values = moves.flatMap(m => [m.yStart, m.yStart + m.yDelta]);
-  return travelRetractionSide === 'minY' ? Math.min(...values) : Math.max(...values);
+  if (!moves.length) throw new Error('No travel moves');
+
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const move of moves) {
+    const endY = move.yStart + move.yDelta;
+    minY = Math.min(minY, move.yStart, endY);
+    maxY = Math.max(maxY, move.yStart, endY);
+  }
+  return travelRetractionSide === 'minY' ? minY : maxY;
 }
 
 export function detectCodirectional(moves: PixelMove[], i: number): {move: PixelMove, length: number} {

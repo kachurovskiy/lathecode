@@ -308,6 +308,19 @@ describe('plannerworker', () => {
     ]);
   });
 
+  it('optimizes long travel runs without overflowing the stack', () => {
+    const moves: PixelMove[] = [];
+    for (let i = 0; i < 20000; i++) {
+      moves.push(PixelMove.withoutCut(i, i % 17, 1, i % 2 ? 3 : -3));
+    }
+
+    expect(optimizeTravel(moves)).toEqual([
+      PixelMove.withoutCut(0, 0, 0, 19),
+      PixelMove.withoutCut(0, 19, 20000, 0),
+      PixelMove.withoutCut(20000, 19, 0, -9),
+    ]);
+  });
+
   it('detectTravel', () => {
     expect(detectTravel([
       PixelMove.withoutCut(100, 100, 0, 1),
