@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import { viteSingleFile } from "vite-plugin-singlefile"
 
 export default defineConfig({
@@ -8,5 +8,6 @@ export default defineConfig({
   },
 	test: {
 		environment: 'jsdom',
+    exclude: [...configDefaults.exclude, 'test/sample-toolpaths/**'],
 	},
 })
