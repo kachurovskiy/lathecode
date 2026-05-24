@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { availableParallelism } from 'os';
 import { dirname, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import puppeteer, { type Browser, type Page } from 'puppeteer';
@@ -33,30 +34,53 @@ type ArtifactIndexEntry = {
   movesFile: string,
 };
 
+type ToolpathWorker = {
+  id: number,
+  page: Page,
+};
+
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(TEST_DIR, '..', '..');
 const OUTPUT_DIR = resolve(TEST_DIR, process.env.SAMPLE_TOOLPATH_OUTPUT_DIR || 'artifacts');
 const PX_PER_MM = getPositiveEnvNumber('SAMPLE_TOOLPATH_PX_PER_MM', 100);
 const MOVES_IMAGE_WIDTH = getPositiveEnvNumber('SAMPLE_TOOLPATH_MOVES_WIDTH', 700);
 const MOVES_IMAGE_HEIGHT = getPositiveEnvNumber('SAMPLE_TOOLPATH_MOVES_HEIGHT', 350);
+const TEST_TIMEOUT_MS = getPositiveEnvNumber('SAMPLE_TOOLPATH_TIMEOUT_MS', 4 * 60 * 60 * 1000);
+const WORKER_COUNT = getPositiveEnvInteger('SAMPLE_TOOLPATH_CONCURRENCY', Math.min(getHostParallelism(), 6));
+const RUNNER_PATH = '/sample-toolpath-runner.html';
+const RUNNER_HTML = '<!doctype html><html><head><meta charset="utf-8"><title>Sample Toolpath Runner</title></head><body></body></html>';
 const PUPPETEER_LAUNCH_OPTIONS = {
   args: ['--disable-gpu', '--no-sandbox', '--disable-setuid-sandbox'],
-  protocolTimeout: 3600000,
+  protocolTimeout: TEST_TIMEOUT_MS,
 };
 
 let server: ViteDevServer;
 let browser: Browser;
-let page: Page;
 let baseUrl = '';
 
 beforeAll(async () => {
   mkdirSync(OUTPUT_DIR, {recursive: true});
   server = await createServer({
+    plugins: [{
+      name: 'sample-toolpath-runner',
+      configureServer(viteServer) {
+        viteServer.middlewares.use(RUNNER_PATH, (_request, response) => {
+          response.statusCode = 200;
+          response.setHeader('Content-Type', 'text/html; charset=utf-8');
+          response.end(RUNNER_HTML);
+        });
+      },
+    }],
     server: {
       host: '127.0.0.1',
       port: 0,
       watch: {
-        ignored: ['**/test/sample-toolpaths/artifacts/**', '**/test/sample-toolpaths/.smoke/**'],
+        ignored: [
+          '**/test/sample-toolpaths/artifacts/**',
+          '**/test/sample-toolpaths/.smoke/**',
+          `${toPosixPath(OUTPUT_DIR)}/**`,
+          `**/${toPosixPath(relative(PROJECT_ROOT, OUTPUT_DIR))}/**`,
+        ],
       },
     },
     logLevel: 'error',
@@ -67,12 +91,9 @@ beforeAll(async () => {
   if (!baseUrl) throw new Error('Unable to start Vite dev server for sample toolpath fixtures');
 
   browser = await puppeteer.launch(PUPPETEER_LAUNCH_OPTIONS);
-  page = await browser.newPage();
-  await page.goto(new URL('?moveTimeout=0', baseUrl).toString(), {waitUntil: 'domcontentloaded'});
 }, 30000);
 
 afterAll(async () => {
-  await page?.close().catch(() => undefined);
   await browser?.close();
   await server?.close();
 });
@@ -106,6 +127,14 @@ function getPositiveEnvNumber(name: string, fallback: number): number {
   if (!rawValue) return fallback;
   const value = Number(rawValue);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function getPositiveEnvInteger(name: string, fallback: number): number {
+  return Math.max(1, Math.floor(getPositiveEnvNumber(name, fallback)));
+}
+
+function getHostParallelism(): number {
+  return Math.max(1, availableParallelism());
 }
 
 function saveGCode(name: string, gcode: string) {
@@ -267,6 +296,10 @@ function toProjectPath(path: string): string {
   return relative(PROJECT_ROOT, path).replace(/\\/g, '/');
 }
 
+function toPosixPath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
 function imagePanel(label: string, file: string | null): string {
   const body = file
     ? `<a href="${escapeAttribute(file)}"><img src="${escapeAttribute(file)}" alt="${escapeAttribute(label)} artifact"></a>`
@@ -287,7 +320,26 @@ function escapeAttribute(text: string): string {
   return escapeHtml(text);
 }
 
-async function generateToolpath(input: string): Promise<GeneratedToolpath> {
+async function createWorkers(count: number): Promise<ToolpathWorker[]> {
+  return Promise.all(Array.from({length: count}, async (_, index) => ({
+    id: index + 1,
+    page: await createRunnerPage(),
+  })));
+}
+
+async function createRunnerPage(): Promise<Page> {
+  const page = await browser.newPage();
+  page.setDefaultTimeout(TEST_TIMEOUT_MS);
+  page.setDefaultNavigationTimeout(TEST_TIMEOUT_MS);
+  await page.goto(new URL(`${RUNNER_PATH}?moveTimeout=0`, baseUrl).toString(), {waitUntil: 'domcontentloaded'});
+  return page;
+}
+
+async function closeWorkers(workers: ToolpathWorker[]): Promise<void> {
+  await Promise.all(workers.map(worker => worker.page.close().catch(() => undefined)));
+}
+
+async function generateToolpath(page: Page, input: string): Promise<GeneratedToolpath> {
   return page.evaluate(async ({latheCodeText, pxPerMm, movesImageWidth, movesImageHeight}) => {
     const browserImport = (path: string) => new Function('path', 'return import(path)')(path);
     const [
@@ -343,38 +395,60 @@ async function generateToolpath(input: string): Promise<GeneratedToolpath> {
 
 test('plans all sample profiles to gcode and images', async () => {
   const cases = getCases();
-  const artifacts: ArtifactIndexEntry[] = [];
+  const workerCount = Math.min(WORKER_COUNT, cases.length);
+  const artifacts: (ArtifactIndexEntry | null)[] = Array.from({length: cases.length}, () => null);
   expect(cases.length, 'No sample toolpath cases matched').toBeGreaterThan(0);
-  writeArtifactIndex(artifacts, cases.length);
+  writeArtifactIndex([], cases.length);
 
-  for (const sampleCase of cases) {
-    const name = `${sampleCase.sampleId}.${sampleCase.side}`;
-    let result: GeneratedToolpath;
-    try {
-      result = await generateToolpath(sampleCase.text);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to plan ${name} (${sampleCase.title}): ${message}`);
+  const workers = await createWorkers(workerCount);
+  let nextCaseIndex = 0;
+
+  async function runWorker(worker: ToolpathWorker) {
+    while (nextCaseIndex < cases.length) {
+      const caseIndex = nextCaseIndex++;
+      const sampleCase = cases[caseIndex];
+      artifacts[caseIndex] = await planSampleCase(worker, sampleCase);
+      writeArtifactIndex(getCompletedArtifacts(artifacts), cases.length);
     }
-
-    expect(result.gcode, `GCode was not generated for ${name}`).toContain('G91 ; relative positioning');
-    expect(result.moveCount, `Planner did not produce moves for ${name}`).toBeGreaterThan(0);
-
-    saveGCode(name, result.gcode);
-    savePng(name + '.part', result.partPng);
-    savePng(name + '.tool', result.toolPng);
-    savePng(name + '.moves', result.movesPng);
-
-    artifacts.push({
-      sampleId: sampleCase.sampleId,
-      title: sampleCase.title,
-      side: sampleCase.side,
-      moveCount: result.moveCount,
-      gcodeFile: name + '.gcode.txt',
-      partFile: result.partPng ? name + '.part.png' : null,
-      toolFile: result.toolPng ? name + '.tool.png' : null,
-      movesFile: name + '.moves.png',
-    });
-    writeArtifactIndex(artifacts, cases.length);
   }
-}, {timeout: 3600000});
+
+  try {
+    await Promise.all(workers.map(runWorker));
+  } finally {
+    await closeWorkers(workers);
+  }
+}, {timeout: TEST_TIMEOUT_MS});
+
+async function planSampleCase(worker: ToolpathWorker, sampleCase: SampleToolpathCase): Promise<ArtifactIndexEntry> {
+  const name = `${sampleCase.sampleId}.${sampleCase.side}`;
+  let result: GeneratedToolpath;
+  try {
+    result = await generateToolpath(worker.page, sampleCase.text);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to plan ${name} (${sampleCase.title}) on worker ${worker.id}: ${message}`);
+  }
+
+  expect(result.gcode, `GCode was not generated for ${name}`).toContain('G91 ; relative positioning');
+  expect(result.moveCount, `Planner did not produce moves for ${name}`).toBeGreaterThan(0);
+
+  saveGCode(name, result.gcode);
+  savePng(name + '.part', result.partPng);
+  savePng(name + '.tool', result.toolPng);
+  savePng(name + '.moves', result.movesPng);
+
+  return {
+    sampleId: sampleCase.sampleId,
+    title: sampleCase.title,
+    side: sampleCase.side,
+    moveCount: result.moveCount,
+    gcodeFile: name + '.gcode.txt',
+    partFile: result.partPng ? name + '.part.png' : null,
+    toolFile: result.toolPng ? name + '.tool.png' : null,
+    movesFile: name + '.moves.png',
+  };
+}
+
+function getCompletedArtifacts(artifacts: readonly (ArtifactIndexEntry | null)[]): ArtifactIndexEntry[] {
+  return artifacts.filter((entry): entry is ArtifactIndexEntry => entry !== null);
+}

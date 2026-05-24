@@ -29,4 +29,6 @@ The default planner resolution is 100 px/mm. Useful environment variables:
 SAMPLE_TOOLPATH_FILTER=hello-cylinder npm run test:sample-toolpaths
 SAMPLE_TOOLPATH_PX_PER_MM=25 npm run test:sample-toolpaths
 SAMPLE_TOOLPATH_OUTPUT_DIR=.smoke npm run test:sample-toolpaths
+SAMPLE_TOOLPATH_CONCURRENCY=8 npm run test:sample-toolpaths
+SAMPLE_TOOLPATH_TIMEOUT_MS=14400000 npm run test:sample-toolpaths
 ```
