@@ -2078,214 +2078,170 @@ L4 D32`,
   },
   {
     id: 'morse-taper-arbor-adapters',
-    title: 'Morse Taper & Arbor Adapters',
-    description: 'Reference taper plugs, sockets, sleeves, arbors, and teaching pieces using shallow taper silhouettes and suitable outside or boring tools.',
+    title: 'Morse Taper Adapter Sleeves',
+    description: 'Reducer drill sleeves matching the MT1-MT2 through MT4-MT5 adapter set, using the table dimensions for total length, outer taper diameter, and inner taper diameter.',
     samples: [
       {
-        id: 'mt0-external-taper-plug',
-        title: 'MT0 External Taper Plug',
-        description: 'Tiny external Morse taper reference plug with a slim free-end tip and a short chuck-side grip.',
-        text: `; MT0 External Taper Plug
+        id: 'mt1-mt2-adapter-sleeve',
+        title: 'MT1-MT2 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT2-size outside, MT1-size bore, L92, D17.78, d12.065.',
+        text: `; MT1-MT2 Adapter Sleeve
 
-STOCK D18
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.35 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
-
-L3 D6
-L14 DS6 DE9
-L4 D14
-L3 D16`,
-      },
-      {
-        id: 'mt2-external-taper-plug',
-        title: 'MT2 External Taper Plug',
-        description: 'Common tailstock-size taper silhouette with a heavier chuck-side register.',
-        text: `; MT2 External Taper Plug
-
-STOCK D26
-TOOL ANG R0.2 L7.8 A32.5 NA55
+STOCK D22 ID8
+TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
+FEED MOVE190 PASS38 PART9
 
-L4 D10
-L24 DS10 DE18
-L5 D22
-L3 D24`,
+L8 D13.64
+L84 DS13.64 DE17.78
+
+INSIDE
+L8 D9.765
+L84 DS9.765 DE12.065`,
       },
       {
-        id: 'mt5-stub-taper',
-        title: 'MT5 Stub Taper',
-        description: 'Short large taper section for comparing scale without requiring a long blank.',
-        text: `; MT5 Stub Taper
+        id: 'mt1-mt3-adapter-sleeve',
+        title: 'MT1-MT3 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT3-size outside, MT1-size bore, L99, D23.825, d12.065.',
+        text: `; MT1-MT3 Adapter Sleeve
 
-STOCK D46
-TOOL ANG R0.2 L7.8 A32.5 NA55
+STOCK D28 ID8
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE190 PASS38 PART9
+
+L8 D19.37
+L91 DS19.37 DE23.825
+
+INSIDE
+L8 D9.59
+L91 DS9.59 DE12.065`,
+      },
+      {
+        id: 'mt1-mt4-adapter-sleeve',
+        title: 'MT1-MT4 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT4-size outside, MT1-size bore, L124, D31.267, d12.065.',
+        text: `; MT1-MT4 Adapter Sleeve
+
+STOCK D36 ID8
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE190 PASS38 PART9
+
+L10 D25.687
+L114 DS25.687 DE31.267
+
+INSIDE
+L10 D8.965
+L114 DS8.965 DE12.065`,
+      },
+      {
+        id: 'mt2-mt3-adapter-sleeve',
+        title: 'MT2-MT3 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT3-size outside, MT2-size bore, L112, D23.825, d17.78.',
+        text: `; MT2-MT3 Adapter Sleeve
+
+STOCK D28 ID8
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE190 PASS38 PART9
+
+L9 D18.785
+L103 DS18.785 DE23.825
+
+INSIDE
+L9 D14.98
+L103 DS14.98 DE17.78`,
+      },
+      {
+        id: 'mt2-mt4-adapter-sleeve',
+        title: 'MT2-MT4 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT4-size outside, MT2-size bore, L124, D31.267, d17.78.',
+        text: `; MT2-MT4 Adapter Sleeve
+
+STOCK D36 ID8
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE190 PASS38 PART9
+
+L10 D25.687
+L114 DS25.687 DE31.267
+
+INSIDE
+L10 D14.68
+L114 DS14.68 DE17.78`,
+      },
+      {
+        id: 'mt2-mt5-adapter-sleeve',
+        title: 'MT2-MT5 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT5-size outside, MT2-size bore, L156, D44.399, d17.78.',
+        text: `; MT2-MT5 Adapter Sleeve
+
+STOCK D50 ID8
+TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.6 FINISH0.1
-FEED MOVE190 PASS40 PART10
+FEED MOVE190 PASS38 PART9
 
-L5 D24
-L22 DS24 DE38
-L6 D42
-L3 D44`,
+L12 D37.379
+L144 DS37.379 DE44.399
+
+INSIDE
+L12 D13.88
+L144 DS13.88 DE17.78`,
       },
       {
-        id: 'mt2-internal-socket-blank',
-        title: 'MT2 Internal Socket Blank',
-        description: 'Hollow adapter body with a longer internal taper and a stronger rear wall.',
-        text: `; MT2 Internal Socket Blank
+        id: 'mt3-mt4-adapter-sleeve',
+        title: 'MT3-MT4 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT4-size outside, MT3-size bore, L140, D31.267, d23.825.',
+        text: `; MT3-MT4 Adapter Sleeve
 
-STOCK D34 ID12
+STOCK D36 ID8
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.45 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
-L28 D28
-L5 D32
+L11 D24.967
+L129 DS24.967 DE31.267
 
 INSIDE
-L4 D13
-L22 DS13 DE22
-L7 D22`,
+L11 D20.325
+L129 DS20.325 DE23.825`,
       },
       {
-        id: 'deep-mt2-test-socket',
-        title: 'Deep MT2 Test Socket',
-        description: 'Long internal taper test socket for fit visualization and bore-depth practice.',
-        text: `; Deep MT2 Test Socket
+        id: 'mt3-mt5-adapter-sleeve',
+        title: 'MT3-MT5 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT5-size outside, MT3-size bore, L156, D44.399, d23.825.',
+        text: `; MT3-MT5 Adapter Sleeve
 
-STOCK D34 ID12
+STOCK D50 ID8
 TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
+DEPTH CUT0.6 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
-L38 D28
-L5 D32
+L12 D37.379
+L144 DS37.379 DE44.399
 
 INSIDE
-L5 D13
-L34 DS13 DE22
-L4 D22`,
+L12 D19.925
+L144 DS19.925 DE23.825`,
       },
       {
-        id: 'mt3-outside-to-mt2-inside',
-        title: 'MT3 Outside to MT2 Inside',
-        description: 'Drill-sleeve style reducer with a larger external taper and MT2-scale internal taper.',
-        text: `; MT3 Outside to MT2 Inside
+        id: 'mt4-mt5-adapter-sleeve',
+        title: 'MT4-MT5 Adapter Sleeve',
+        description: 'Reducer drill sleeve with MT5-size outside, MT4-size bore, L171, D44.399, d31.267.',
+        text: `; MT4-MT5 Adapter Sleeve
 
-STOCK D42 ID12
+STOCK D50 ID8
 TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.5 FINISH0.1
+DEPTH CUT0.6 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
-L5 D18
-L30 DS18 DE34
-L6 D38
+L13 D36.704
+L158 DS36.704 DE44.399
 
 INSIDE
-L5 D13
-L26 DS13 DE22
-L10 D24`,
-      },
-      {
-        id: 'mt2-drill-chuck-arbor-blank',
-        title: 'MT2 Drill-Chuck Arbor Blank',
-        description: 'Larger drill-chuck arbor blank with a shoulder between the nose taper and Morse shank.',
-        text: `; MT2 Drill-Chuck Arbor Blank
-
-STOCK D30
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
-
-L5 DS8 DE13
-L3 D16
-L24 DS16 DE24
-L4 D28`,
-      },
-      {
-        id: 'mt2-faceplate-arbor-blank',
-        title: 'MT2 Faceplate Arbor Blank',
-        description: 'Taper shank with a wide mounting flange and short rear register.',
-        text: `; MT2 Faceplate Arbor Blank
-
-STOCK D44
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.5 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L4 D12
-L24 DS12 DE26
-L4 D34
-L8 D42
-L3 D42`,
-      },
-      {
-        id: 'drawbar-mt2-blank',
-        title: 'Drawbar MT2 Blank',
-        description: 'MT2-style taper shank with a through-hole suitable for drawbar-style sketches.',
-        text: `; Drawbar MT2 Blank
-
-STOCK D34 ID8
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D12
-L26 DS12 DE26
-L5 D30
-
-INSIDE
-L35 D10`,
-      },
-      {
-        id: 'taper-gauge-male-female-pair',
-        title: 'Taper Gauge Male/Female Pair',
-        description: 'Matching plug and socket silhouettes in one sample, using the boring tool for the internal taper.',
-        text: `; Taper Gauge Male/Female Pair
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L3 D10
-L18 DS10 DE22
-L3 D26
-L4 D30
-L20 D30
-
-INSIDE
-L7 D10
-L21 D12
-L18 DS12 DE22`,
-      },
-      {
-        id: 'miniature-morse-taper-teaching-set',
-        title: 'Miniature Morse Taper Teaching Set',
-        description: 'MT0 through MT3 comparison set in one bar, with tool-width gaps between the taper references.',
-        text: `; Miniature Morse Taper Teaching Set
-
-STOCK D34
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L2 D6
-L10 DS6 DE10
-L3
-L2 D8
-L12 DS8 DE14
-L3
-L2 D10
-L14 DS10 DE18
-L3
-L2 D12
-L16 DS12 DE24
-L4 D30`,
+L13 D26.992
+L158 DS26.992 DE31.267`,
       },
     ],
   },
