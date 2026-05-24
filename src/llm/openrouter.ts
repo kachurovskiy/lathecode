@@ -51,7 +51,8 @@ Lathecode syntax:
 - CH and FI sizes are measured along the segment's horizontal L distance, so their combined endpoint sizes must not exceed that line's L length.
 - Use CH and FI only at endpoints with an actual radial shoulder where the neighboring profile radius changes. Do not add FI or CH to every segment in a polyline curve approximation.
 - Curved profile lines add CONV or CONC after DS/DE or RS/RE. Do not use CH or FI on CONV/CONC lines.
-- Complex silhouettes may be approximated with many short L lines. Dozens of short straight segments are acceptable when a part has freeform, compound, or drawing-derived curves.
+- Smooth freeform profile line: L<length> DS<startDiameter> DE<endDiameter> BSPLINE D<controlDiameter> D<controlDiameter>..., or use RS/RE with R controls. Example: L24 DS10 DE22 BSPLINE D14 D26 D18 D28. BSPLINE controls are interior guide values; the curve starts at DS/RS and ends at DE/RE. Do not use CH or FI on BSPLINE lines.
+- Prefer BSPLINE for smooth organic silhouettes when exact circular arcs are not required. Complex silhouettes may also be approximated with many short L lines when the shape has sharp details or the spline would overshoot stock or adjacent features.
 - Numeric parameter names and values are joined with no space: write CUT1, FINISH0.2, MOVE100, R5, L10, DS5, RE10, CH0.5, FI0.5. Do not write CUT 1, MOVE 100, R 5, CH 0.5, or L 10.
 - A bare L<length> line is a parting or cutoff-width line.
 - INSIDE begins an internal/bore profile. Inside profile radii must stay inside the outside profile and stock.
@@ -202,7 +203,8 @@ Common syntax fixes:
 - Use FEED MOVE100 PASS50 PART30, not FEED MOVE 100 PASS 50 PART 30.
 - Use L5 R5 and L10 RS5 RE10 CONC, not L 5 R 5.
 - Use L2 D24 for a straight diameter segment. Use DS24 only when the line also has DE, for example L10 DS24 DE30.
-- Use CH0.5 and FI0.5 for chamfers and fillets, not CH 0.5 or FI 0.5. Use them only on straight or tapered lines, not on CONV or CONC lines.
+- Use L24 DS10 DE22 BSPLINE D14 D26 D18 D28 for a smooth freeform spline segment.
+- Use CH0.5 and FI0.5 for chamfers and fillets, not CH 0.5 or FI 0.5. Use them only on straight or tapered lines, not on CONV, CONC, or BSPLINE lines.
 - Keep each CH/FI value within the segment's horizontal L length.
 - Use CH/FI only at real radial shoulders. Remove endpoint CH/FI when the neighboring line starts or ends at the same radius or diameter.
 - Do not introduce AXES directives.

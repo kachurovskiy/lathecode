@@ -105,10 +105,42 @@ describe('lathegeometry', () => {
     expect(approximateSegments(segments, 0.1).length).toBeGreaterThan(approximateSegments(segments, 1).length);
   });
 
+  it('approximates B-splines through their endpoints and inside the control hull', () => {
+    const points = approximateSegments([
+      new Segment('BSPLINE', new Point(5, 0), new Point(11, 24), [
+        new Point(5, 0),
+        new Point(7, 6),
+        new Point(13, 12),
+        new Point(9, 18),
+        new Point(11, 24),
+      ]),
+    ], 0.5);
+
+    expect(points[0]).toEqual(new Point(5, 0));
+    expect(points.at(-1)).toEqual(new Point(11, 24));
+    expect(points.length).toBeGreaterThan(2);
+    expect(points.every(point => point.x >= 5 && point.x <= 13 && point.z >= 0 && point.z <= 24)).toBeTruthy();
+    expect(isMonotonic(points.map(point => point.z), 1)).toBeTruthy();
+    expect(approximateSegments([
+      new Segment('BSPLINE', new Point(5, 0), new Point(11, 24), [
+        new Point(5, 0),
+        new Point(7, 6),
+        new Point(13, 12),
+        new Point(9, 18),
+        new Point(11, 24),
+      ]),
+    ], 0.1).length).toBeGreaterThan(points.length);
+  });
+
   it('offsets segments radially without changing z coordinates or mutating input', () => {
     const original = [
       new Segment('LINE', new Point(1, 0), new Point(2, 3)),
       new Segment('CONV', new Point(2, 3), new Point(4, 5)),
+      new Segment('BSPLINE', new Point(4, 5), new Point(5, 8), [
+        new Point(4, 5),
+        new Point(6, 6.5),
+        new Point(5, 8),
+      ]),
     ];
 
     const offset = offsetSegmentsRadially(original, 0.25);
@@ -116,10 +148,20 @@ describe('lathegeometry', () => {
     expect(offset).toEqual([
       new Segment('LINE', new Point(1.25, 0), new Point(2.25, 3)),
       new Segment('CONV', new Point(2.25, 3), new Point(4.25, 5)),
+      new Segment('BSPLINE', new Point(4.25, 5), new Point(5.25, 8), [
+        new Point(4.25, 5),
+        new Point(6.25, 6.5),
+        new Point(5.25, 8),
+      ]),
     ]);
     expect(original).toEqual([
       new Segment('LINE', new Point(1, 0), new Point(2, 3)),
       new Segment('CONV', new Point(2, 3), new Point(4, 5)),
+      new Segment('BSPLINE', new Point(4, 5), new Point(5, 8), [
+        new Point(4, 5),
+        new Point(6, 6.5),
+        new Point(5, 8),
+      ]),
     ]);
   });
 });

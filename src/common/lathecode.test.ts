@@ -139,6 +139,23 @@ L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsideProfileSegments();
     expect(() => new LatheCode('L5 DS0 FI0.5 DE10 CONV')).toThrow('not supported for CONV or CONC');
   });
 
+  it('parses B-spline profile lines with diameter controls', () => {
+    const latheCode = new LatheCode('L3 D10\nL24 DS10 DE22 BSPLINE D14 D26 D18');
+    const spline = latheCode.getOutsideProfileSegments()[1];
+
+    expect(spline.type).toBe('BSPLINE');
+    expect(spline.start).toEqual(new Point(5, 3));
+    expect(spline.end).toEqual(new Point(11, 27));
+    expect(spline.controlPoints).toEqual([
+      new Point(5, 3),
+      new Point(7, 9),
+      new Point(13, 15),
+      new Point(9, 21),
+      new Point(11, 27),
+    ]);
+    expect(latheCode.getStock()?.diameter).toBe(26);
+  });
+
   it('face + shoulder + cutoff', () => {
     expectPoints('L1\nL2 R2\nL3 R3\nL2', 'LINE:0,6-0,1 LINE:0,1-2,1 LINE:2,1-2,3 LINE:2,3-3,3 LINE:3,3-3,6 LINE:3,6-0,6', '');
   });
@@ -296,6 +313,10 @@ L6 RS2 RE4 CONC`);
     expect(new LatheCode('STOCK D20\nL2 D10 FI0.5\nL3 DS12 CH0 DE12 CH1').scale(2, 3)).toBe('STOCK D24\nL6 D20 FI1\nL9 DS24 CH0 DE24 CH2');
   });
 
+  it('scales B-spline endpoint and control dimensions', () => {
+    expect(new LatheCode('STOCK D28\nL24 DS10 DE22 BSPLINE D14 R13 D18').scale(2, 3)).toBe('STOCK D52\nL72 DS20 DE44 BSPLINE D28 R26 D36');
+  });
+
   it('rounds scaled dimensions to compact decimal output', () => {
     expect(new LatheCode('STOCK D10 ID1\nTOOL RECT R0.2 L2\nL2 R1\nL1 RS1 RE2').scale(1 / 3)).toBe('STOCK D1.3333 ID0.3333\nTOOL RECT R0.2 L2\nL0.6667 R0.3333\nL0.3333 RS0.3333 RE0.6667');
   });
@@ -315,6 +336,7 @@ L2 D9.8 ; line 1
 L3 D9.8
 L24 DS15.733 DE14.5 ; line 3
 L4 DS14.5 DE1 ; line 4
+L6 DS1 DE10 BSPLINE D4 D14 D8 ; spline
 L5 DS10 DE0 CONV
 L15 DS0 DE5 CONC ; line 6
 L1
@@ -328,6 +350,7 @@ L1 ; line 8
 L1
 L15 DS5 DE0 CONC ; line 6
 L5 DS0 DE10 CONV
+L6 DS10 DE1 BSPLINE D8 D14 D4 ; spline
 L4 DS1 DE14.5 ; line 4
 L24 DS14.5 DE15.733 ; line 3
 L3 D9.8

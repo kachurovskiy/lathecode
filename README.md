@@ -4,7 +4,7 @@ Text format for lathe parts and other objects with circular symmetry. Defines st
 
 **[Try it in the online editor.](https://kachurovskiy.com/lathecode)**
 
-The shape of the object is defined in segments. Each segment can be straight, angled, or circular, and its position is relative to the segment before it. For example, in lathecode, a simple cylinder is defined in one segment. A cylinder with a length of 7mm and a diameter of 6mm is described as:
+The shape of the object is defined in segments. Each segment can be straight, angled, circular, or a B-spline, and its position is relative to the segment before it. For example, in lathecode, a simple cylinder is defined in one segment. A cylinder with a length of 7mm and a diameter of 6mm is described as:
 
 ```
 L7 D6
@@ -65,6 +65,21 @@ L3.1 D2
 ```
 
 ![image](https://github.com/kachurovskiy/lathecode/assets/517919/11b07d65-7ecc-411c-843d-ebd269759ca6)
+
+## B-splines
+
+Use `BSPLINE` when a profile needs a smooth freeform curve instead of a straight taper or circular `CONV` / `CONC` segment. A spline line still has a fixed horizontal `L` length, a start radius or diameter, and an end radius or diameter. Interior control values follow `BSPLINE` and pull the curve between the endpoints:
+
+```
+; smooth freeform outside profile
+L3 D10
+L24 DS10 DE22 BSPLINE D14 D26 D18 D28
+L4 D28 CH0.5
+```
+
+Control values may be diameters (`D`) or radii (`R`). The curve starts at `DS` / `RS`, ends at `DE` / `RE`, and does not necessarily pass through the interior controls. Lathecode samples the spline into short profile chords for previewing and planning, then the planner emits ordinary linear G-code moves.
+
+Chamfers and fillets are not currently supported for `BSPLINE` segments.
 
 ## Fillets and chamfers
 

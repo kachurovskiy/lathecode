@@ -93,6 +93,21 @@ L2 D10 CH 0.5`,
     expect(request.messages[0].content).toContain('Do not use CH or FI on CONV/CONC lines');
   });
 
+  it('tells the model how to use B-spline profile lines', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D32\nL24 DS10 DE22 BSPLINE D14 D26 D18 D28',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('smooth organic profile');
+    const request = getOpenRouterRequest(fetchMock);
+
+    expect(request.messages[0].content).toContain('BSPLINE');
+    expect(request.messages[0].content).toContain('L24 DS10 DE22 BSPLINE D14 D26 D18 D28');
+    expect(request.messages[0].content).toContain('Do not use CH or FI on BSPLINE lines');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
   it('includes chamfer and fillet syntax in repair prompts', async () => {
     const fetchMock = mockOpenRouterResponses([
       'STOCK D10\nL2 D10 BAD',
@@ -109,7 +124,7 @@ L2 D10 CH 0.5`,
     const repairPrompt = repairRequest.messages.at(-1)?.content ?? '';
     expect(repairPrompt).toContain('Use CH0.5 and FI0.5');
     expect(repairPrompt).toContain('not CH 0.5 or FI 0.5');
-    expect(repairPrompt).toContain('not on CONV or CONC lines');
+    expect(repairPrompt).toContain('not on CONV, CONC, or BSPLINE lines');
     expect(repairPrompt).toContain('real radial shoulders');
   });
 

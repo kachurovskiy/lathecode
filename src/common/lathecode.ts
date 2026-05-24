@@ -14,6 +14,7 @@ import {
   type ModeType,
   type NumericParam,
   type ParserData,
+  type SplineLine,
   type StockDirective,
   type StraightLine,
   type ToolDirective,
@@ -39,10 +40,13 @@ export class Point {
 }
 
 export class Segment {
-  constructor(readonly type: string, readonly start: Point, public end: Point) {}
+  constructor(readonly type: string, readonly start: Point, public end: Point, readonly controlPoints: readonly Point[] = []) {}
 
   isEqual(other: Segment) {
-    return this.type === other.type && this.start.isEqual(other.start) && this.end.isEqual(other.end);
+    return this.type === other.type
+      && this.start.isEqual(other.start)
+      && this.end.isEqual(other.end)
+      && pointsEqual(this.controlPoints, other.controlPoints);
   }
 
   isColinear(other: Segment) {
@@ -60,11 +64,17 @@ export class Segment {
   }
 
   toString() {
-    return `${this.type}:${this.start}-${this.end}`;
+    const controls = this.controlPoints.length ? `[${this.controlPoints.join('|')}]` : '';
+    return `${this.type}:${this.start}-${this.end}${controls}`;
   }
 
   offsetBy(xDelta: number, zDelta: number): Segment {
-    return new Segment(this.type, this.start.offsetBy(xDelta, zDelta), this.end.offsetBy(xDelta, zDelta));
+    return new Segment(
+      this.type,
+      this.start.offsetBy(xDelta, zDelta),
+      this.end.offsetBy(xDelta, zDelta),
+      this.controlPoints.map(point => point.offsetBy(xDelta, zDelta)),
+    );
   }
 }
 
@@ -170,7 +180,7 @@ export class LatheCode {
     // console.log('this.data', this.data);
     const stockInnerRadius = this.getStockInnerDiameter() / 2;
     this.outside = this.getSegmentsForSide(this.data.outside, stockInnerRadius);
-    this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
+    this.outsideMaxRadius = this.outside.length ? Math.max(...this.outside.flatMap(segmentRadii)) : 0;
     this.inside = this.data.inside ? this.getSegmentsForSide(this.data.inside.entries, this.getStockDiameter() / 2) : [];
     this.outsideSegments = this.closeLoop(this.outside, stockInnerRadius);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
@@ -426,6 +436,9 @@ export class LatheCode {
       } else if (isCurvedLine(line)) {
         startX = line.start / (line.startType === 'DS' ? 2 : 1) * this.unitsMultiplier;
         endX = line.end / (line.endType === 'DE' ? 2 : 1) * this.unitsMultiplier;
+      } else if (isSplineLine(line)) {
+        startX = line.start / (line.startType === 'DS' ? 2 : 1) * this.unitsMultiplier;
+        endX = line.end / (line.endType === 'DE' ? 2 : 1) * this.unitsMultiplier;
       } else if (isPartingLine(line)) {
         startX = zeroX;
         endX = zeroX;
@@ -434,9 +447,12 @@ export class LatheCode {
       }
       const start = new Point(startX, z);
       const end = new Point(endX, z += line.length * this.unitsMultiplier);
+      const controlPoints = isSplineLine(line)
+        ? getSplineControlPoints(line, start, end, this.unitsMultiplier)
+        : [];
       specs.push({
         line,
-        segment: new Segment(getLineSegmentType(line), start, end),
+        segment: new Segment(getLineSegmentType(line), start, end, controlPoints),
         startFeature: getLineStartFeature(line),
         endFeature: getLineEndFeature(line),
       });
@@ -475,7 +491,10 @@ export class LatheCode {
       if (startFeature) {
         appendSegments(result, startFeature.segments);
       }
-      appendSegment(result, new Segment(spec.segment.type, segmentStart, segmentEnd));
+      const controlPoints = segmentStart.isEqual(spec.segment.start) && segmentEnd.isEqual(spec.segment.end)
+        ? spec.segment.controlPoints
+        : [];
+      appendSegment(result, new Segment(spec.segment.type, segmentStart, segmentEnd, controlPoints));
       if (endFeature) {
         appendSegments(result, endFeature.segments);
       }
@@ -683,6 +702,14 @@ function reverseLine(line: LatheLine): string {
       endFeature: line.startFeature,
     });
   }
+  if (isSplineLine(line)) {
+    return latheLineToString({
+      ...line,
+      start: line.end,
+      end: line.start,
+      controls: [...line.controls].reverse(),
+    });
+  }
   return latheLineToString(line);
 }
 
@@ -701,6 +728,13 @@ function getProfileLineDimensions(entries: readonly LatheEntry[]): {maxRadius: n
         line.start / (line.startType === 'DS' ? 2 : 1),
         line.end / (line.endType === 'DE' ? 2 : 1),
       );
+    } else if (isSplineLine(line)) {
+      maxRadius = Math.max(
+        maxRadius,
+        line.start / (line.startType === 'DS' ? 2 : 1),
+        line.end / (line.endType === 'DE' ? 2 : 1),
+        ...line.controls.map(control => control.size / (control.sizeType === 'D' ? 2 : 1)),
+      );
     }
   }
   return maxRadius > 0 && materialLength > 0 ? {maxRadius, materialLength} : null;
@@ -708,6 +742,10 @@ function getProfileLineDimensions(entries: readonly LatheEntry[]): {maxRadius: n
 
 function getStockDirectiveDiameterInLatheUnits(directive: StockDirective): number {
   return directive.size * (directive.sizeType === 'D' ? 1 : 2);
+}
+
+function segmentRadii(segment: Segment): number[] {
+  return [segment.start.x, segment.end.x, ...segment.controlPoints.map(point => point.x)];
 }
 
 function scaleStockDirective(directive: StockDirective, xScale: number, scaledPartDiameter: number | null): StockDirective {
@@ -733,6 +771,18 @@ function scaleLatheLine(line: LatheLine, xScale: number, zScale: number): string
       end: scaleNumber(line.end, xScale),
       startFeature: scaleEdgeFeature(line.startFeature, xScale),
       endFeature: scaleEdgeFeature(line.endFeature, xScale),
+    });
+  }
+  if (isSplineLine(line)) {
+    return latheLineToString({
+      ...line,
+      length: scaleNumber(line.length, zScale),
+      start: scaleNumber(line.start, xScale),
+      end: scaleNumber(line.end, xScale),
+      controls: line.controls.map(control => ({
+        ...control,
+        size: scaleNumber(control.size, xScale),
+      })),
     });
   }
   if (isStraightLine(line)) {
@@ -826,6 +876,10 @@ function latheLineToString(line: LatheLine): string {
   if (isCurvedLine(line)) {
     return `L${numberToString(line.length)} ${line.startType}${numberToString(line.start)}${edgeFeatureToString(line.startFeature)} ${line.endType}${numberToString(line.end)}${edgeFeatureToString(line.endFeature)}${line.curveType ? ' ' + line.curveType : ''}${formatComment(line.comment)}`;
   }
+  if (isSplineLine(line)) {
+    const controls = line.controls.map(control => `${control.sizeType}${numberToString(control.size)}`).join(' ');
+    return `L${numberToString(line.length)} ${line.startType}${numberToString(line.start)} ${line.endType}${numberToString(line.end)} BSPLINE ${controls}${formatComment(line.comment)}`;
+  }
   if (isStraightLine(line)) {
     if (!edgeFeaturesEqual(line.startFeature, line.endFeature)) {
       const startType = line.sizeType === 'D' ? 'DS' : 'RS';
@@ -865,6 +919,7 @@ export function removeEmptySegments(segments: Segment[]): Segment[] {
 }
 
 function getLineSegmentType(line: LatheLine): string {
+  if (isSplineLine(line)) return 'BSPLINE';
   return isCurvedLine(line) ? line.curveType || 'LINE' : 'LINE';
 }
 
@@ -878,6 +933,19 @@ function getLineEndFeature(line: LatheLine): EdgeFeature | null {
   if (isStraightLine(line)) return line.endFeature;
   if (isCurvedLine(line)) return line.endFeature;
   return null;
+}
+
+function getSplineControlPoints(line: SplineLine, start: Point, end: Point, unitsMultiplier: number): Point[] {
+  const radii = [
+    start.x,
+    ...line.controls.map(control => control.size / (control.sizeType === 'D' ? 2 : 1) * unitsMultiplier),
+    end.x,
+  ];
+  const length = end.z - start.z;
+  return radii.map((radius, index) => new Point(
+    radius,
+    start.z + length * index / (radii.length - 1),
+  ));
 }
 
 function normalizeEdgeFeature(feature: EdgeFeature | null): EdgeFeature | null {
@@ -948,6 +1016,10 @@ function distance(a: Point, b: Point): number {
   return vectorLength(pointDelta(a, b));
 }
 
+function pointsEqual(left: readonly Point[], right: readonly Point[]): boolean {
+  return left.length === right.length && left.every((point, index) => point.isEqual(right[index]));
+}
+
 function pointDelta(a: Point, b: Point): Vector {
   return {x: b.x - a.x, z: b.z - a.z};
 }
@@ -992,6 +1064,10 @@ function isStraightLine(line: LatheLine): line is StraightLine {
 
 function isCurvedLine(line: LatheLine): line is CurvedLine {
   return line.kind === 'curved';
+}
+
+function isSplineLine(line: LatheLine): line is SplineLine {
+  return line.kind === 'spline';
 }
 
 function isPartingLine(line: LatheLine) {

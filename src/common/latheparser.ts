@@ -106,7 +106,23 @@ export interface CurvedLine {
   readonly endFeature: EdgeFeature | null;
 }
 
-export type LatheLine = PartingLine | StraightLine | CurvedLine;
+export interface SplineControl {
+  readonly sizeType: RadiusDiameterType;
+  readonly size: number;
+}
+
+export interface SplineLine {
+  readonly kind: 'spline';
+  readonly length: number;
+  readonly startType: SegmentStartType;
+  readonly start: number;
+  readonly endType: SegmentEndType;
+  readonly end: number;
+  readonly controls: readonly SplineControl[];
+  readonly comment: string;
+}
+
+export type LatheLine = PartingLine | StraightLine | CurvedLine | SplineLine;
 
 export interface LatheEntry {
   readonly comments: CommentList;
@@ -331,7 +347,7 @@ class LineCursor {
     if (this.position === start) this.fail('Expected digit');
   }
 
-  private fail(message: string): never {
+  fail(message: string): never {
     throw new LatheCodeSyntaxError(message, this.lineNumber, this.position + 1);
   }
 }
@@ -448,6 +464,7 @@ function parseLathe(line: string, lineNumber: number): LatheLine {
   return tryParseLatheVariant(line, lineNumber, parsePartingLine)
     ?? tryParseLatheVariant(line, lineNumber, parseStraightLine)
     ?? tryParseLatheVariant(line, lineNumber, parseCurvedLine)
+    ?? tryParseLatheVariant(line, lineNumber, parseSplineLine)
     ?? failLine(lineNumber, 'Invalid lathe line');
 }
 
@@ -498,6 +515,33 @@ function parseCurvedLine(cursor: LineCursor): CurvedLine {
     comment: cursor.comment(),
     startFeature,
     endFeature,
+  };
+}
+
+function parseSplineLine(cursor: LineCursor): SplineLine {
+  cursor.literal('L');
+  const length = cursor.float();
+  const startType = cursor.oneOf(['DS', 'RS'] as const);
+  const start = cursor.float();
+  const endType = cursor.oneOf(['DE', 'RE'] as const);
+  const end = cursor.float();
+  cursor.literal('BSPLINE');
+  cursor.spaces();
+  const controls: SplineControl[] = [];
+  while (cursor.lineStartsWith('D') || cursor.lineStartsWith('R')) {
+    const sizeType = cursor.oneOf(['D', 'R'] as const);
+    controls.push({sizeType, size: cursor.float()});
+  }
+  if (!controls.length) cursor.fail('Expected spline control point');
+  return {
+    kind: 'spline',
+    length,
+    startType,
+    start,
+    endType,
+    end,
+    controls,
+    comment: cursor.comment(),
   };
 }
 

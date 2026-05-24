@@ -617,6 +617,22 @@ L7 DS22 DE28 CONV
 L4 D30`,
       },
       {
+        id: 'b-spline-sampler',
+        title: 'B-Spline Sampler',
+        description: 'A smooth freeform profile controlled by interior diameter guide values instead of circular arcs.',
+        text: `; B-Spline Sampler
+
+STOCK D32
+TOOL ROUND R3
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L3 D10
+L24 DS10 DE22 BSPLINE D14 D26 D18 D28
+L4 D28 CH0.5`,
+      },
+      {
         id: 'concave-convex-wave',
         title: 'Concave/Convex Wave',
         description: 'Alternating inward and outward arcs that make curve direction differences obvious.',

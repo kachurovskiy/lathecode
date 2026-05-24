@@ -1,4 +1,5 @@
 import { LatheCode, Point, Segment } from "../common/lathecode";
+import { approximateSegments } from "../common/lathegeometry";
 import { PlannerBitmap, PlannerCell } from "./bitmap";
 
 type RasterPoint = {
@@ -69,59 +70,7 @@ export class Rasterizer {
   }
 
   private segmentsToPolygon(segments: Segment[]): RasterPoint[] {
-    const points: RasterPoint[] = [this.pointToPixel(segments[0].start)];
-    for (let s of segments) {
-      const isLineCircle = (s.type === 'CONV' || s.type === 'CONC') && s.start.x === s.end.x;
-      if (s.type === 'LINE' || isLineCircle) {
-        points.push(this.pointToPixel(s.end));
-      } else if (s.type === 'CONV' || s.type === 'CONC') {
-        points.push(...this.ellipsePoints(s, s.type === 'CONV'));
-      } else {
-        throw new Error('Unable to rasterize segment of type ' + s.type);
-      }
-    }
-    return points;
-  }
-
-  private ellipsePoints(s: Segment, convex: boolean): RasterPoint[] {
-    const asc = s.end.x > s.start.x;
-    const center = asc === convex ? new Point(s.start.x, s.end.z) : new Point(s.end.x, s.start.z);
-    let startAngle = 0;
-    let endAngle = 0;
-    let counterclockwise = false;
-    if (asc && convex) {
-      startAngle = 0;
-      endAngle = Math.PI / 2;
-    } else if (asc && !convex) {
-      startAngle = Math.PI * 3 / 2;
-      endAngle = Math.PI;
-      counterclockwise = true;
-    } else if (!asc && convex) {
-      startAngle = Math.PI / 2;
-      endAngle = Math.PI;
-    } else if (!asc && !convex) {
-      startAngle = Math.PI * 2;
-      endAngle = Math.PI * 3 / 2;
-      counterclockwise = true;
-    }
-
-    let delta = endAngle - startAngle;
-    if (!counterclockwise && delta < 0) delta += Math.PI * 2;
-    if (counterclockwise && delta > 0) delta -= Math.PI * 2;
-
-    const rx = Math.abs(s.end.z - s.start.z) * this.pxPerMm;
-    const ry = Math.abs(s.end.x - s.start.x) * this.pxPerMm;
-    const centerPixel = this.pointToPixel(center);
-    const steps = Math.max(1, Math.ceil(Math.max(rx, ry) * Math.PI / 2));
-    const points: RasterPoint[] = [];
-    for (let i = 1; i <= steps; i++) {
-      const a = startAngle + delta * i / steps;
-      points.push({
-        x: centerPixel.x + rx * Math.cos(a),
-        y: centerPixel.y + ry * Math.sin(a),
-      });
-    }
-    return points;
+    return approximateSegments(segments, 1 / this.pxPerMm).map(point => this.pointToPixel(point));
   }
 
   private pointToPixel(p: Point): RasterPoint {
