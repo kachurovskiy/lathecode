@@ -361,9 +361,9 @@ describe('StartPanel', () => {
       const profileLines = sample.text.split(/\r?\n/)
         .map(line => line.trim())
         .filter(line => line.startsWith('L'));
-      expect(profileLines.at(-3)).toBe(`L${expected.chamferLength} DS${expected.flatDiameter} DE${expected.diameter}`);
-      expect(profileLines.at(-2)).toBe(`L${expected.bodyLength} D${expected.diameter}`);
-      expect(profileLines.at(-1)).toBe(`L${expected.chamferLength} DS${expected.diameter} DE${expected.flatDiameter}`);
+      const headHeight = formatCompactNumber(Number(expected.bodyLength) + Number(expected.chamferLength) * 2);
+      const headChamfer = formatCompactNumber((Number(expected.diameter) - Number(expected.flatDiameter)) / 2);
+      expect(profileLines.at(-1)).toBe(`L${headHeight} D${expected.diameter} CH${headChamfer}`);
     }
   });
 
@@ -399,9 +399,9 @@ describe('StartPanel', () => {
         .map(line => line.trim())
         .filter(line => line.startsWith('L'));
       expect(profileLines[1]).toMatch(new RegExp(`\\sD${expected.bodyDiameter}$`));
-      expect(profileLines.at(-3)).toBe(`L${expected.chamferLength} DS${expected.flatDiameter} DE${expected.headDiameter}`);
-      expect(profileLines.at(-2)).toBe(`L${expected.headBodyLength} D${expected.headDiameter}`);
-      expect(profileLines.at(-1)).toBe(`L${expected.chamferLength} DS${expected.headDiameter} DE${expected.flatDiameter}`);
+      const headHeight = formatCompactNumber(Number(expected.headBodyLength) + Number(expected.chamferLength) * 2);
+      const headChamfer = formatCompactNumber((Number(expected.headDiameter) - Number(expected.flatDiameter)) / 2);
+      expect(profileLines.at(-1)).toBe(`L${headHeight} D${expected.headDiameter} CH${headChamfer}`);
     }
   });
 
@@ -923,6 +923,12 @@ function expectRectangularGroovesReachableByTool(sampleId: string, latheCode: La
 
 function formatNumberForMessage(value: number): string {
   return String(Math.round(value * 1000) / 1000);
+}
+
+function formatCompactNumber(value: number): string {
+  const rounded = Math.round(value * 1_000_000) / 1_000_000;
+  if (Number.isInteger(rounded)) return rounded.toFixed(0);
+  return rounded.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function getProfileMinZ(points: ProfilePoint[]): number {

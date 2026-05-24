@@ -21,7 +21,7 @@ export const SAMPLE_SECTIONS: readonly SampleSection[] = [
       {
         id: 'hello-cylinder',
         title: 'Hello Cylinder',
-        description: 'The smallest useful part: one clean cylinder with conservative stock, tool, depth, and feed.',
+        description: 'The smallest useful part: one clean chamfered cylinder with conservative stock, tool, depth, and feed.',
         text: `; Hello Cylinder
 
 STOCK D16
@@ -30,12 +30,12 @@ DEPTH CUT0.5 FINISH0.1
 FEED MOVE200 PASS45 PART10
 MODE TURN
 
-L24 D12`,
+L24 D12 CH0.5`,
       },
       {
         id: 'two-step-shoulder',
         title: 'Two-Step Shoulder',
-        description: 'A first shoulder part with a slim nose, a locating land, and a larger chuck-side body.',
+        description: 'A first shoulder part with a slim nose, eased locating land, and larger chuck-side body.',
         text: `; Two-Step Shoulder
 
 STOCK D22
@@ -44,11 +44,10 @@ DEPTH CUT0.55 FINISH0.1
 FEED MOVE200 PASS45 PART10
 MODE TURN
 
-L6 D12
-L7 D12
-L2 D10
-L7 D18
-L4 D20`,
+L13 DS12 CH0.4 DE12 FI0.5
+L2 D10 FI0.5
+L7 D18 FI0.5
+L4 D20 CH0.5`,
       },
       {
         id: 'taper',
@@ -62,10 +61,9 @@ DEPTH CUT0.6 FINISH0.1
 FEED MOVE190 PASS42 PART10
 MODE TURN
 
-L3 D7
+L3 DS7 CH0.5 DE7 CH0
 L18 DS7 DE18
-L4 D22
-L2 D22`,
+L6 D22 CH0.5`,
       },
       {
         id: 'ball-on-a-stick',
@@ -82,10 +80,9 @@ MODE TURN
 L1.5 D5
 L4.5 DS5 DE14 CONV
 L4.5 DS14 DE5 CONV
-L9 D5
-L3 DS5 DE11
+L12 DS5 CH0 DE5 CH3
 L3 D15
-L1.5 D17`,
+L1.5 D17 CH0.5`,
       },
       {
         id: 'three-part-batch',
@@ -249,8 +246,7 @@ DEPTH CUT0.5 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L5 D16
-L12 D20
-L4 DS20 DE28
+L16 DS20 CH0 DE20 CH4
 L5 D28
 
 INSIDE
@@ -2130,9 +2126,7 @@ MODE TURN
 L0.8 DS2.4 DE3
 L10.7 D3
 L0.5 D2.7
-L0.4 DS5.5 DE6.01
-L1.2 D6.01
-L0.4 DS6.01 DE5.5`,
+L2 D6.01 CH0.255`,
       },
       {
         id: 'm4-x-16-hex-bolt',
@@ -2149,9 +2143,7 @@ MODE TURN
 L1 DS3.2 DE4
 L14.4 D4
 L0.6 D3.6
-L0.5 DS7 DE7.66
-L1.8 D7.66
-L0.5 DS7.66 DE7`,
+L2.8 D7.66 CH0.33`,
       },
       {
         id: 'm5-x-20-hex-bolt',
@@ -2168,9 +2160,7 @@ MODE TURN
 L1.2 DS4 DE5
 L18.1 D5
 L0.7 D4.5
-L0.6 DS8 DE8.79
-L2.3 D8.79
-L0.6 DS8.79 DE8`,
+L3.5 D8.79 CH0.395`,
       },
       {
         id: 'm6-x-25-hex-bolt',
@@ -2187,9 +2177,7 @@ MODE TURN
 L1.5 DS4.8 DE6
 L22.7 D6
 L0.8 D5.4
-L0.7 DS10 DE11.05
-L2.6 D11.05
-L0.7 DS11.05 DE10`,
+L4 D11.05 CH0.525`,
       },
       {
         id: 'm8-x-40-hex-bolt',
@@ -2206,9 +2194,7 @@ MODE TURN
 L2 DS6.4 DE8
 L36.8 D8
 L1.2 D7.2
-L0.9 DS13 DE14.38
-L3.5 D14.38
-L0.9 DS14.38 DE13`,
+L5.3 D14.38 CH0.69`,
       },
       {
         id: 'm10-x-50-hex-bolt',
@@ -2225,9 +2211,7 @@ MODE TURN
 L2.5 DS8 DE10
 L46 D10
 L1.5 D9
-L1 DS17 DE18.9
-L4.4 D18.9
-L1 DS18.9 DE17`,
+L6.4 D18.9 CH0.95`,
       },
       {
         id: 'm12-x-60-hex-bolt',
@@ -2244,9 +2228,7 @@ MODE TURN
 L3 DS9.6 DE12
 L55.2 D12
 L1.8 D10.8
-L1.2 DS19 DE21.1
-L5.1 D21.1
-L1.2 DS21.1 DE19`,
+L7.5 D21.1 CH1.05`,
       },
       {
         id: 'm14-x-70-hex-bolt',
@@ -2263,9 +2245,7 @@ MODE TURN
 L3.5 DS11.2 DE14
 L64.4 D14
 L2.1 D12.6
-L1.4 DS22 DE24.49
-L6 D24.49
-L1.4 DS24.49 DE22`,
+L8.8 D24.49 CH1.245`,
       },
       {
         id: 'm16-x-80-hex-bolt',
@@ -2282,9 +2262,7 @@ MODE TURN
 L4 DS12.8 DE16
 L73.6 D16
 L2.4 D14.4
-L1.6 DS24 DE26.75
-L6.8 D26.75
-L1.6 DS26.75 DE24`,
+L10 D26.75 CH1.375`,
       },
       {
         id: 'm18-x-90-hex-bolt',
@@ -2301,9 +2279,7 @@ MODE TURN
 L4.5 DS14.4 DE18
 L82.8 D18
 L2.7 D16.2
-L1.8 DS27 DE30.14
-L7.9 D30.14
-L1.8 DS30.14 DE27`,
+L11.5 D30.14 CH1.57`,
       },
       {
         id: 'm20-x-100-hex-bolt',
@@ -2320,9 +2296,7 @@ MODE TURN
 L5 DS16 DE20
 L92 D20
 L3 D18
-L2 DS30 DE33.53
-L8.5 D33.53
-L2 DS33.53 DE30`,
+L12.5 D33.53 CH1.765`,
       },
       {
         id: 'm22-x-110-hex-bolt',
@@ -2339,9 +2313,7 @@ MODE TURN
 L5.5 DS17.6 DE22
 L101.2 D22
 L3.3 D19.8
-L2.2 DS32 DE35.72
-L9.6 D35.72
-L2.2 DS35.72 DE32`,
+L14 D35.72 CH1.86`,
       },
       {
         id: 'm24-x-120-hex-bolt',
@@ -2358,9 +2330,7 @@ MODE TURN
 L6 DS19.2 DE24
 L110.4 D24
 L3.6 D21.6
-L2.4 DS36 DE39.98
-L10.2 D39.98
-L2.4 DS39.98 DE36`,
+L15 D39.98 CH1.99`,
       },
       {
         id: 'm27-x-140-hex-bolt',
@@ -2377,9 +2347,7 @@ MODE TURN
 L6.8 DS21.6 DE27
 L129.1 D27
 L4.1 D24.3
-L2.7 DS41 DE45.2
-L11.6 D45.2
-L2.7 DS45.2 DE41`,
+L17 D45.2 CH2.1`,
       },
       {
         id: 'm30-x-150-hex-bolt',
@@ -2396,9 +2364,7 @@ MODE TURN
 L7.5 DS24 DE30
 L138 D30
 L4.5 D27
-L3 DS46 DE50.85
-L12.7 D50.85
-L3 DS50.85 DE46`,
+L18.7 D50.85 CH2.425`,
       },
       {
         id: 'm33-x-160-hex-bolt',
@@ -2415,9 +2381,7 @@ MODE TURN
 L8.3 DS26.4 DE33
 L146.7 D33
 L5 D29.7
-L3.3 DS50 DE55.37
-L14.4 D55.37
-L3.3 DS55.37 DE50`,
+L21 D55.37 CH2.685`,
       },
       {
         id: 'm36-x-180-hex-bolt',
@@ -2434,9 +2398,7 @@ MODE TURN
 L9 DS28.8 DE36
 L165.6 D36
 L5.4 D32.4
-L3.6 DS55 DE60.79
-L15.3 D60.79
-L3.6 DS60.79 DE55`,
+L22.5 D60.79 CH2.895`,
       },
       {
         id: 'm42-x-200-hex-bolt',
@@ -2453,9 +2415,7 @@ MODE TURN
 L10.5 DS33.6 DE42
 L183.2 D42
 L6.3 D37.8
-L4.2 DS65 DE71.3
-L17.6 D71.3
-L4.2 DS71.3 DE65`,
+L26 D71.3 CH3.15`,
       },
       {
         id: 'm48-x-240-hex-bolt',
@@ -2472,9 +2432,7 @@ MODE TURN
 L12 DS38.4 DE48
 L220.8 D48
 L7.2 D43.2
-L4.8 DS75 DE82.6
-L20.4 D82.6
-L4.8 DS82.6 DE75`,
+L30 D82.6 CH3.8`,
       },
     ],
   },
@@ -2499,9 +2457,7 @@ MODE TURN
 L0.1 DS0.4 DE0.499
 L1.83 D0.499
 L0.07 D0.459
-L0.025 DS0.75 DE0.866
-L0.273 D0.866
-L0.025 DS0.866 DE0.75`,
+L0.323 D0.866 CH0.058`,
       },
       {
         id: 'nine-sixteenths-12-x-2-25-hex-bolt',
@@ -2519,9 +2475,7 @@ MODE TURN
 L0.11 DS0.45 DE0.561
 L2.06 D0.561
 L0.08 D0.516
-L0.025 DS0.812 DE0.938
-L0.321 D0.938
-L0.025 DS0.938 DE0.812`,
+L0.371 D0.938 CH0.063`,
       },
       {
         id: 'five-eighths-11-x-2-5-hex-bolt',
@@ -2539,9 +2493,7 @@ MODE TURN
 L0.13 DS0.5 DE0.623
 L2.28 D0.623
 L0.09 D0.573
-L0.025 DS0.938 DE1.083
-L0.353 D1.083
-L0.025 DS1.083 DE0.938`,
+L0.403 D1.083 CH0.0725`,
       },
       {
         id: 'three-quarters-10-x-3-hex-bolt',
@@ -2559,9 +2511,7 @@ MODE TURN
 L0.15 DS0.6 DE0.748
 L2.74 D0.748
 L0.11 D0.688
-L0.025 DS1.125 DE1.299
-L0.433 D1.299
-L0.025 DS1.299 DE1.125`,
+L0.483 D1.299 CH0.087`,
       },
       {
         id: 'seven-eighths-9-x-3-5-hex-bolt',
@@ -2579,9 +2529,7 @@ MODE TURN
 L0.18 DS0.7 DE0.873
 L3.2 D0.873
 L0.12 D0.803
-L0.035 DS1.312 DE1.516
-L0.493 D1.516
-L0.035 DS1.516 DE1.312`,
+L0.563 D1.516 CH0.102`,
       },
       {
         id: 'one-8-x-4-hex-bolt',
@@ -2599,9 +2547,7 @@ MODE TURN
 L0.2 DS0.8 DE0.998
 L3.66 D0.998
 L0.14 D0.918
-L0.035 DS1.5 DE1.732
-L0.557 D1.732
-L0.035 DS1.732 DE1.5`,
+L0.627 D1.732 CH0.116`,
       },
       {
         id: 'one-and-one-eighth-8-x-4-5-hex-bolt',
@@ -2619,9 +2565,7 @@ MODE TURN
 L0.23 DS0.9 DE1.123
 L4.11 D1.123
 L0.16 D1.033
-L0.035 DS1.688 DE1.949
-L0.648 D1.949
-L0.035 DS1.949 DE1.688`,
+L0.718 D1.949 CH0.1305`,
       },
       {
         id: 'one-and-one-quarter-8-x-5-hex-bolt',
@@ -2639,9 +2583,7 @@ MODE TURN
 L0.25 DS1 DE1.248
 L4.57 D1.248
 L0.18 D1.148
-L0.035 DS1.875 DE2.165
-L0.743 D2.165
-L0.035 DS2.165 DE1.875`,
+L0.813 D2.165 CH0.145`,
       },
       {
         id: 'one-and-three-eighths-8-x-5-5-hex-bolt',
@@ -2659,9 +2601,7 @@ MODE TURN
 L0.28 DS1.1 DE1.373
 L5.03 D1.373
 L0.19 D1.263
-L0.035 DS2.062 DE2.382
-L0.808 D2.382
-L0.035 DS2.382 DE2.062`,
+L0.878 D2.382 CH0.16`,
       },
       {
         id: 'one-and-one-half-8-x-6-hex-bolt',
@@ -2679,9 +2619,7 @@ MODE TURN
 L0.3 DS1.2 DE1.498
 L5.49 D1.498
 L0.21 D1.378
-L0.035 DS2.25 DE2.598
-L0.904 D2.598
-L0.035 DS2.598 DE2.25`,
+L0.974 D2.598 CH0.174`,
       },
       {
         id: 'one-and-five-eighths-8-x-6-5-hex-bolt',
@@ -2699,9 +2637,7 @@ MODE TURN
 L0.33 DS1.3 DE1.623
 L5.94 D1.623
 L0.23 D1.493
-L0.035 DS2.438 DE2.815
-L0.968 D2.815
-L0.035 DS2.815 DE2.438`,
+L1.038 D2.815 CH0.1885`,
       },
       {
         id: 'one-and-three-quarters-8-x-7-hex-bolt',
@@ -2719,9 +2655,7 @@ MODE TURN
 L0.35 DS1.4 DE1.748
 L6.4 D1.748
 L0.25 D1.608
-L0.035 DS2.625 DE3.031
-L1.064 D3.031
-L0.035 DS3.031 DE2.625`,
+L1.134 D3.031 CH0.203`,
       },
       {
         id: 'one-and-seven-eighths-8-x-7-5-hex-bolt',
@@ -2739,9 +2673,7 @@ MODE TURN
 L0.38 DS1.5 DE1.873
 L6.86 D1.873
 L0.26 D1.723
-L0.035 DS2.812 DE3.248
-L1.128 D3.248
-L0.035 DS3.248 DE2.812`,
+L1.198 D3.248 CH0.218`,
       },
       {
         id: 'two-8-x-8-hex-bolt',
@@ -2759,9 +2691,7 @@ MODE TURN
 L0.4 DS1.6 DE1.998
 L7.32 D1.998
 L0.28 D1.838
-L0.035 DS3 DE3.464
-L1.193 D3.464
-L0.035 DS3.464 DE3`,
+L1.263 D3.464 CH0.232`,
       },
       {
         id: 'two-and-one-quarter-8-x-9-hex-bolt',
@@ -2779,9 +2709,7 @@ MODE TURN
 L0.45 DS1.8 DE2.248
 L8.23 D2.248
 L0.32 D2.068
-L0.035 DS3.375 DE3.897
-L1.353 D3.897
-L0.035 DS3.897 DE3.375`,
+L1.423 D3.897 CH0.261`,
       },
       {
         id: 'two-and-one-half-8-x-10-hex-bolt',
@@ -2799,9 +2727,7 @@ MODE TURN
 L0.5 DS2 DE2.498
 L9.15 D2.498
 L0.35 D2.298
-L0.035 DS3.75 DE4.33
-L1.513 D4.33
-L0.035 DS4.33 DE3.75`,
+L1.583 D4.33 CH0.29`,
       },
       {
         id: 'two-and-three-quarters-8-x-11-hex-bolt',
@@ -2819,9 +2745,7 @@ MODE TURN
 L0.55 DS2.2 DE2.748
 L10.06 D2.748
 L0.39 D2.528
-L0.035 DS4.125 DE4.763
-L1.674 D4.763
-L0.035 DS4.763 DE4.125`,
+L1.744 D4.763 CH0.319`,
       },
       {
         id: 'three-8-x-12-hex-bolt',
@@ -2839,9 +2763,7 @@ MODE TURN
 L0.6 DS2.4 DE2.997
 L10.98 D2.997
 L0.42 D2.757
-L0.035 DS4.5 DE5.196
-L1.865 D5.196
-L0.035 DS5.196 DE4.5`,
+L1.935 D5.196 CH0.348`,
       },
     ],
   },

@@ -4015,7 +4015,7 @@ Return a corrected complete lathecode only.`}]}}throw new Error(C2((s==null?void
 `);const a=e.findIndex(o=>o.trimStart().startsWith("UNITS "));if(a>=0)return e.splice(a+1,0,t),e.join(`
 `);const l=e.findIndex(o=>{const d=o.trim();return d&&!d.startsWith(";")});return e.splice(l>=0?l:e.length,0,t),e.join(`
 `)}function ga(n){const t=Math.round(n*1e6)/1e6;return Number.isInteger(t)?t.toFixed(0):t.toFixed(6).replace(/0+$/,"").replace(/\.$/,"")}async function dW(n,t,e){const i=n.textContent||"";t.textContent="",n.disabled=!0,n.textContent="Modifying...",document.body.style.cursor="wait";try{await e()}catch(s){t.textContent=s instanceof Error?s.message:String(s)}finally{n.disabled=!1,n.textContent=i,document.body.style.cursor="default"}}function cW(n){const t=Cn(),e=document.createElement("form");e.className="settingsDialog";for(const c of Td){const r=document.createElement("section");r.className="settingsSection",r.dataset.settingSectionId=c.id;const u=document.createElement("h3");u.className="settingsSectionTitle",u.textContent=c.label,r.appendChild(u);const h=document.createElement("p");h.className="settingsSectionGuide",h.textContent=c.guidance,r.appendChild(h);const m=document.createElement("div");m.className="settingsGrid",r.appendChild(m);for(const G of c.definitions)m.appendChild(hW(G,t));e.appendChild(r)}const i=document.createElement("div");i.className="settingsActions";const s=document.createElement("button");s.type="button",s.textContent="Save settings",i.appendChild(s);const a=document.createElement("button");a.type="button",a.textContent="Reset defaults",i.appendChild(a),e.appendChild(i);const l=un(e,"Settings"),o=()=>rW(e),d=()=>{const c=Sh(e);Eu(c),l.remove(),n==null||n()};o(),e.addEventListener("input",o),e.addEventListener("change",o),s.addEventListener("click",d),a.addEventListener("click",()=>{mW(e,Tt),o()}),e.addEventListener("submit",c=>{c.preventDefault(),d()})}function Sh(n){const t={};for(const e of ks){const i=n.elements.namedItem(e.key);t[e.key]=i instanceof HTMLInputElement&&i.type==="checkbox"?i.checked:(i==null?void 0:i.value)??""}return is(t)}function rW(n){const t=Sh(n);for(const e of Td){const i=n.querySelector(`.settingsSection[data-setting-section-id="${e.id}"]`);i&&(i.hidden=!uW(e,t))}}function uW(n,t){return!n.plannerEngines||n.plannerEngines.includes(t.plannerEngine)}function hW(n,t){var l;const e=document.createElement("label");e.className="settingField";const i=document.createElement("span");i.className="settingHeading",i.textContent=n.label,e.appendChild(i);let s;if(n.type==="select"){const o=document.createElement("select");for(const d of n.options){const c=document.createElement("option");c.value=d.value,c.textContent=d.label,o.appendChild(c)}s=o}else if(n.type==="boolean"){const o=document.createElement("input");o.type="checkbox",o.checked=!!t[n.key],s=o}else if(n.type==="text"){const o=document.createElement("input");o.type=n.inputType??"text",o.placeholder=n.placeholder??"",s=o}else{const o=document.createElement("input");o.type="number",o.min=String(n.min),o.max=String(n.max),o.step=String(n.step),s=o}s.className="settingInput",s.name=n.key,s instanceof HTMLInputElement&&s.type==="checkbox"||(s.value=String(t[n.key])),e.appendChild(s);const a=document.createElement("span");return a.className="settingGuide",n.type==="select"?a.textContent=`${n.guidance} Default: ${((l=n.options.find(o=>o.value===n.defaultValue))==null?void 0:l.label)??n.defaultValue}.`:n.type==="boolean"?a.textContent=`${n.guidance} Default: ${n.defaultValue?"on":"off"}.`:n.type==="text"?a.textContent=n.defaultValue?`${n.guidance} Default: ${n.defaultValue}.`:n.guidance:a.textContent=`${n.guidance} Reasonable values: ${n.reasonableValues} ${n.unit}. Default: ${n.defaultValue} ${n.unit}.`,e.appendChild(a),e}function mW(n,t){for(const e of ks){const i=n.elements.namedItem(e.key);i instanceof HTMLInputElement&&i.type==="checkbox"?i.checked=!!t[e.key]:i&&(i.value=String(t[e.key]))}}const Nr=216,vr=216,pW=2,bW=80,GW=1.08;let so=null,Rn=null,ZW=0,Ss=0;const ll=new Map,cn=[],pi=new Map;function yW(){Ss++;let n=!1;return()=>{n||(n=!0,Ss=Math.max(0,Ss-1),Ss||WW())}}function LW(n){const t=document.createElement("div");t.className="samplePreview",t.setAttribute("aria-hidden","true");try{new yi(n)}catch{return t.appendChild(Hr("Preview unavailable")),t}if(!Th())return t.appendChild(od()),t;const e=Cn().partRevolutionDegrees,i=gh(n,e),s=ll.get(i);return s instanceof HTMLCanvasElement?t.appendChild(Vh(s)):s==="unavailable"?t.appendChild(od()):(t.appendChild(Hr("Preview loading")),hs()&&(RW(i,t),XW(n,e))),t}function Ja(){if(!hs()||!cn.length)return;const n=new Map;for(const t of cn)n.set(t.cacheKey,VW(t.cacheKey));cn.sort((t,e)=>(n.get(e.cacheKey)??0)-(n.get(t.cacheKey)??0)||t.sequence-e.sequence),(n.get(cn[0].cacheKey)??0)>0&&fh()}function XW(n,t){if(!hs())return;const e=gh(n,t);ll.has(e)||cn.some(i=>i.cacheKey===e)||(cn.push({cacheKey:e,text:n,partRevolutionDegrees:t,sequence:ZW++}),xh())}function xh(){hs()&&Rn===null&&(Rn=window.setTimeout(Rh,SW()))}function fh(){hs()&&cn.length&&(Rn!==null&&window.clearTimeout(Rn),Rn=window.setTimeout(Rh,0))}function Rh(){if(Rn=null,!hs())return;Ja();const n=cn.shift();n&&(ll.set(n.cacheKey,xW(n)),gW(n.cacheKey),cn.length&&xh())}function hs(){return Ss>0}function WW(){Rn!==null&&(window.clearTimeout(Rn),Rn=null),cn.length=0,pi.clear()}function SW(){return pi.size>0?0:bW}function xW(n){try{return fW(new yi(n.text),n.partRevolutionDegrees)}catch{return"unavailable"}}function fW(n,t){const e=NW(),i=Math.min(window.devicePixelRatio||1,pW);e.setPixelRatio(i),e.setSize(Nr,vr,!1),e.setClearColor(16777215,0);const s=new yu;Pu(s);const a=Du(n,{partRevolutionDegrees:t}),l=new Dn;l.add(a.latheMesh),CW(l),s.add(l);const o=new tl(-7,7,-7,7,0,1e3);IW(o,[l],Nr/vr),e.render(s,o);const d=document.createElement("canvas");d.className="samplePreviewCanvas",d.width=e.domElement.width,d.height=e.domElement.height;const c=d.getContext("2d");if(!c)throw new Error("2D preview canvas unavailable");return c.drawImage(e.domElement,0,0),Kr(l),Kr(a.stockMesh),d}function gh(n,t){return`${t}
-${n}`}function RW(n,t){const e=pi.get(n)??new Set;e.add(t),pi.set(n,e),Ja(),fh()}function gW(n){const t=pi.get(n);if(!t)return;const e=ll.get(n);t.forEach(i=>{i.replaceChildren(e instanceof HTMLCanvasElement?Vh(e):od())}),pi.delete(n)}function VW(n){const t=pi.get(n);if(!t)return 0;let e=!1;for(const i of Array.from(t))if(i.isConnected&&TW(i)&&(e=!0,MW(i)))return 2;return e?1:0}function TW(n){if(n.closest("[hidden]"))return!1;const t=n.getBoundingClientRect();return t.width>0&&t.height>0}function MW(n){const t=n.getBoundingClientRect(),e=window.innerWidth||document.documentElement.clientWidth,i=window.innerHeight||document.documentElement.clientHeight;return t.bottom>0&&t.right>0&&t.top<i&&t.left<e}function Vh(n){const t=document.createElement("canvas");t.className=n.className,t.width=n.width,t.height=n.height;const e=t.getContext("2d");if(!e)throw new Error("2D preview canvas unavailable");return e.drawImage(n,0,0),t}function CW(n){n.rotation.set(-.72,Math.PI+.35,2.2)}function IW(n,t,e){const i=new hn;if(t.forEach(o=>i.union(new hn().setFromObject(o))),i.isEmpty())return;const s=new I,a=new I;i.getCenter(s),i.getSize(a);const l=Math.max(a.y,a.x/e,.001)*GW/2;n.left=-l*e,n.right=l*e,n.top=l,n.bottom=-l,n.position.set(s.x,s.y,i.max.z+Math.max(a.z,1)),n.near=-1e5,n.far=1e5,n.zoom=1,n.updateProjectionMatrix()}function NW(){if(!Th())throw new Error("WebGL preview unavailable");return so||(so=new Nu({alpha:!0,antialias:!0,preserveDrawingBuffer:!0})),so}function Th(){return typeof WebGLRenderingContext<"u"||typeof WebGL2RenderingContext<"u"}function Hr(n){const t=document.createElement("div");return t.className="samplePreviewFallback",t.textContent=n,t}function od(){const n=document.createElement("div");return n.className="samplePreviewUnavailable",n.textContent="3D preview unavailable",n}function Kr(n){n.traverse(t=>{const e=t;e.geometry&&e.geometry.dispose();const i=e.material;Array.isArray(i)?i.forEach(s=>s.dispose()):i&&i.dispose()})}const Mh=[{id:"start-here-tiny-wins",title:"Start Here: Tiny Wins",description:"Small first parts that demonstrate the core lathecode shapes without needing setup decisions first.",samples:[{id:"hello-cylinder",title:"Hello Cylinder",description:"The smallest useful part: one clean cylinder with conservative stock, tool, depth, and feed.",text:`; Hello Cylinder
+${n}`}function RW(n,t){const e=pi.get(n)??new Set;e.add(t),pi.set(n,e),Ja(),fh()}function gW(n){const t=pi.get(n);if(!t)return;const e=ll.get(n);t.forEach(i=>{i.replaceChildren(e instanceof HTMLCanvasElement?Vh(e):od())}),pi.delete(n)}function VW(n){const t=pi.get(n);if(!t)return 0;let e=!1;for(const i of Array.from(t))if(i.isConnected&&TW(i)&&(e=!0,MW(i)))return 2;return e?1:0}function TW(n){if(n.closest("[hidden]"))return!1;const t=n.getBoundingClientRect();return t.width>0&&t.height>0}function MW(n){const t=n.getBoundingClientRect(),e=window.innerWidth||document.documentElement.clientWidth,i=window.innerHeight||document.documentElement.clientHeight;return t.bottom>0&&t.right>0&&t.top<i&&t.left<e}function Vh(n){const t=document.createElement("canvas");t.className=n.className,t.width=n.width,t.height=n.height;const e=t.getContext("2d");if(!e)throw new Error("2D preview canvas unavailable");return e.drawImage(n,0,0),t}function CW(n){n.rotation.set(-.72,Math.PI+.35,2.2)}function IW(n,t,e){const i=new hn;if(t.forEach(o=>i.union(new hn().setFromObject(o))),i.isEmpty())return;const s=new I,a=new I;i.getCenter(s),i.getSize(a);const l=Math.max(a.y,a.x/e,.001)*GW/2;n.left=-l*e,n.right=l*e,n.top=l,n.bottom=-l,n.position.set(s.x,s.y,i.max.z+Math.max(a.z,1)),n.near=-1e5,n.far=1e5,n.zoom=1,n.updateProjectionMatrix()}function NW(){if(!Th())throw new Error("WebGL preview unavailable");return so||(so=new Nu({alpha:!0,antialias:!0,preserveDrawingBuffer:!0})),so}function Th(){return typeof WebGLRenderingContext<"u"||typeof WebGL2RenderingContext<"u"}function Hr(n){const t=document.createElement("div");return t.className="samplePreviewFallback",t.textContent=n,t}function od(){const n=document.createElement("div");return n.className="samplePreviewUnavailable",n.textContent="3D preview unavailable",n}function Kr(n){n.traverse(t=>{const e=t;e.geometry&&e.geometry.dispose();const i=e.material;Array.isArray(i)?i.forEach(s=>s.dispose()):i&&i.dispose()})}const Mh=[{id:"start-here-tiny-wins",title:"Start Here: Tiny Wins",description:"Small first parts that demonstrate the core lathecode shapes without needing setup decisions first.",samples:[{id:"hello-cylinder",title:"Hello Cylinder",description:"The smallest useful part: one clean chamfered cylinder with conservative stock, tool, depth, and feed.",text:`; Hello Cylinder
 
 STOCK D16
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -4023,7 +4023,7 @@ DEPTH CUT0.5 FINISH0.1
 FEED MOVE200 PASS45 PART10
 MODE TURN
 
-L24 D12`},{id:"two-step-shoulder",title:"Two-Step Shoulder",description:"A first shoulder part with a slim nose, a locating land, and a larger chuck-side body.",text:`; Two-Step Shoulder
+L24 D12 CH0.5`},{id:"two-step-shoulder",title:"Two-Step Shoulder",description:"A first shoulder part with a slim nose, eased locating land, and larger chuck-side body.",text:`; Two-Step Shoulder
 
 STOCK D22
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -4031,11 +4031,10 @@ DEPTH CUT0.55 FINISH0.1
 FEED MOVE200 PASS45 PART10
 MODE TURN
 
-L6 D12
-L7 D12
-L2 D10
-L7 D18
-L4 D20`},{id:"taper",title:"Tapered Peg",description:"A simple cone/frustum profile with a small working end and a stout chuck-side shoulder.",text:`; Tapered Peg
+L13 DS12 CH0.4 DE12 FI0.5
+L2 D10 FI0.5
+L7 D18 FI0.5
+L4 D20 CH0.5`},{id:"taper",title:"Tapered Peg",description:"A simple cone/frustum profile with a small working end and a stout chuck-side shoulder.",text:`; Tapered Peg
 
 STOCK D24
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -4043,10 +4042,9 @@ DEPTH CUT0.6 FINISH0.1
 FEED MOVE190 PASS42 PART10
 MODE TURN
 
-L3 D7
+L3 DS7 CH0.5 DE7 CH0
 L18 DS7 DE18
-L4 D22
-L2 D22`},{id:"ball-on-a-stick",title:"Ball-on-a-Stick",description:"Smaller round bead on a longer fine stem, with a modest chuck-side base for support.",text:`; Ball-on-a-Stick
+L6 D22 CH0.5`},{id:"ball-on-a-stick",title:"Ball-on-a-Stick",description:"Smaller round bead on a longer fine stem, with a modest chuck-side base for support.",text:`; Ball-on-a-Stick
 
 STOCK D20
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -4057,10 +4055,9 @@ MODE TURN
 L1.5 D5
 L4.5 DS5 DE14 CONV
 L4.5 DS14 DE5 CONV
-L9 D5
-L3 DS5 DE11
+L12 DS5 CH0 DE5 CH3
 L3 D15
-L1.5 D17`},{id:"three-part-batch",title:"Three-Part Batch",description:"Three small solid spacers in one setup, with parting gaps and increasing chuck-side mass.",text:`; Three-Part Batch
+L1.5 D17 CH0.5`},{id:"three-part-batch",title:"Three-Part Batch",description:"Three small solid spacers in one setup, with parting gaps and increasing chuck-side mass.",text:`; Three-Part Batch
 
 STOCK D22
 TOOL RECT R0.15 L1.5 H4
@@ -4163,8 +4160,7 @@ DEPTH CUT0.5 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L5 D16
-L12 D20
-L4 DS20 DE28
+L16 DS20 CH0 DE20 CH4
 L5 D28
 
 INSIDE
@@ -5423,9 +5419,7 @@ MODE TURN
 L0.8 DS2.4 DE3
 L10.7 D3
 L0.5 D2.7
-L0.4 DS5.5 DE6.01
-L1.2 D6.01
-L0.4 DS6.01 DE5.5`},{id:"m4-x-16-hex-bolt",title:"M4 x 16 Hex Bolt",description:"DIN 933 M4 bolt blank with k2.8, e7.66, s7 head geometry.",text:`; M4 x 16 Hex Bolt
+L2 D6.01 CH0.255`},{id:"m4-x-16-hex-bolt",title:"M4 x 16 Hex Bolt",description:"DIN 933 M4 bolt blank with k2.8, e7.66, s7 head geometry.",text:`; M4 x 16 Hex Bolt
 
 STOCK D7.66
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -5436,9 +5430,7 @@ MODE TURN
 L1 DS3.2 DE4
 L14.4 D4
 L0.6 D3.6
-L0.5 DS7 DE7.66
-L1.8 D7.66
-L0.5 DS7.66 DE7`},{id:"m5-x-20-hex-bolt",title:"M5 x 20 Hex Bolt",description:"DIN 933 M5 bolt blank with k3.5, e8.79, s8 head geometry.",text:`; M5 x 20 Hex Bolt
+L2.8 D7.66 CH0.33`},{id:"m5-x-20-hex-bolt",title:"M5 x 20 Hex Bolt",description:"DIN 933 M5 bolt blank with k3.5, e8.79, s8 head geometry.",text:`; M5 x 20 Hex Bolt
 
 STOCK D8.79
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -5449,9 +5441,7 @@ MODE TURN
 L1.2 DS4 DE5
 L18.1 D5
 L0.7 D4.5
-L0.6 DS8 DE8.79
-L2.3 D8.79
-L0.6 DS8.79 DE8`},{id:"m6-x-25-hex-bolt",title:"M6 x 25 Hex Bolt",description:"DIN 933 M6 bolt blank with k4, e11.05, s10 head geometry.",text:`; M6 x 25 Hex Bolt
+L3.5 D8.79 CH0.395`},{id:"m6-x-25-hex-bolt",title:"M6 x 25 Hex Bolt",description:"DIN 933 M6 bolt blank with k4, e11.05, s10 head geometry.",text:`; M6 x 25 Hex Bolt
 
 STOCK D11.05
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -5462,9 +5452,7 @@ MODE TURN
 L1.5 DS4.8 DE6
 L22.7 D6
 L0.8 D5.4
-L0.7 DS10 DE11.05
-L2.6 D11.05
-L0.7 DS11.05 DE10`},{id:"m8-x-40-hex-bolt",title:"M8 x 40 Hex Bolt",description:"DIN 933 M8 bolt blank with k5.3, e14.38, s13 head geometry.",text:`; M8 x 40 Hex Bolt
+L4 D11.05 CH0.525`},{id:"m8-x-40-hex-bolt",title:"M8 x 40 Hex Bolt",description:"DIN 933 M8 bolt blank with k5.3, e14.38, s13 head geometry.",text:`; M8 x 40 Hex Bolt
 
 STOCK D14.38
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -5475,9 +5463,7 @@ MODE TURN
 L2 DS6.4 DE8
 L36.8 D8
 L1.2 D7.2
-L0.9 DS13 DE14.38
-L3.5 D14.38
-L0.9 DS14.38 DE13`},{id:"m10-x-50-hex-bolt",title:"M10 x 50 Hex Bolt",description:"DIN 933 M10 bolt blank with k6.4, e18.9, s17 head geometry.",text:`; M10 x 50 Hex Bolt
+L5.3 D14.38 CH0.69`},{id:"m10-x-50-hex-bolt",title:"M10 x 50 Hex Bolt",description:"DIN 933 M10 bolt blank with k6.4, e18.9, s17 head geometry.",text:`; M10 x 50 Hex Bolt
 
 STOCK D18.9
 TOOL ANG R0.2 L7.8 A32.5 NA55
@@ -5488,9 +5474,7 @@ MODE TURN
 L2.5 DS8 DE10
 L46 D10
 L1.5 D9
-L1 DS17 DE18.9
-L4.4 D18.9
-L1 DS18.9 DE17`},{id:"m12-x-60-hex-bolt",title:"M12 x 60 Hex Bolt",description:"DIN 933 M12 bolt blank with k7.5, e21.1, s19 head geometry.",text:`; M12 x 60 Hex Bolt
+L6.4 D18.9 CH0.95`},{id:"m12-x-60-hex-bolt",title:"M12 x 60 Hex Bolt",description:"DIN 933 M12 bolt blank with k7.5, e21.1, s19 head geometry.",text:`; M12 x 60 Hex Bolt
 
 STOCK D21.1
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5501,9 +5485,7 @@ MODE TURN
 L3 DS9.6 DE12
 L55.2 D12
 L1.8 D10.8
-L1.2 DS19 DE21.1
-L5.1 D21.1
-L1.2 DS21.1 DE19`},{id:"m14-x-70-hex-bolt",title:"M14 x 70 Hex Bolt",description:"DIN 933 M14 bolt blank with k8.8, e24.49, s22 head geometry.",text:`; M14 x 70 Hex Bolt
+L7.5 D21.1 CH1.05`},{id:"m14-x-70-hex-bolt",title:"M14 x 70 Hex Bolt",description:"DIN 933 M14 bolt blank with k8.8, e24.49, s22 head geometry.",text:`; M14 x 70 Hex Bolt
 
 STOCK D24.49
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5514,9 +5496,7 @@ MODE TURN
 L3.5 DS11.2 DE14
 L64.4 D14
 L2.1 D12.6
-L1.4 DS22 DE24.49
-L6 D24.49
-L1.4 DS24.49 DE22`},{id:"m16-x-80-hex-bolt",title:"M16 x 80 Hex Bolt",description:"DIN 933 M16 bolt blank with k10, e26.75, s24 head geometry.",text:`; M16 x 80 Hex Bolt
+L8.8 D24.49 CH1.245`},{id:"m16-x-80-hex-bolt",title:"M16 x 80 Hex Bolt",description:"DIN 933 M16 bolt blank with k10, e26.75, s24 head geometry.",text:`; M16 x 80 Hex Bolt
 
 STOCK D26.75
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5527,9 +5507,7 @@ MODE TURN
 L4 DS12.8 DE16
 L73.6 D16
 L2.4 D14.4
-L1.6 DS24 DE26.75
-L6.8 D26.75
-L1.6 DS26.75 DE24`},{id:"m18-x-90-hex-bolt",title:"M18 x 90 Hex Bolt",description:"DIN 933 M18 bolt blank with k11.5, e30.14, s27 head geometry.",text:`; M18 x 90 Hex Bolt
+L10 D26.75 CH1.375`},{id:"m18-x-90-hex-bolt",title:"M18 x 90 Hex Bolt",description:"DIN 933 M18 bolt blank with k11.5, e30.14, s27 head geometry.",text:`; M18 x 90 Hex Bolt
 
 STOCK D30.14
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5540,9 +5518,7 @@ MODE TURN
 L4.5 DS14.4 DE18
 L82.8 D18
 L2.7 D16.2
-L1.8 DS27 DE30.14
-L7.9 D30.14
-L1.8 DS30.14 DE27`},{id:"m20-x-100-hex-bolt",title:"M20 x 100 Hex Bolt",description:"DIN 933 M20 bolt blank with k12.5, e33.53, s30 head geometry.",text:`; M20 x 100 Hex Bolt
+L11.5 D30.14 CH1.57`},{id:"m20-x-100-hex-bolt",title:"M20 x 100 Hex Bolt",description:"DIN 933 M20 bolt blank with k12.5, e33.53, s30 head geometry.",text:`; M20 x 100 Hex Bolt
 
 STOCK D33.53
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5553,9 +5529,7 @@ MODE TURN
 L5 DS16 DE20
 L92 D20
 L3 D18
-L2 DS30 DE33.53
-L8.5 D33.53
-L2 DS33.53 DE30`},{id:"m22-x-110-hex-bolt",title:"M22 x 110 Hex Bolt",description:"DIN 933 M22 bolt blank with k14, e35.72, s32 head geometry.",text:`; M22 x 110 Hex Bolt
+L12.5 D33.53 CH1.765`},{id:"m22-x-110-hex-bolt",title:"M22 x 110 Hex Bolt",description:"DIN 933 M22 bolt blank with k14, e35.72, s32 head geometry.",text:`; M22 x 110 Hex Bolt
 
 STOCK D35.72
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5566,9 +5540,7 @@ MODE TURN
 L5.5 DS17.6 DE22
 L101.2 D22
 L3.3 D19.8
-L2.2 DS32 DE35.72
-L9.6 D35.72
-L2.2 DS35.72 DE32`},{id:"m24-x-120-hex-bolt",title:"M24 x 120 Hex Bolt",description:"DIN 933 M24 bolt blank with k15, e39.98, s36 head geometry.",text:`; M24 x 120 Hex Bolt
+L14 D35.72 CH1.86`},{id:"m24-x-120-hex-bolt",title:"M24 x 120 Hex Bolt",description:"DIN 933 M24 bolt blank with k15, e39.98, s36 head geometry.",text:`; M24 x 120 Hex Bolt
 
 STOCK D39.98
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5579,9 +5551,7 @@ MODE TURN
 L6 DS19.2 DE24
 L110.4 D24
 L3.6 D21.6
-L2.4 DS36 DE39.98
-L10.2 D39.98
-L2.4 DS39.98 DE36`},{id:"m27-x-140-hex-bolt",title:"M27 x 140 Hex Bolt",description:"DIN 933 M27 bolt blank with k17, e45.2, s41 head geometry.",text:`; M27 x 140 Hex Bolt
+L15 D39.98 CH1.99`},{id:"m27-x-140-hex-bolt",title:"M27 x 140 Hex Bolt",description:"DIN 933 M27 bolt blank with k17, e45.2, s41 head geometry.",text:`; M27 x 140 Hex Bolt
 
 STOCK D45.2
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5592,9 +5562,7 @@ MODE TURN
 L6.8 DS21.6 DE27
 L129.1 D27
 L4.1 D24.3
-L2.7 DS41 DE45.2
-L11.6 D45.2
-L2.7 DS45.2 DE41`},{id:"m30-x-150-hex-bolt",title:"M30 x 150 Hex Bolt",description:"DIN 933 M30 bolt blank with k18.7, e50.85, s46 head geometry.",text:`; M30 x 150 Hex Bolt
+L17 D45.2 CH2.1`},{id:"m30-x-150-hex-bolt",title:"M30 x 150 Hex Bolt",description:"DIN 933 M30 bolt blank with k18.7, e50.85, s46 head geometry.",text:`; M30 x 150 Hex Bolt
 
 STOCK D50.85
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5605,9 +5573,7 @@ MODE TURN
 L7.5 DS24 DE30
 L138 D30
 L4.5 D27
-L3 DS46 DE50.85
-L12.7 D50.85
-L3 DS50.85 DE46`},{id:"m33-x-160-hex-bolt",title:"M33 x 160 Hex Bolt",description:"DIN 933 M33 bolt blank with k21, e55.37, s50 head geometry.",text:`; M33 x 160 Hex Bolt
+L18.7 D50.85 CH2.425`},{id:"m33-x-160-hex-bolt",title:"M33 x 160 Hex Bolt",description:"DIN 933 M33 bolt blank with k21, e55.37, s50 head geometry.",text:`; M33 x 160 Hex Bolt
 
 STOCK D55.37
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5618,9 +5584,7 @@ MODE TURN
 L8.3 DS26.4 DE33
 L146.7 D33
 L5 D29.7
-L3.3 DS50 DE55.37
-L14.4 D55.37
-L3.3 DS55.37 DE50`},{id:"m36-x-180-hex-bolt",title:"M36 x 180 Hex Bolt",description:"DIN 933 M36 bolt blank with k22.5, e60.79, s55 head geometry.",text:`; M36 x 180 Hex Bolt
+L21 D55.37 CH2.685`},{id:"m36-x-180-hex-bolt",title:"M36 x 180 Hex Bolt",description:"DIN 933 M36 bolt blank with k22.5, e60.79, s55 head geometry.",text:`; M36 x 180 Hex Bolt
 
 STOCK D60.79
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5631,9 +5595,7 @@ MODE TURN
 L9 DS28.8 DE36
 L165.6 D36
 L5.4 D32.4
-L3.6 DS55 DE60.79
-L15.3 D60.79
-L3.6 DS60.79 DE55`},{id:"m42-x-200-hex-bolt",title:"M42 x 200 Hex Bolt",description:"DIN 933 M42 bolt blank with k26, e71.3, s65 head geometry.",text:`; M42 x 200 Hex Bolt
+L22.5 D60.79 CH2.895`},{id:"m42-x-200-hex-bolt",title:"M42 x 200 Hex Bolt",description:"DIN 933 M42 bolt blank with k26, e71.3, s65 head geometry.",text:`; M42 x 200 Hex Bolt
 
 STOCK D71.3
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5644,9 +5606,7 @@ MODE TURN
 L10.5 DS33.6 DE42
 L183.2 D42
 L6.3 D37.8
-L4.2 DS65 DE71.3
-L17.6 D71.3
-L4.2 DS71.3 DE65`},{id:"m48-x-240-hex-bolt",title:"M48 x 240 Hex Bolt",description:"DIN 933 M48 bolt blank with k30, e82.6, s75 head geometry.",text:`; M48 x 240 Hex Bolt
+L26 D71.3 CH3.15`},{id:"m48-x-240-hex-bolt",title:"M48 x 240 Hex Bolt",description:"DIN 933 M48 bolt blank with k30, e82.6, s75 head geometry.",text:`; M48 x 240 Hex Bolt
 
 STOCK D82.6
 TOOL ANG R0.4 L12 A32.5 NA55
@@ -5657,9 +5617,7 @@ MODE TURN
 L12 DS38.4 DE48
 L220.8 D48
 L7.2 D43.2
-L4.8 DS75 DE82.6
-L20.4 D82.6
-L4.8 DS82.6 DE75`}]},{id:"imperial-hex-bolts",title:"Imperial Hex Bolts",description:"Imperial UNC hex bolt blanks using ASME B18.2.1 T-6 body, across-flats, across-corners, and head-height dimensions, with small chamfers on both sides of the head.",samples:[{id:"half-13-x-2-hex-bolt",title:"1/2-13 x 2 in Hex Bolt",description:"ASME B18.2.1 T-6 1/2-13 blank with Hmax 0.323, Gmax 0.866, Fmax 0.750, and Dmax 0.499.",text:`; 1/2-13 x 2 in Hex Bolt
+L30 D82.6 CH3.8`}]},{id:"imperial-hex-bolts",title:"Imperial Hex Bolts",description:"Imperial UNC hex bolt blanks using ASME B18.2.1 T-6 body, across-flats, across-corners, and head-height dimensions, with small chamfers on both sides of the head.",samples:[{id:"half-13-x-2-hex-bolt",title:"1/2-13 x 2 in Hex Bolt",description:"ASME B18.2.1 T-6 1/2-13 blank with Hmax 0.323, Gmax 0.866, Fmax 0.750, and Dmax 0.499.",text:`; 1/2-13 x 2 in Hex Bolt
 
 UNITS IN
 STOCK D0.866
@@ -5671,9 +5629,7 @@ MODE TURN
 L0.1 DS0.4 DE0.499
 L1.83 D0.499
 L0.07 D0.459
-L0.025 DS0.75 DE0.866
-L0.273 D0.866
-L0.025 DS0.866 DE0.75`},{id:"nine-sixteenths-12-x-2-25-hex-bolt",title:"9/16-12 x 2.25 in Hex Bolt",description:"ASME B18.2.1 T-6 9/16-12 blank with Hmax 0.371, Gmax 0.938, Fmax 0.812, and Dmax 0.561.",text:`; 9/16-12 x 2.25 in Hex Bolt
+L0.323 D0.866 CH0.058`},{id:"nine-sixteenths-12-x-2-25-hex-bolt",title:"9/16-12 x 2.25 in Hex Bolt",description:"ASME B18.2.1 T-6 9/16-12 blank with Hmax 0.371, Gmax 0.938, Fmax 0.812, and Dmax 0.561.",text:`; 9/16-12 x 2.25 in Hex Bolt
 
 UNITS IN
 STOCK D0.938
@@ -5685,9 +5641,7 @@ MODE TURN
 L0.11 DS0.45 DE0.561
 L2.06 D0.561
 L0.08 D0.516
-L0.025 DS0.812 DE0.938
-L0.321 D0.938
-L0.025 DS0.938 DE0.812`},{id:"five-eighths-11-x-2-5-hex-bolt",title:"5/8-11 x 2.5 in Hex Bolt",description:"ASME B18.2.1 T-6 5/8-11 blank with Hmax 0.403, Gmax 1.083, Fmax 0.938, and Dmax 0.623.",text:`; 5/8-11 x 2.5 in Hex Bolt
+L0.371 D0.938 CH0.063`},{id:"five-eighths-11-x-2-5-hex-bolt",title:"5/8-11 x 2.5 in Hex Bolt",description:"ASME B18.2.1 T-6 5/8-11 blank with Hmax 0.403, Gmax 1.083, Fmax 0.938, and Dmax 0.623.",text:`; 5/8-11 x 2.5 in Hex Bolt
 
 UNITS IN
 STOCK D1.083
@@ -5699,9 +5653,7 @@ MODE TURN
 L0.13 DS0.5 DE0.623
 L2.28 D0.623
 L0.09 D0.573
-L0.025 DS0.938 DE1.083
-L0.353 D1.083
-L0.025 DS1.083 DE0.938`},{id:"three-quarters-10-x-3-hex-bolt",title:"3/4-10 x 3 in Hex Bolt",description:"ASME B18.2.1 T-6 3/4-10 blank with Hmax 0.483, Gmax 1.299, Fmax 1.125, and Dmax 0.748.",text:`; 3/4-10 x 3 in Hex Bolt
+L0.403 D1.083 CH0.0725`},{id:"three-quarters-10-x-3-hex-bolt",title:"3/4-10 x 3 in Hex Bolt",description:"ASME B18.2.1 T-6 3/4-10 blank with Hmax 0.483, Gmax 1.299, Fmax 1.125, and Dmax 0.748.",text:`; 3/4-10 x 3 in Hex Bolt
 
 UNITS IN
 STOCK D1.299
@@ -5713,9 +5665,7 @@ MODE TURN
 L0.15 DS0.6 DE0.748
 L2.74 D0.748
 L0.11 D0.688
-L0.025 DS1.125 DE1.299
-L0.433 D1.299
-L0.025 DS1.299 DE1.125`},{id:"seven-eighths-9-x-3-5-hex-bolt",title:"7/8-9 x 3.5 in Hex Bolt",description:"ASME B18.2.1 T-6 7/8-9 blank with Hmax 0.563, Gmax 1.516, Fmax 1.312, and Dmax 0.873.",text:`; 7/8-9 x 3.5 in Hex Bolt
+L0.483 D1.299 CH0.087`},{id:"seven-eighths-9-x-3-5-hex-bolt",title:"7/8-9 x 3.5 in Hex Bolt",description:"ASME B18.2.1 T-6 7/8-9 blank with Hmax 0.563, Gmax 1.516, Fmax 1.312, and Dmax 0.873.",text:`; 7/8-9 x 3.5 in Hex Bolt
 
 UNITS IN
 STOCK D1.516
@@ -5727,9 +5677,7 @@ MODE TURN
 L0.18 DS0.7 DE0.873
 L3.2 D0.873
 L0.12 D0.803
-L0.035 DS1.312 DE1.516
-L0.493 D1.516
-L0.035 DS1.516 DE1.312`},{id:"one-8-x-4-hex-bolt",title:"1-8 x 4 in Hex Bolt",description:"ASME B18.2.1 T-6 1-8 blank with Hmax 0.627, Gmax 1.732, Fmax 1.500, and Dmax 0.998.",text:`; 1-8 x 4 in Hex Bolt
+L0.563 D1.516 CH0.102`},{id:"one-8-x-4-hex-bolt",title:"1-8 x 4 in Hex Bolt",description:"ASME B18.2.1 T-6 1-8 blank with Hmax 0.627, Gmax 1.732, Fmax 1.500, and Dmax 0.998.",text:`; 1-8 x 4 in Hex Bolt
 
 UNITS IN
 STOCK D1.732
@@ -5741,9 +5689,7 @@ MODE TURN
 L0.2 DS0.8 DE0.998
 L3.66 D0.998
 L0.14 D0.918
-L0.035 DS1.5 DE1.732
-L0.557 D1.732
-L0.035 DS1.732 DE1.5`},{id:"one-and-one-eighth-8-x-4-5-hex-bolt",title:"1-1/8-8 x 4.5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-1/8-8 blank with Hmax 0.718, Gmax 1.949, Fmax 1.688, and Dmax 1.123.",text:`; 1-1/8-8 x 4.5 in Hex Bolt
+L0.627 D1.732 CH0.116`},{id:"one-and-one-eighth-8-x-4-5-hex-bolt",title:"1-1/8-8 x 4.5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-1/8-8 blank with Hmax 0.718, Gmax 1.949, Fmax 1.688, and Dmax 1.123.",text:`; 1-1/8-8 x 4.5 in Hex Bolt
 
 UNITS IN
 STOCK D1.949
@@ -5755,9 +5701,7 @@ MODE TURN
 L0.23 DS0.9 DE1.123
 L4.11 D1.123
 L0.16 D1.033
-L0.035 DS1.688 DE1.949
-L0.648 D1.949
-L0.035 DS1.949 DE1.688`},{id:"one-and-one-quarter-8-x-5-hex-bolt",title:"1-1/4-8 x 5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-1/4-8 blank with Hmax 0.813, Gmax 2.165, Fmax 1.875, and Dmax 1.248.",text:`; 1-1/4-8 x 5 in Hex Bolt
+L0.718 D1.949 CH0.1305`},{id:"one-and-one-quarter-8-x-5-hex-bolt",title:"1-1/4-8 x 5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-1/4-8 blank with Hmax 0.813, Gmax 2.165, Fmax 1.875, and Dmax 1.248.",text:`; 1-1/4-8 x 5 in Hex Bolt
 
 UNITS IN
 STOCK D2.165
@@ -5769,9 +5713,7 @@ MODE TURN
 L0.25 DS1 DE1.248
 L4.57 D1.248
 L0.18 D1.148
-L0.035 DS1.875 DE2.165
-L0.743 D2.165
-L0.035 DS2.165 DE1.875`},{id:"one-and-three-eighths-8-x-5-5-hex-bolt",title:"1-3/8-8 x 5.5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-3/8-8 blank with Hmax 0.878, Gmax 2.382, Fmax 2.062, and Dmax 1.373.",text:`; 1-3/8-8 x 5.5 in Hex Bolt
+L0.813 D2.165 CH0.145`},{id:"one-and-three-eighths-8-x-5-5-hex-bolt",title:"1-3/8-8 x 5.5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-3/8-8 blank with Hmax 0.878, Gmax 2.382, Fmax 2.062, and Dmax 1.373.",text:`; 1-3/8-8 x 5.5 in Hex Bolt
 
 UNITS IN
 STOCK D2.382
@@ -5783,9 +5725,7 @@ MODE TURN
 L0.28 DS1.1 DE1.373
 L5.03 D1.373
 L0.19 D1.263
-L0.035 DS2.062 DE2.382
-L0.808 D2.382
-L0.035 DS2.382 DE2.062`},{id:"one-and-one-half-8-x-6-hex-bolt",title:"1-1/2-8 x 6 in Hex Bolt",description:"ASME B18.2.1 T-6 1-1/2-8 blank with Hmax 0.974, Gmax 2.598, Fmax 2.250, and Dmax 1.498.",text:`; 1-1/2-8 x 6 in Hex Bolt
+L0.878 D2.382 CH0.16`},{id:"one-and-one-half-8-x-6-hex-bolt",title:"1-1/2-8 x 6 in Hex Bolt",description:"ASME B18.2.1 T-6 1-1/2-8 blank with Hmax 0.974, Gmax 2.598, Fmax 2.250, and Dmax 1.498.",text:`; 1-1/2-8 x 6 in Hex Bolt
 
 UNITS IN
 STOCK D2.598
@@ -5797,9 +5737,7 @@ MODE TURN
 L0.3 DS1.2 DE1.498
 L5.49 D1.498
 L0.21 D1.378
-L0.035 DS2.25 DE2.598
-L0.904 D2.598
-L0.035 DS2.598 DE2.25`},{id:"one-and-five-eighths-8-x-6-5-hex-bolt",title:"1-5/8-8 x 6.5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-5/8-8 blank with Hmax 1.038, Gmax 2.815, Fmax 2.438, and Dmax 1.623.",text:`; 1-5/8-8 x 6.5 in Hex Bolt
+L0.974 D2.598 CH0.174`},{id:"one-and-five-eighths-8-x-6-5-hex-bolt",title:"1-5/8-8 x 6.5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-5/8-8 blank with Hmax 1.038, Gmax 2.815, Fmax 2.438, and Dmax 1.623.",text:`; 1-5/8-8 x 6.5 in Hex Bolt
 
 UNITS IN
 STOCK D2.815
@@ -5811,9 +5749,7 @@ MODE TURN
 L0.33 DS1.3 DE1.623
 L5.94 D1.623
 L0.23 D1.493
-L0.035 DS2.438 DE2.815
-L0.968 D2.815
-L0.035 DS2.815 DE2.438`},{id:"one-and-three-quarters-8-x-7-hex-bolt",title:"1-3/4-8 x 7 in Hex Bolt",description:"ASME B18.2.1 T-6 1-3/4-8 blank with Hmax 1.134, Gmax 3.031, Fmax 2.625, and Dmax 1.748.",text:`; 1-3/4-8 x 7 in Hex Bolt
+L1.038 D2.815 CH0.1885`},{id:"one-and-three-quarters-8-x-7-hex-bolt",title:"1-3/4-8 x 7 in Hex Bolt",description:"ASME B18.2.1 T-6 1-3/4-8 blank with Hmax 1.134, Gmax 3.031, Fmax 2.625, and Dmax 1.748.",text:`; 1-3/4-8 x 7 in Hex Bolt
 
 UNITS IN
 STOCK D3.031
@@ -5825,9 +5761,7 @@ MODE TURN
 L0.35 DS1.4 DE1.748
 L6.4 D1.748
 L0.25 D1.608
-L0.035 DS2.625 DE3.031
-L1.064 D3.031
-L0.035 DS3.031 DE2.625`},{id:"one-and-seven-eighths-8-x-7-5-hex-bolt",title:"1-7/8-8 x 7.5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-7/8-8 blank with Hmax 1.198, Gmax 3.248, Fmax 2.812, and Dmax 1.873.",text:`; 1-7/8-8 x 7.5 in Hex Bolt
+L1.134 D3.031 CH0.203`},{id:"one-and-seven-eighths-8-x-7-5-hex-bolt",title:"1-7/8-8 x 7.5 in Hex Bolt",description:"ASME B18.2.1 T-6 1-7/8-8 blank with Hmax 1.198, Gmax 3.248, Fmax 2.812, and Dmax 1.873.",text:`; 1-7/8-8 x 7.5 in Hex Bolt
 
 UNITS IN
 STOCK D3.248
@@ -5839,9 +5773,7 @@ MODE TURN
 L0.38 DS1.5 DE1.873
 L6.86 D1.873
 L0.26 D1.723
-L0.035 DS2.812 DE3.248
-L1.128 D3.248
-L0.035 DS3.248 DE2.812`},{id:"two-8-x-8-hex-bolt",title:"2-8 x 8 in Hex Bolt",description:"ASME B18.2.1 T-6 2-8 blank with Hmax 1.263, Gmax 3.464, Fmax 3.000, and Dmax 1.998.",text:`; 2-8 x 8 in Hex Bolt
+L1.198 D3.248 CH0.218`},{id:"two-8-x-8-hex-bolt",title:"2-8 x 8 in Hex Bolt",description:"ASME B18.2.1 T-6 2-8 blank with Hmax 1.263, Gmax 3.464, Fmax 3.000, and Dmax 1.998.",text:`; 2-8 x 8 in Hex Bolt
 
 UNITS IN
 STOCK D3.464
@@ -5853,9 +5785,7 @@ MODE TURN
 L0.4 DS1.6 DE1.998
 L7.32 D1.998
 L0.28 D1.838
-L0.035 DS3 DE3.464
-L1.193 D3.464
-L0.035 DS3.464 DE3`},{id:"two-and-one-quarter-8-x-9-hex-bolt",title:"2-1/4-8 x 9 in Hex Bolt",description:"ASME B18.2.1 T-6 2-1/4-8 blank with Hmax 1.423, Gmax 3.897, Fmax 3.375, and Dmax 2.248.",text:`; 2-1/4-8 x 9 in Hex Bolt
+L1.263 D3.464 CH0.232`},{id:"two-and-one-quarter-8-x-9-hex-bolt",title:"2-1/4-8 x 9 in Hex Bolt",description:"ASME B18.2.1 T-6 2-1/4-8 blank with Hmax 1.423, Gmax 3.897, Fmax 3.375, and Dmax 2.248.",text:`; 2-1/4-8 x 9 in Hex Bolt
 
 UNITS IN
 STOCK D3.897
@@ -5867,9 +5797,7 @@ MODE TURN
 L0.45 DS1.8 DE2.248
 L8.23 D2.248
 L0.32 D2.068
-L0.035 DS3.375 DE3.897
-L1.353 D3.897
-L0.035 DS3.897 DE3.375`},{id:"two-and-one-half-8-x-10-hex-bolt",title:"2-1/2-8 x 10 in Hex Bolt",description:"ASME B18.2.1 T-6 2-1/2-8 blank with Hmax 1.583, Gmax 4.330, Fmax 3.750, and Dmax 2.498.",text:`; 2-1/2-8 x 10 in Hex Bolt
+L1.423 D3.897 CH0.261`},{id:"two-and-one-half-8-x-10-hex-bolt",title:"2-1/2-8 x 10 in Hex Bolt",description:"ASME B18.2.1 T-6 2-1/2-8 blank with Hmax 1.583, Gmax 4.330, Fmax 3.750, and Dmax 2.498.",text:`; 2-1/2-8 x 10 in Hex Bolt
 
 UNITS IN
 STOCK D4.33
@@ -5881,9 +5809,7 @@ MODE TURN
 L0.5 DS2 DE2.498
 L9.15 D2.498
 L0.35 D2.298
-L0.035 DS3.75 DE4.33
-L1.513 D4.33
-L0.035 DS4.33 DE3.75`},{id:"two-and-three-quarters-8-x-11-hex-bolt",title:"2-3/4-8 x 11 in Hex Bolt",description:"ASME B18.2.1 T-6 2-3/4-8 blank with Hmax 1.744, Gmax 4.763, Fmax 4.125, and Dmax 2.748.",text:`; 2-3/4-8 x 11 in Hex Bolt
+L1.583 D4.33 CH0.29`},{id:"two-and-three-quarters-8-x-11-hex-bolt",title:"2-3/4-8 x 11 in Hex Bolt",description:"ASME B18.2.1 T-6 2-3/4-8 blank with Hmax 1.744, Gmax 4.763, Fmax 4.125, and Dmax 2.748.",text:`; 2-3/4-8 x 11 in Hex Bolt
 
 UNITS IN
 STOCK D4.763
@@ -5895,9 +5821,7 @@ MODE TURN
 L0.55 DS2.2 DE2.748
 L10.06 D2.748
 L0.39 D2.528
-L0.035 DS4.125 DE4.763
-L1.674 D4.763
-L0.035 DS4.763 DE4.125`},{id:"three-8-x-12-hex-bolt",title:"3-8 x 12 in Hex Bolt",description:"ASME B18.2.1 T-6 3-8 blank with Hmax 1.935, Gmax 5.196, Fmax 4.500, and Dmax 2.997.",text:`; 3-8 x 12 in Hex Bolt
+L1.744 D4.763 CH0.319`},{id:"three-8-x-12-hex-bolt",title:"3-8 x 12 in Hex Bolt",description:"ASME B18.2.1 T-6 3-8 blank with Hmax 1.935, Gmax 5.196, Fmax 4.500, and Dmax 2.997.",text:`; 3-8 x 12 in Hex Bolt
 
 UNITS IN
 STOCK D5.196
@@ -5909,9 +5833,7 @@ MODE TURN
 L0.6 DS2.4 DE2.997
 L10.98 D2.997
 L0.42 D2.757
-L0.035 DS4.5 DE5.196
-L1.865 D5.196
-L0.035 DS5.196 DE4.5`}]},{id:"screw-fastener-blanks",title:"Screw & Fastener Blanks",description:"Screw-head silhouettes, studs, pins, rivets, nuts, and thread placeholders sized for reachable tool geometry.",samples:[{id:"shoulder-bolt-blank",title:"Shoulder Bolt Blank",description:"Smaller thread land, larger precision shoulder, and a broad round head at the chuck side.",text:`; Shoulder Bolt Blank
+L1.935 D5.196 CH0.348`}]},{id:"screw-fastener-blanks",title:"Screw & Fastener Blanks",description:"Screw-head silhouettes, studs, pins, rivets, nuts, and thread placeholders sized for reachable tool geometry.",samples:[{id:"shoulder-bolt-blank",title:"Shoulder Bolt Blank",description:"Smaller thread land, larger precision shoulder, and a broad round head at the chuck side.",text:`; Shoulder Bolt Blank
 
 STOCK D30
 TOOL RECT R0.15 L1.5 H4
