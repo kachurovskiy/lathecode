@@ -34,7 +34,6 @@ describe('StartPanel', () => {
     expect(document.querySelectorAll<HTMLElement>('.sampleDialogSection').length).toBe(SAMPLE_SECTIONS.length);
     expect(Array.from(document.querySelectorAll<HTMLElement>('.sampleDialogSectionTitle')).map(title => title.textContent)).toEqual([
       'Start Here: Tiny Wins',
-      'Standard Shop Parts',
       'Spline Profiles',
       'Curvy Showpieces',
       'Toys, Desk Trinkets & Funny Shapes',
