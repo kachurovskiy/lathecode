@@ -5,6 +5,7 @@ import {
   type CommentList,
   type CurvedLine,
   type DepthDirective,
+  type EdgeFeature,
   type FeedDirective,
   type LatheEntry,
   type LatheLine,
@@ -131,6 +132,27 @@ const UNITS: {
   "IN": 25.4,
 };
 const SCALE_DECIMAL_PLACES = 4;
+const EDGE_FEATURE_EPSILON = 1e-9;
+const FILLET_ARC_CHORD_MM = 0.1;
+
+type ProfileSegmentSpec = {
+  line: LatheLine;
+  segment: Segment;
+  startFeature: EdgeFeature | null;
+  endFeature: EdgeFeature | null;
+};
+
+type EndpointFeatureGeometry = {
+  radialPoint: Point;
+  segmentPoint: Point;
+  trimDistance: number;
+  segments: Segment[];
+};
+
+type Vector = {
+  x: number;
+  z: number;
+};
 
 export class LatheCode {
   private data: ParserData;
@@ -396,7 +418,7 @@ export class LatheCode {
   }
 
   private getSegmentsForSide(side: LatheEntry[], zeroX: number): Segment[] {
-    const segments: Segment[] = [];
+    const specs: ProfileSegmentSpec[] = [];
     let z = 0;
     for (let commentsAndLine of side) {
       let line = commentsAndLine[1];
@@ -414,13 +436,167 @@ export class LatheCode {
         throw new Error('unimplemented ' + line);
       }
       const start = new Point(startX, z);
-      if (segments.length) {
-        const prevEnd = segments.at(-1)!.end;
-        if (!prevEnd.isEqual(start)) segments.push(new Segment('LINE', prevEnd, start));
-      }
-      segments.push(new Segment(line[6] || 'LINE', start, new Point(endX, z += line[1] * this.unitsMultiplier)));
+      const end = new Point(endX, z += line[1] * this.unitsMultiplier);
+      specs.push({
+        line,
+        segment: new Segment(getLineSegmentType(line), start, end),
+        startFeature: getLineStartFeature(line),
+        endFeature: getLineEndFeature(line),
+      });
     }
-    return segments;
+    return this.applyEdgeFeatures(specs, zeroX);
+  }
+
+  private applyEdgeFeatures(specs: ProfileSegmentSpec[], zeroX: number): Segment[] {
+    const features = specs.map((spec, index) => {
+      const previousRadius = index === 0 ? zeroX : specs[index - 1].segment.end.x;
+      const nextRadius = index === specs.length - 1 ? zeroX : specs[index + 1].segment.start.x;
+      const start = this.createEndpointFeature(spec, 'start', previousRadius);
+      const end = this.createEndpointFeature(spec, 'end', nextRadius);
+      this.validateSegmentFeatureFit(spec, start, end);
+      return {start, end};
+    });
+
+    const result: Segment[] = [];
+    let currentEnd: Point | null = null;
+
+    for (let index = 0; index < specs.length; index++) {
+      const spec = specs[index];
+      const startFeature = features[index].start;
+      const endFeature = features[index].end;
+      const segmentStart = startFeature?.segmentPoint ?? spec.segment.start;
+      const segmentEnd = endFeature?.segmentPoint ?? spec.segment.end;
+      const entryStart = startFeature?.radialPoint ?? segmentStart;
+
+      if (currentEnd) {
+        this.validateConnectorFeatureFit(specs[index - 1].segment.end, spec.segment.start, currentEnd, entryStart);
+        appendSegment(result, new Segment('LINE', currentEnd, entryStart));
+      } else {
+        currentEnd = entryStart;
+      }
+
+      if (startFeature) {
+        appendSegments(result, startFeature.segments);
+      }
+      appendSegment(result, new Segment(spec.segment.type, segmentStart, segmentEnd));
+      if (endFeature) {
+        appendSegments(result, endFeature.segments);
+      }
+
+      currentEnd = endFeature?.radialPoint ?? segmentEnd;
+    }
+
+    return result;
+  }
+
+  private createEndpointFeature(spec: ProfileSegmentSpec, endpoint: 'start' | 'end', neighborRadius: number): EndpointFeatureGeometry | null {
+    const feature = normalizeEdgeFeature(endpoint === 'start' ? spec.startFeature : spec.endFeature);
+    if (!feature) return null;
+    if (spec.segment.type !== 'LINE') {
+      throw new Error('Error: chamfers and fillets are not supported for CONV or CONC segments');
+    }
+
+    const size = feature[1] * this.unitsMultiplier;
+    const edgePoint = endpoint === 'start' ? spec.segment.start : spec.segment.end;
+    const radialDelta = neighborRadius - edgePoint.x;
+    const radialGap = Math.abs(radialDelta);
+    if (radialGap <= EDGE_FEATURE_EPSILON) {
+      throw new Error('Error: chamfer or fillet requires a radial edge');
+    }
+
+    const lineVector = pointDelta(spec.segment.start, spec.segment.end);
+    const span = horizontalSpan(spec.segment);
+    if (span <= EDGE_FEATURE_EPSILON) {
+      throw new Error('Error: chamfer or fillet is too large for the segment to contain');
+    }
+
+    const radialDirection = {x: Math.sign(radialDelta), z: 0};
+    const segmentDirection = endpoint === 'start'
+      ? normalizeVector(lineVector)
+      : scaleVector(normalizeVector(lineVector), -1);
+    const angle = angleBetween(radialDirection, segmentDirection);
+    if (angle <= EDGE_FEATURE_EPSILON || Math.PI - angle <= EDGE_FEATURE_EPSILON) {
+      throw new Error('Error: chamfer or fillet requires a corner angle');
+    }
+
+    if (feature[0] === 'CH') {
+      const segmentPoint = pointAtHorizontalTrim(spec.segment, endpoint, size);
+      const radialPoint = addVector(edgePoint, scaleVector(radialDirection, size));
+      this.validateEndpointFeatureFit(size, radialGap);
+      return {
+        radialPoint,
+        segmentPoint,
+        trimDistance: size,
+        segments: endpoint === 'start'
+          ? [new Segment('LINE', radialPoint, segmentPoint)]
+          : [new Segment('LINE', segmentPoint, radialPoint)],
+      };
+    }
+
+    const fullSegmentCurveType = getFullSegmentFilletCurveType(spec.segment, endpoint, radialDirection.x, size);
+    if (fullSegmentCurveType) {
+      return endpoint === 'start'
+        ? {
+          radialPoint: spec.segment.start,
+          segmentPoint: spec.segment.end,
+          trimDistance: size,
+          segments: [new Segment(fullSegmentCurveType, spec.segment.start, spec.segment.end)],
+        }
+        : {
+          radialPoint: spec.segment.end,
+          segmentPoint: spec.segment.start,
+          trimDistance: size,
+          segments: [new Segment(fullSegmentCurveType, spec.segment.start, spec.segment.end)],
+        };
+    }
+
+    const horizontalComponent = Math.abs(segmentDirection.z);
+    if (horizontalComponent <= EDGE_FEATURE_EPSILON) {
+      throw new Error('Error: chamfer or fillet requires horizontal segment length');
+    }
+
+    const tangentDistance = size / horizontalComponent;
+    const radius = tangentDistance * Math.tan(angle / 2);
+    this.validateEndpointFeatureFit(tangentDistance, radialGap);
+    const radialPoint = addVector(edgePoint, scaleVector(radialDirection, tangentDistance));
+    const segmentPoint = pointAtHorizontalTrim(spec.segment, endpoint, size);
+    const bisector = normalizeVector(addVectors(radialDirection, segmentDirection));
+    const center = addVector(edgePoint, scaleVector(bisector, radius / Math.sin(angle / 2)));
+    return {
+      radialPoint,
+      segmentPoint,
+      trimDistance: size,
+      segments: endpoint === 'start'
+        ? filletArcSegments(center, radius, radialPoint, segmentPoint)
+        : filletArcSegments(center, radius, segmentPoint, radialPoint),
+    };
+  }
+
+  private validateEndpointFeatureFit(radialTrimDistance: number, radialGap: number): void {
+    if (radialTrimDistance - radialGap > EDGE_FEATURE_EPSILON) {
+      throw new Error('Error: chamfer or fillet is too large for the adjacent radial edge');
+    }
+  }
+
+  private validateSegmentFeatureFit(
+    spec: ProfileSegmentSpec,
+    startFeature: EndpointFeatureGeometry | null,
+    endFeature: EndpointFeatureGeometry | null,
+  ): void {
+    const segmentLength = horizontalSpan(spec.segment);
+    const featureLength = (startFeature?.trimDistance ?? 0) + (endFeature?.trimDistance ?? 0);
+    if (featureLength - segmentLength > EDGE_FEATURE_EPSILON) {
+      throw new Error('Error: chamfer or fillet is too large for the segment to contain');
+    }
+  }
+
+  private validateConnectorFeatureFit(originalStart: Point, originalEnd: Point, start: Point, end: Point): void {
+    const radialDirection = Math.sign(originalEnd.x - originalStart.x);
+    if (!radialDirection) return;
+    if (Math.abs(start.z - end.z) > EDGE_FEATURE_EPSILON) return;
+    if (radialDirection * (end.x - start.x) < -EDGE_FEATURE_EPSILON) {
+      throw new Error('Error: chamfers or fillets are too large for the adjacent radial edge');
+    }
   }
 
   reverse(): string {
@@ -502,14 +678,21 @@ function findLineStart(text: string, lineStart: string, fromIndex = 0): number {
 
 function reverseLine(line: LatheLine): string {
   if (line[0] !== 'L') throw new Error('Expected L line');
-  const second = line[2];
-  if (isStraightLine(line)) {
-    return `L${line[1]} ${second}${line[3]}${line[4] ? ' ; ' + line[4] : ''}`;
-  }
   if (isCurvedLine(line)) {
-    return `L${line[1]} ${second}${line[5]} ${line[4]}${line[3]}${line[6] ? ' ' + line[6] : ''}${line[7] ? ' ; ' + (line[6] ? (line[7] as string).substring(1).trim() : line[7]) : ''}`;
+    return latheLineToString([
+      'L',
+      line[1],
+      line[2],
+      line[5],
+      line[4],
+      line[3],
+      line[6],
+      line[7],
+      line[9],
+      line[8],
+    ]);
   }
-  return `L${line[1]}${line[2] ? ' ; ' + line[2] : ''}`;
+  return latheLineToString(line);
 }
 
 function getProfileLineDimensions(entries: LatheEntry[]): {maxRadius: number, materialLength: number} | null {
@@ -560,16 +743,39 @@ function scaleStockDirective(directive: StockDirective, xScale: number, scaledPa
 
 function scaleLatheLine(line: LatheLine, xScale: number, zScale: number): string {
   if (isCurvedLine(line)) {
-    return `L${numberToString(scaleNumber(line[1], zScale))} ${line[2]}${numberToString(scaleNumber(line[3], xScale))} ${line[4]}${numberToString(scaleNumber(line[5], xScale))}${line[6] ? ' ' + line[6] : ''}${formatComment(line[7])}`;
+    return latheLineToString([
+      'L',
+      scaleNumber(line[1], zScale),
+      line[2],
+      scaleNumber(line[3], xScale),
+      line[4],
+      scaleNumber(line[5], xScale),
+      line[6],
+      line[7],
+      scaleEdgeFeature(line[8], xScale),
+      scaleEdgeFeature(line[9], xScale),
+    ]);
   }
   if (isStraightLine(line)) {
-    return `L${numberToString(scaleNumber(line[1], zScale))} ${line[2]}${numberToString(scaleNumber(line[3], xScale))}${formatComment(line[4])}`;
+    return latheLineToString([
+      'L',
+      scaleNumber(line[1], zScale),
+      line[2],
+      scaleNumber(line[3], xScale),
+      line[4],
+      scaleEdgeFeature(line[5], xScale),
+      scaleEdgeFeature(line[6], xScale),
+    ]);
   }
   return latheLineToString(line);
 }
 
 function scaleNumericParam<Name extends string>(param: NumericParam<Name> | null, scale: number): NumericParam<Name> | null {
   return param ? [param[0], scaleNumber(param[1], scale)] : null;
+}
+
+function scaleEdgeFeature(feature: EdgeFeature | null, scale: number): EdgeFeature | null {
+  return feature ? [feature[0], scaleNumber(feature[1], scale)] : null;
 }
 
 function scaleNumber(value: number, scale: number): number {
@@ -623,6 +829,15 @@ function numericParamsToString(params: readonly (NumericParam<string> | null)[])
   return params.flatMap(param => param ? [`${param[0]}${numberToString(param[1])}`] : []);
 }
 
+function edgeFeatureToString(feature: EdgeFeature | null): string {
+  return feature ? ` ${feature[0]}${numberToString(feature[1])}` : '';
+}
+
+function edgeFeaturesEqual(a: EdgeFeature | null, b: EdgeFeature | null): boolean {
+  if (!a || !b) return a === b;
+  return a[0] === b[0] && a[1] === b[1];
+}
+
 function modeDirectiveToString(directive: ModeDirective): string {
   return `MODE ${directive[2]}${formatComment(directive[3])}`;
 }
@@ -633,10 +848,15 @@ function axesDirectiveToString(directive: AxesDirective): string {
 
 function latheLineToString(line: LatheLine): string {
   if (isCurvedLine(line)) {
-    return `L${numberToString(line[1])} ${line[2]}${numberToString(line[3])} ${line[4]}${numberToString(line[5])}${line[6] ? ' ' + line[6] : ''}${formatComment(line[7])}`;
+    return `L${numberToString(line[1])} ${line[2]}${numberToString(line[3])}${edgeFeatureToString(line[8])} ${line[4]}${numberToString(line[5])}${edgeFeatureToString(line[9])}${line[6] ? ' ' + line[6] : ''}${formatComment(line[7])}`;
   }
   if (isStraightLine(line)) {
-    return `L${numberToString(line[1])} ${line[2]}${numberToString(line[3])}${formatComment(line[4])}`;
+    if (!edgeFeaturesEqual(line[5], line[6])) {
+      const startType = line[2] === 'D' ? 'DS' : 'RS';
+      const endType = line[2] === 'D' ? 'DE' : 'RE';
+      return `L${numberToString(line[1])} ${startType}${numberToString(line[3])}${edgeFeatureToString(line[5])} ${endType}${numberToString(line[3])}${edgeFeatureToString(line[6])}${formatComment(line[4])}`;
+    }
+    return `L${numberToString(line[1])} ${line[2]}${numberToString(line[3])}${edgeFeatureToString(line[5])}${formatComment(line[4])}`;
   }
   return `L${numberToString(line[1])}${formatComment(line[2])}`;
 }
@@ -666,6 +886,128 @@ export function removeEmptySegments(segments: Segment[]): Segment[] {
     if (!s.isEmpty()) result.push(s);
   }
   return result;
+}
+
+function getLineSegmentType(line: LatheLine): string {
+  return isCurvedLine(line) ? line[6] || 'LINE' : 'LINE';
+}
+
+function getLineStartFeature(line: LatheLine): EdgeFeature | null {
+  if (isStraightLine(line)) return line[5];
+  if (isCurvedLine(line)) return line[8];
+  return null;
+}
+
+function getLineEndFeature(line: LatheLine): EdgeFeature | null {
+  if (isStraightLine(line)) return line[6];
+  if (isCurvedLine(line)) return line[9];
+  return null;
+}
+
+function normalizeEdgeFeature(feature: EdgeFeature | null): EdgeFeature | null {
+  return feature && feature[1] > 0 ? feature : null;
+}
+
+function appendSegments(result: Segment[], segments: Segment[]): void {
+  for (const segment of segments) appendSegment(result, segment);
+}
+
+function appendSegment(result: Segment[], segment: Segment): void {
+  if (distance(segment.start, segment.end) <= EDGE_FEATURE_EPSILON) return;
+  result.push(segment);
+}
+
+function pointAtHorizontalTrim(segment: Segment, endpoint: 'start' | 'end', trimDistance: number): Point {
+  const span = horizontalSpan(segment);
+  if (span <= EDGE_FEATURE_EPSILON) throw new Error('Error: chamfer or fillet requires horizontal segment length');
+  const ratio = trimDistance / span;
+  const vector = pointDelta(segment.start, segment.end);
+  return endpoint === 'start'
+    ? new Point(segment.start.x + vector.x * ratio, segment.start.z + vector.z * ratio)
+    : new Point(segment.end.x - vector.x * ratio, segment.end.z - vector.z * ratio);
+}
+
+function horizontalSpan(segment: Segment): number {
+  return Math.abs(segment.end.z - segment.start.z);
+}
+
+function getFullSegmentFilletCurveType(segment: Segment, endpoint: 'start' | 'end', radialDirection: number, trimDistance: number): 'CONV' | 'CONC' | null {
+  if (Math.abs(trimDistance - horizontalSpan(segment)) > EDGE_FEATURE_EPSILON) return null;
+
+  const radialDelta = segment.end.x - segment.start.x;
+  const segmentRadialDirection = Math.sign(radialDelta);
+  if (!segmentRadialDirection || radialDirection !== segmentRadialDirection) return null;
+
+  if (endpoint === 'start') return segmentRadialDirection > 0 ? 'CONV' : 'CONC';
+  return segmentRadialDirection > 0 ? 'CONC' : 'CONV';
+}
+
+function filletArcSegments(center: Point, radius: number, start: Point, end: Point): Segment[] {
+  const startAngle = Math.atan2(start.z - center.z, start.x - center.x);
+  const endAngle = Math.atan2(end.z - center.z, end.x - center.x);
+  const delta = normalizeAngle(endAngle - startAngle);
+  const steps = Math.max(2, Math.ceil(Math.abs(delta) * radius / FILLET_ARC_CHORD_MM));
+  const segments: Segment[] = [];
+  let previous = start;
+  for (let i = 1; i <= steps; i++) {
+    const point = i === steps
+      ? end
+      : new Point(
+        center.x + radius * Math.cos(startAngle + delta * i / steps),
+        center.z + radius * Math.sin(startAngle + delta * i / steps),
+      );
+    appendSegment(segments, new Segment('LINE', previous, point));
+    previous = point;
+  }
+  return segments;
+}
+
+function normalizeAngle(angle: number): number {
+  while (angle <= -Math.PI) angle += Math.PI * 2;
+  while (angle > Math.PI) angle -= Math.PI * 2;
+  return angle;
+}
+
+function distance(a: Point, b: Point): number {
+  return vectorLength(pointDelta(a, b));
+}
+
+function pointDelta(a: Point, b: Point): Vector {
+  return {x: b.x - a.x, z: b.z - a.z};
+}
+
+function vectorLength(vector: Vector): number {
+  return Math.hypot(vector.x, vector.z);
+}
+
+function normalizeVector(vector: Vector): Vector {
+  const length = vectorLength(vector);
+  if (length <= EDGE_FEATURE_EPSILON) throw new Error('Error: unable to normalize zero-length vector');
+  return {x: vector.x / length, z: vector.z / length};
+}
+
+function addVector(point: Point, vector: Vector): Point {
+  return new Point(point.x + vector.x, point.z + vector.z);
+}
+
+function addVectors(a: Vector, b: Vector): Vector {
+  return {x: a.x + b.x, z: a.z + b.z};
+}
+
+function scaleVector(vector: Vector, scale: number): Vector {
+  return {x: vector.x * scale, z: vector.z * scale};
+}
+
+function angleBetween(a: Vector, b: Vector): number {
+  return Math.acos(clamp(dot(a, b) / (vectorLength(a) * vectorLength(b)), -1, 1));
+}
+
+function dot(a: Vector, b: Vector): number {
+  return a.x * b.x + a.z * b.z;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function isStraightLine(line: LatheLine): line is StraightLine {

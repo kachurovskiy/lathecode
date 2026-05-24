@@ -8,8 +8,10 @@ export type StockHoleType = 'IR' | 'ID';
 export type SegmentStartType = 'DS' | 'RS';
 export type SegmentEndType = 'DE' | 'RE';
 export type CurveType = 'CONV' | 'CONC';
+export type EdgeFeatureType = 'CH' | 'FI';
 export type CommentList = string[];
 export type NumericParam<Name extends string> = [Name, number];
+export type EdgeFeature = NumericParam<EdgeFeatureType>;
 
 export type UnitsDirective = ['UNITS', null, UnitType, string];
 export type StockDirective = ['STOCK', null, [RadiusDiameterType, number, NumericParam<StockHoleType> | null, NumericParam<'A'> | null], string];
@@ -33,8 +35,8 @@ export type ModeDirective = ['MODE', null, ModeType, string];
 export type AxesDirective = ['AXES', null, [ZDirection, null, XDirection], string];
 
 export type PartingLine = ['L', number, string];
-export type StraightLine = ['L', number, RadiusDiameterType, number, string];
-export type CurvedLine = ['L', number, SegmentStartType, number, SegmentEndType, number, CurveType | null, string];
+export type StraightLine = ['L', number, RadiusDiameterType, number, string, EdgeFeature | null, EdgeFeature | null];
+export type CurvedLine = ['L', number, SegmentStartType, number, SegmentEndType, number, CurveType | null, string, EdgeFeature | null, EdgeFeature | null];
 export type LatheLine = PartingLine | StraightLine | CurvedLine;
 export type LatheEntry = [CommentList, LatheLine];
 export type InsideBlock = [CommentList, ['INSIDE', string], LatheEntry[]];
@@ -228,6 +230,12 @@ class LineCursor {
     return this.oneOf(['CONV', 'CONC'] as const);
   }
 
+  maybeEdgeFeature(): EdgeFeature | null {
+    if (!this.line.startsWith('CH', this.position) && !this.line.startsWith('FI', this.position)) return null;
+    const type = this.oneOf(['CH', 'FI'] as const);
+    return [type, this.float()];
+  }
+
   lineStartsWith(text: string): boolean {
     return this.line.startsWith(text, this.position);
   }
@@ -359,25 +367,43 @@ function parsePartingLine(cursor: LineCursor): PartingLine {
 }
 
 function parseStraightLine(cursor: LineCursor): StraightLine {
+  const lineType = cursor.literal('L');
+  const length = cursor.float();
+  const sizeType = cursor.oneOf(['D', 'R'] as const);
+  const size = cursor.float();
+  const feature = cursor.maybeEdgeFeature();
   return [
-    cursor.literal('L'),
-    cursor.float(),
-    cursor.oneOf(['D', 'R'] as const),
-    cursor.float(),
+    lineType,
+    length,
+    sizeType,
+    size,
     cursor.comment(),
+    feature,
+    feature,
   ];
 }
 
 function parseCurvedLine(cursor: LineCursor): CurvedLine {
+  const lineType = cursor.literal('L');
+  const length = cursor.float();
+  const startType = cursor.oneOf(['DS', 'RS'] as const);
+  const start = cursor.float();
+  const startFeature = cursor.maybeEdgeFeature();
+  const endType = cursor.oneOf(['DE', 'RE'] as const);
+  const end = cursor.float();
+  const endFeature = cursor.maybeEdgeFeature();
+  const curveType = cursor.maybeCurveType();
   return [
-    cursor.literal('L'),
-    cursor.float(),
-    cursor.oneOf(['DS', 'RS'] as const),
-    cursor.float(),
-    cursor.oneOf(['DE', 'RE'] as const),
-    cursor.float(),
-    cursor.maybeCurveType(),
+    lineType,
+    length,
+    startType,
+    start,
+    endType,
+    end,
+    curveType,
     cursor.comment(),
+    startFeature,
+    endFeature,
   ];
 }
 

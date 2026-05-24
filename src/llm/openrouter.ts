@@ -43,14 +43,17 @@ const LATHECODE_SYSTEM_PROMPT = `You generate lathecode for a browser lathe CAM 
 
 Lathecode syntax:
 - Comment lines start with ";".
-- Optional setup directives come before profile lines and must not be commented out: UNITS MM|CM|M|FT|IN, STOCK D<number>|R<number> with optional ID<number>|IR<number>, TOOL RECT|ROUND|ANG, DEPTH CUT<number> FINISH<number>, FEED MOVE<number> PASS<number> PART<number>, MODE FACE|TURN, AXES LEFT|RIGHT UP|DOWN.
+- Optional setup directives come before profile lines and must not be commented out: UNITS MM|CM|M|FT|IN, STOCK D<number>|R<number> with optional ID<number>|IR<number>, TOOL RECT|ROUND|ANG, DEPTH CUT<number> FINISH<number>, FEED MOVE<number> PASS<number> PART<number>, MODE FACE|TURN.
+- Do not add AXES directives; axis direction is configured outside LLM-generated lathecode. When modifying existing lathecode, preserve an existing AXES line only if it is already present.
 - Use MM unless the request clearly asks for another unit.
 - For typical external turning, include STOCK, TOOL, DEPTH, and outside profile lines.
 - Lathecode pieces are assembled right-to-left: profile lines start at the right/free/end of the part and proceed left toward the chuck side.
-- Straight profile line: L<length> R<radius> or L<length> D<diameter>.
-- Curved or tapered profile line: L<length> RS<startRadius> RE<endRadius> CONV|CONC, or use DS/DE for diameters. Do not use DS or RS unless the same line also has matching DE or RE.
+- Straight profile line: L<length> R<radius> or L<length> D<diameter>. Add CH<size> for chamfers or FI<size> for fillets on both ends, for example L6 D19.6 CH0.5 or L20 D10 FI0.5.
+- Tapered or endpoint-specific profile line: L<length> RS<startRadius> RE<endRadius>, or use DS/DE for diameters. Endpoint features can follow start/end values, for example L20 DS10 FI0.5 DE10 CH1. Do not use DS or RS unless the same line also has matching DE or RE.
+- CH and FI sizes are measured along the segment's horizontal L distance, so their combined endpoint sizes must not exceed that line's L length.
+- Curved profile lines add CONV or CONC after DS/DE or RS/RE. Do not use CH or FI on CONV/CONC lines.
 - Complex silhouettes may be approximated with many short L lines. Dozens of short straight segments are acceptable when a part has freeform, compound, or drawing-derived curves.
-- Numeric parameter names and values are joined with no space: write CUT1, FINISH0.2, MOVE100, R5, L10, DS5, RE10. Do not write CUT 1, MOVE 100, R 5, or L 10.
+- Numeric parameter names and values are joined with no space: write CUT1, FINISH0.2, MOVE100, R5, L10, DS5, RE10, CH0.5, FI0.5. Do not write CUT 1, MOVE 100, R 5, CH 0.5, or L 10.
 - A bare L<length> line is a parting or cutoff-width line.
 - INSIDE begins an internal/bore profile. Inside profile radii must stay inside the outside profile and stock.
 - Keep all lengths positive. Keep outside radii at or below stock radius. Make stock large enough for the whole part.
@@ -166,13 +169,19 @@ async function generateValidLatheCode(
         {role: 'assistant', content: lastText},
         {
           role: 'user',
-          content: `The returned lathecode is invalid: ${lastError.message}
+          content: `The returned lathecode is invalid.
+
+Error:
+${lastError.message}
 
 Common syntax fixes:
 - Use DEPTH CUT1 FINISH0.2, not DEPTH CUT 1 FINISH 0.2.
 - Use FEED MOVE100 PASS50 PART30, not FEED MOVE 100 PASS 50 PART 30.
 - Use L5 R5 and L10 RS5 RE10 CONC, not L 5 R 5.
 - Use L2 D24 for a straight diameter segment. Use DS24 only when the line also has DE, for example L10 DS24 DE30.
+- Use CH0.5 and FI0.5 for chamfers and fillets, not CH 0.5 or FI 0.5. Use them only on straight or tapered lines, not on CONV or CONC lines.
+- Keep each CH/FI value within the segment's horizontal L length.
+- Do not introduce AXES directives.
 - Do not prefix real setup or profile lines with ";". Comments are fine, but ;STOCK D64 is only a comment and does not define stock.
 
 Return a corrected complete lathecode only.`,
@@ -181,7 +190,7 @@ Return a corrected complete lathecode only.`,
     }
   }
 
-  throw new Error(`OpenRouter returned invalid lathecode: ${lastError?.message ?? 'unknown error'}${lastText ? `\n\nReturned:\n${truncateText(lastText, 800)}` : ''}`);
+  throw new Error(formatInvalidGeneratedLatheCodeError(lastError?.message ?? 'unknown error', lastText));
 }
 
 async function sendOpenRouterChatCompletion(
@@ -271,7 +280,7 @@ function normalizeGeneratedLatheCodeLine(line: string): string {
   const code = commentIndex >= 0 ? line.substring(0, commentIndex) : line;
   const comment = commentIndex >= 0 ? line.substring(commentIndex) : '';
   const normalizedCode = normalizeLoneCurveStartParams(code.replace(
-    /\b(CUT|FINISH|MOVE|PASS|PART|ID|IR|DS|DE|RS|RE|NA|R|D|L|H|A)\s+([0-9]+(?:\.[0-9]*)?|\.[0-9]+)/g,
+    /\b(CUT|FINISH|MOVE|PASS|PART|ID|IR|DS|DE|RS|RE|CH|FI|NA|R|D|L|H|A)\s+([0-9]+(?:\.[0-9]*)?|\.[0-9]+)/g,
     '$1$2',
   ));
   return `${normalizedCode.trimEnd()}${comment ? ` ${comment.trim()}` : ''}`;
@@ -328,8 +337,8 @@ Line ${error.line}: ${line || '(empty)'}${hint ? `\nHint: ${hint}` : ''}`;
 }
 
 function getSyntaxHint(message: string, line: string): string {
-  if (message.includes('Expected digit') && /\b(CUT|FINISH|MOVE|PASS|PART|ID|IR|DS|DE|RS|RE|NA|R|D|L|H|A)\s+[0-9.]/.test(line)) {
-    return 'lathecode numeric parameters have no space between the name and value, for example CUT1, MOVE100, L5, R5, DS5, or RE10.';
+  if (message.includes('Expected digit') && /\b(CUT|FINISH|MOVE|PASS|PART|ID|IR|DS|DE|RS|RE|CH|FI|NA|R|D|L|H|A)\s+[0-9.]/.test(line)) {
+    return 'lathecode numeric parameters have no space between the name and value, for example CUT1, MOVE100, L5, R5, DS5, RE10, CH0.5, or FI0.5.';
   }
   if (message.includes('Invalid lathe line') && /\b[DR]S[0-9.]+\s*$/.test(line)) {
     return 'DS and RS are start values for curved or tapered lines and need matching DE or RE. Use D or R for a straight segment, for example L2 D24.';
@@ -338,6 +347,19 @@ function getSyntaxHint(message: string, line: string): string {
     return 'only setup directives, L profile lines, INSIDE, and comment lines are allowed in generated lathecode.';
   }
   return '';
+}
+
+function formatInvalidGeneratedLatheCodeError(errorMessage: string, returnedText: string): string {
+  const fields = [
+    'OpenRouter returned invalid lathecode.',
+    '',
+    'Error:',
+    errorMessage,
+  ];
+  if (returnedText) {
+    fields.push('', 'Returned lathecode:', truncateText(returnedText, 800));
+  }
+  return fields.join('\n');
 }
 
 function truncateText(text: string, maxLength: number): string {

@@ -66,6 +66,28 @@ L3.1 D2
 
 ![image](https://github.com/kachurovskiy/lathecode/assets/517919/11b07d65-7ecc-411c-843d-ebd269759ca6)
 
+## Fillets and chamfers
+
+A chamfer or fillet can be added to both ends of a straight or tapered segment. Each segment owns its own end features and only uses neighboring segments to determine whether the feature turns up or down.
+
+```
+; M10 bolt
+L20 D10 FI0.5 ; fillet on the free end and at the shoulder root
+L6 D19.6 CH0.5 ; chamfer both head edges
+```
+
+Endpoint features can also be specified separately after `DS` and `DE`, or after `RS` and `RE`:
+
+```
+; M10 bolt
+L20 DS10 FI0.5 DE10 CH1 ; fillet on bolt end, chamfer up between bolt and head
+L6 DS19.6 CH0 DE19.6 CH0.5 ; no head chamfer where head touches shank, small chamfer on head top
+```
+
+`CH0` and `FI0` mean no feature. Chamfer and fillet sizes are measured along the segment's horizontal `L` distance. Combined start and end features must fit within the segment length and each feature must fit the adjacent radial transition.
+
+Chamfers and fillets are not currently supported for `CONV` or `CONC` segments.
+
 ## Tools
 
 Tool is assumed to be zeroed on the centerline, touching the stock from the right.

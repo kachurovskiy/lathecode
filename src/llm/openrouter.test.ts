@@ -35,6 +35,20 @@ L2`,
     expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
   });
 
+  it('normalizes chamfer and fillet spacing mistakes before validation', async () => {
+    vi.stubGlobal('fetch', mockOpenRouterResponses([
+      `STOCK D12
+L2 DS6 FI 0.25 DE6 CH 0.25
+L2 D10 CH 0.5`,
+    ]));
+
+    const latheCodeText = await createLatheCodeFromPrompt('small stepped part with softened edges');
+
+    expect(latheCodeText).toContain('L2 DS6 FI0.25 DE6 CH0.25');
+    expect(latheCodeText).toContain('L2 D10 CH0.5');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
   it('tells the model that profile pieces run right-to-left toward the chuck', async () => {
     const fetchMock = mockOpenRouterResponses([
       'STOCK D10\nL2 R3',
@@ -47,6 +61,66 @@ L2`,
     expect(request.messages[0].content).toContain('assembled right-to-left');
     expect(request.messages[0].content).toContain('start at the right/free/end of the part');
     expect(request.messages[0].content).toContain('proceed left toward the chuck side');
+  });
+
+  it('does not ask the model to produce AXES directives', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D10\nL2 R3',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createLatheCodeFromPrompt('simple cylinder');
+
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.messages[0].content).not.toContain('AXES LEFT|RIGHT');
+    expect(request.messages[0].content).toContain('Do not add AXES directives');
+  });
+
+  it('tells the model how to use chamfers and fillets', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D10\nL2 R3',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createLatheCodeFromPrompt('simple cylinder');
+
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.messages[0].content).toContain('CH<size>');
+    expect(request.messages[0].content).toContain('FI<size>');
+    expect(request.messages[0].content).toContain('L20 DS10 FI0.5 DE10 CH1');
+    expect(request.messages[0].content).toContain("measured along the segment's horizontal L distance");
+    expect(request.messages[0].content).toContain('Do not use CH or FI on CONV/CONC lines');
+  });
+
+  it('includes chamfer and fillet syntax in repair prompts', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D10\nL2 D10 CHX',
+      'STOCK D10\nL2 D10 CHX',
+      'STOCK D10\nL2 D10 CHX',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createLatheCodeFromPrompt('invalid chamfer')).rejects.toThrow(/CHX/);
+
+    const repairRequest = JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string) as {
+      messages: {content: string}[],
+    };
+    const repairPrompt = repairRequest.messages.at(-1)?.content ?? '';
+    expect(repairPrompt).toContain('Use CH0.5 and FI0.5');
+    expect(repairPrompt).toContain('not CH 0.5 or FI 0.5');
+    expect(repairPrompt).toContain('not on CONV or CONC lines');
+  });
+
+  it('formats invalid generated lathecode errors as multiline fields', async () => {
+    vi.stubGlobal('fetch', mockOpenRouterResponses([
+      'STOCK D10\nAXES RIGHT\nL2 R3',
+      'STOCK D10\nAXES RIGHT\nL2 R3',
+      'STOCK D10\nAXES RIGHT\nL2 R3',
+    ]));
+
+    await expect(createLatheCodeFromPrompt('invalid axes')).rejects.toThrow(
+      /OpenRouter returned invalid lathecode\.\n\nError:\nExpected "UP" or "DOWN".*\nLine 2: AXES RIGHT\n\nReturned lathecode:\nSTOCK D10\nAXES RIGHT\nL2 R3/s,
+    );
   });
 
   it('requires provider routing that does not retain user inputs', async () => {

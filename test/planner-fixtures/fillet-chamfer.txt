@@ -1,0 +1,51 @@
+UNITS MM
+STOCK D11
+
+TOOL RECT R0 L2
+DEPTH CUT0.25 FINISH0.05
+MODE TURN
+
+; Full-length straight segments: the two edge features consume the whole segment.
+L0.4 D3 CH0.2
+L0.5 D6
+L0.5
+
+L0.4 D3 FI0.2
+L0.5 D6
+L0.5
+
+L0.4 DS3 CH0.2 DE3 FI0.2
+L0.5 D6
+L0.5
+
+L0.4 DS3 FI0.2 DE3 CH0.2
+L0.5 D6
+L0.5
+
+; Straight segment combinations between larger and smaller neighbors.
+L0.5 D9
+L0.5 DS6 CH0.2 DE6 FI0.2
+L0.5 D3
+L0.5
+
+L0.5 D9
+L0.5 DS6 FI0.2 DE6 CH0.2
+L0.5 D3
+L0.5
+
+; Explicit zero feature on one end, nonzero feature on the other.
+L0.5 D6
+L1 DS4 CH0 DE4 FI0.2
+L0.5 D8
+L0.5
+
+; Tapered line segments with endpoint features.
+L0.5 D2
+L1 DS4 CH0.15 DE6 FI0.15
+L0.5 D9
+L1
+
+L0.5 D9
+L1 DS6 FI0.15 DE4 CH0.15
+L0.5 D2
+L1

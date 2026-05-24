@@ -97,6 +97,48 @@ describe('lathecode', () => {
     expectPoints('L2 R2\nL3 R3', 'LINE:0,5-0,0 LINE:0,0-2,0 LINE:2,0-2,2 LINE:2,2-3,2 LINE:3,2-3,5 LINE:3,5-0,5', '');
   })
 
+  it('adds chamfers to both ends of a segment', () => {
+    expect(outsideProfilePoints('L6 D10 CH0.5')).toBe('LINE:4.5,0-5,0.5 LINE:5,0.5-5,5.5 LINE:5,5.5-4.5,6');
+  });
+
+  it('adds independent fillets and chamfers to documented bolt segments', () => {
+    const segments = new LatheCode(`L20 DS10 FI0.5 DE10 CH1
+L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsideProfileSegments();
+
+    expect(segments[0].start).toEqual(new Point(4.5, 0));
+    expect(segments.some(segment => segment.start.isEqual(new Point(5, 19)) && segment.end.isEqual(new Point(6, 20)))).toBeTruthy();
+    expect(segments.some(segment => segment.start.isEqual(new Point(6, 20)) && segment.end.isEqual(new Point(9.8, 20)))).toBeTruthy();
+    expect(segments.at(-1)!.end).toEqual(new Point(9.3, 26));
+  });
+
+  it('treats zero chamfers and fillets as no feature', () => {
+    expect(outsideProfilePoints('L6 D10 CH0')).toBe('LINE:5,0-5,6');
+    expect(outsideProfilePoints('L6 DS10 FI0 DE10 CH0')).toBe('LINE:5,0-5,6');
+  });
+
+  it('rejects chamfers and fillets that do not fit the segment', () => {
+    expect(() => new LatheCode('L1 D10 CH0.6')).toThrow('too large for the segment');
+  });
+
+  it('measures chamfer and fillet feature size against horizontal segment length', () => {
+    expect(() => new LatheCode('L3 DS0 CH0 DE3 CH3.3\nL3 D10')).toThrow('too large for the segment');
+  });
+
+  it('collapses a full-length tapered fillet into the equivalent profile curve', () => {
+    const fillet = new LatheCode('L3 DS0 FI0 RE3 FI3\nL3 D10').getOutsideProfileSegments();
+    const curve = new LatheCode('L3 RS0 RE3 CONC\nL3 D10').getOutsideProfileSegments();
+
+    expect(pointsToString(fillet)).toBe(pointsToString(curve));
+  });
+
+  it('rejects chamfers and fillets that do not fit the radial edge', () => {
+    expect(() => new LatheCode('L2 D10 CH2\nL2 D12')).toThrow('too large for the adjacent radial edge');
+  });
+
+  it('rejects chamfers and fillets on curved segments', () => {
+    expect(() => new LatheCode('L5 DS0 FI0.5 DE10 CONV')).toThrow('not supported for CONV or CONC');
+  });
+
   it('face + shoulder + cutoff', () => {
     expectPoints('L1\nL2 R2\nL3 R3\nL2', 'LINE:0,6-0,1 LINE:0,1-2,1 LINE:2,1-2,3 LINE:2,3-3,3 LINE:3,3-3,6 LINE:3,6-0,6', '');
   });
@@ -250,6 +292,10 @@ L3 R2
 L6 RS2 RE4 CONC`);
   });
 
+  it('scales chamfers and fillets with radial dimensions', () => {
+    expect(new LatheCode('STOCK D20\nL2 D10 FI0.5\nL3 DS12 CH0 DE12 CH1').scale(2, 3)).toBe('STOCK D24\nL6 D20 FI1\nL9 DS24 CH0 DE24 CH2');
+  });
+
   it('rounds scaled dimensions to compact decimal output', () => {
     expect(new LatheCode('STOCK D10 ID1\nTOOL RECT R0.2 L2\nL2 R1\nL1 RS1 RE2').scale(1 / 3)).toBe('STOCK D1.3333 ID0.3333\nTOOL RECT R0.2 L2\nL0.6667 R0.3333\nL0.3333 RS0.3333 RE0.6667');
   });
@@ -296,6 +342,12 @@ L3 DS6 DE4
 L2 D4 ; line 1`);
   });
 
+  it('reverses endpoint chamfers and fillets', () => {
+    expect(new LatheCode(`L20 DS10 FI0.5 DE10 CH1 ; shank
+L6 D19.6 CH0.5 ; head`).reverse()).toEqual(`L6 D19.6 CH0.5 ; head
+L20 DS10 CH1 DE10 FI0.5 ; shank`);
+  });
+
   it('reverses inside-only profiles', () => {
     expect(new LatheCode(`STOCK D10
 INSIDE
@@ -336,6 +388,10 @@ function pointsToString(points: Segment[]): string {
 
 function outsidePoints(text: string): string {
   return pointsToString(new LatheCode(text).getOutsideSegments());
+}
+
+function outsideProfilePoints(text: string): string {
+  return pointsToString(new LatheCode(text).getOutsideProfileSegments());
 }
 
 function insidePoints(text: string): string {

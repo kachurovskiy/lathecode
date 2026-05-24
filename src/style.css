@@ -304,6 +304,7 @@ button.sampleDialogMoreCard:hover {
   color: #ffffff;
   font-size: 14px;
   border-radius: 0;
+  white-space: pre-wrap;
 }
 
 .statusContainer:not(:empty) {
@@ -427,6 +428,7 @@ button.sampleDialogMoreCard:hover {
   background-color: #ff4c4c;
   color: white;
   margin-bottom: 12px;
+  white-space: pre-wrap;
 }
 
 .toolApplyButton {
