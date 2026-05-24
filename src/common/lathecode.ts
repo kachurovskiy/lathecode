@@ -7,6 +7,7 @@ import {
   type DepthDirective,
   type EdgeFeature,
   type FeedDirective,
+  type InsideDirective,
   type LatheEntry,
   type LatheLine,
   type ModeDirective,
@@ -165,12 +166,12 @@ export class LatheCode {
 
   constructor(private text: string) {
     this.data = parseLatheCode(text + '\n');
-    this.unitsMultiplier = this.data[1] ? UNITS[this.data[1][2]] : 1;
+    this.unitsMultiplier = this.data.units ? UNITS[this.data.units.unit] : 1;
     // console.log('this.data', this.data);
     const stockInnerRadius = this.getStockInnerDiameter() / 2;
-    this.outside = this.getSegmentsForSide(this.data[14], stockInnerRadius);
+    this.outside = this.getSegmentsForSide(this.data.outside, stockInnerRadius);
     this.outsideMaxRadius = this.outside.length ? Math.max.apply(null, this.outside.map(p => Math.max(p.start.x, p.end.x))) : 0;
-    this.inside = this.data[15] ? this.getSegmentsForSide(this.data[15][2], this.getStockDiameter() / 2) : [];
+    this.inside = this.data.inside ? this.getSegmentsForSide(this.data.inside.entries, this.getStockDiameter() / 2) : [];
     this.outsideSegments = this.closeLoop(this.outside, stockInnerRadius);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
     this.getStock(); // validate the stock
@@ -182,7 +183,7 @@ export class LatheCode {
   }
 
   getTitle(): string {
-    return this.data[0][1] || '';
+    return this.data.leadingComments[1] || '';
   }
 
   getStock(): Stock|null {
@@ -207,14 +208,14 @@ export class LatheCode {
   }
 
   getTool(): Tool {
-    if (!this.data[5]) return new Tool('RECT', 3, 3, 0.4);
-    const type = this.data[5][2];
-    const params = this.data[5][4];
-    const radius = params[0] ? params[0][1] * this.unitsMultiplier : 0;
-    const length = params[1] ? params[1][1] * this.unitsMultiplier : 0;
-    const height = params[2] ? params[2][1] * this.unitsMultiplier : 0;
-    const angle = params[3] ? params[3][1] : 0;
-    const noseAngle = params[4] ? params[4][1] : 0;
+    const directive = this.data.tool;
+    if (!directive) return new Tool('RECT', 3, 3, 0.4);
+    const type = directive.type;
+    const radius = directive.radius ? directive.radius.value * this.unitsMultiplier : 0;
+    const length = directive.length ? directive.length.value * this.unitsMultiplier : 0;
+    const height = directive.height ? directive.height.value * this.unitsMultiplier : 0;
+    const angle = directive.angle ? directive.angle.value : 0;
+    const noseAngle = directive.noseAngle ? directive.noseAngle.value : 0;
     if (type === 'RECT') {
       if (angle) throw new Error('A not implemented for TOOL RECT');
       if (noseAngle) throw new Error('NA not supported for TOOL RECT');
@@ -234,36 +235,32 @@ export class LatheCode {
   }
 
   getFeed(): Feed {
-    const params = this.data[9] ? this.data[9][2] : [];
     return new Feed(
-      ((params[0] ? params[0][1] : 0) * this.unitsMultiplier) || 200,
-      ((params[1] ? params[1][1] : 0) * this.unitsMultiplier) || 50,
-      ((params[2] ? params[2][1] : 0) * this.unitsMultiplier) || 10);
+      ((this.data.feed?.move?.value || 0) * this.unitsMultiplier) || 200,
+      ((this.data.feed?.pass?.value || 0) * this.unitsMultiplier) || 50,
+      ((this.data.feed?.part?.value || 0) * this.unitsMultiplier) || 10);
   }
 
   getDepth(): Depth {
-    const params = this.data[7] ? this.data[7][2] : [];
-    const cut = params[0];
-    const finish = params[1];
     return new Depth(
-      ((cut ? cut[1] : 0) * this.unitsMultiplier) || 0.5,
-      ((finish ? finish[1] : 0) * this.unitsMultiplier) || 0.1
+      ((this.data.depth?.cut?.value || 0) * this.unitsMultiplier) || 0.5,
+      ((this.data.depth?.finish?.value || 0) * this.unitsMultiplier) || 0.1
     );
   }
 
   getMode(): ModeType {
-    if (!this.data[11]) return 'FACE';
-    return this.data[11][2];
+    if (!this.data.mode) return 'FACE';
+    return this.data.mode.mode;
   }
 
   getZDirection(): ZDirection {
-    if (!this.data[13]) return 'LEFT';
-    return this.data[13][2][0];
+    if (!this.data.axes) return 'LEFT';
+    return this.data.axes.zDirection;
   }
 
   getXDirection(): XDirection {
-    if (!this.data[13]) return 'UP';
-    return this.data[13][2][2];
+    if (!this.data.axes) return 'UP';
+    return this.data.axes.xDirection;
   }
 
   isNanoElsCompatible(): boolean {
@@ -306,15 +303,15 @@ export class LatheCode {
 
   /** LatheCode containing only the selected profile and shared setup directives. */
   getLatheCodeForProfile(side: ProfileSide): LatheCode | null {
-    const entries = side === 'outside' ? this.data[14] : this.data[15]?.[2] || [];
+    const entries = side === 'outside' ? this.data.outside : this.data.inside?.entries || [];
     if (!entries.length) return null;
 
     const lines = this.getSetupLines(side);
     if (side === 'inside') {
-      const insideBlock = this.data[15];
-      lines.push(`INSIDE${formatComment(insideBlock?.[1][1] || '')}`);
+      const insideBlock = this.data.inside;
+      lines.push(`INSIDE${formatComment(insideBlock?.directive.comment || '')}`);
     }
-    lines.push(...entries.map(entry => latheLineToString(entry[1])));
+    lines.push(...entries.map(entry => latheLineToString(entry.line)));
     return new LatheCode(lines.join('\n'));
   }
 
@@ -323,14 +320,14 @@ export class LatheCode {
     const result: number[] = [];
     let seenPart = false;
     let z = 0;
-    for (let commentsAndLine of this.data[14]) {
-      let line = commentsAndLine[1];
+    for (let entry of this.data.outside) {
+      let line = entry.line;
       if (isPartingLine(line) && seenPart) {
         result.push(z);
       } else {
         seenPart = true;
       }
-      z += line[1] * this.unitsMultiplier;
+      z += line.length * this.unitsMultiplier;
     }
     return result;
   }
@@ -348,22 +345,22 @@ export class LatheCode {
   }
 
   private getStockDiameter(): number {
-    if (!this.data[3]) return this.outsideMaxRadius * 2;
-    const stockParams = this.data[3][2];
-    return stockParams[1] * (stockParams[0] == 'D' ? 1 : 2) * this.unitsMultiplier;
+    const stock = this.data.stock;
+    if (!stock) return this.outsideMaxRadius * 2;
+    return stock.size * (stock.sizeType == 'D' ? 1 : 2) * this.unitsMultiplier;
   }
 
   private getStockInnerDiameter(): number {
-    if (!this.data[3]) return 0;
-    const stockHole = this.data[3][2][2];
+    if (!this.data.stock) return 0;
+    const stockHole = this.data.stock.hole;
     if (!stockHole) return 0;
-    return stockHole[1] * (stockHole[0] == 'ID' ? 1 : 2) * this.unitsMultiplier;
+    return stockHole.value * (stockHole.name == 'ID' ? 1 : 2) * this.unitsMultiplier;
   }
 
   private getPartDimensionsInLatheUnits(): PartDimensions | null {
-    const outside = getProfileLineDimensions(this.data[14]);
-    const inside = this.data[15] ? getProfileLineDimensions(this.data[15][2]) : null;
-    const stockDiameter = this.data[3] ? getStockDirectiveDiameterInLatheUnits(this.data[3]) : 0;
+    const outside = getProfileLineDimensions(this.data.outside);
+    const inside = this.data.inside ? getProfileLineDimensions(this.data.inside.entries) : null;
+    const stockDiameter = this.data.stock ? getStockDirectiveDiameterInLatheUnits(this.data.stock) : 0;
     const diameter = outside?.maxRadius
       ? outside.maxRadius * 2
       : inside?.maxRadius && stockDiameter
@@ -376,25 +373,25 @@ export class LatheCode {
   private getSetupLines(side: ProfileSide): string[] {
     const lines: string[] = [];
     const pushComments = (comments: CommentList) => lines.push(...comments.map(commentToString));
-    pushComments(this.data[0]);
-    if (this.data[1]) lines.push(unitsDirectiveToString(this.data[1]));
-    pushComments(this.data[2]);
-    if (this.data[3]) {
-      lines.push(stockDirectiveToString(this.data[3], {includeHole: side !== 'outside'}));
+    pushComments(this.data.leadingComments);
+    if (this.data.units) lines.push(unitsDirectiveToString(this.data.units));
+    pushComments(this.data.afterUnitsComments);
+    if (this.data.stock) {
+      lines.push(stockDirectiveToString(this.data.stock, {includeHole: side !== 'outside'}));
     } else if (side === 'inside') {
       const stock = this.getStock();
       if (stock) lines.push(`STOCK D${numberToString(stock.diameter)}`);
     }
-    pushComments(this.data[4]);
-    if (this.data[5]) lines.push(toolDirectiveToString(this.data[5]));
-    pushComments(this.data[6]);
-    if (this.data[7]) lines.push(depthDirectiveToString(this.data[7]));
-    pushComments(this.data[8]);
-    if (this.data[9]) lines.push(feedDirectiveToString(this.data[9]));
-    pushComments(this.data[10]);
-    if (this.data[11]) lines.push(modeDirectiveToString(this.data[11]));
-    pushComments(this.data[12]);
-    if (this.data[13]) lines.push(axesDirectiveToString(this.data[13]));
+    pushComments(this.data.afterStockComments);
+    if (this.data.tool) lines.push(toolDirectiveToString(this.data.tool));
+    pushComments(this.data.afterToolComments);
+    if (this.data.depth) lines.push(depthDirectiveToString(this.data.depth));
+    pushComments(this.data.afterDepthComments);
+    if (this.data.feed) lines.push(feedDirectiveToString(this.data.feed));
+    pushComments(this.data.afterFeedComments);
+    if (this.data.mode) lines.push(modeDirectiveToString(this.data.mode));
+    pushComments(this.data.afterModeComments);
+    if (this.data.axes) lines.push(axesDirectiveToString(this.data.axes));
     return lines;
   }
 
@@ -417,18 +414,18 @@ export class LatheCode {
     return result.length < 3 ? [] : result;
   }
 
-  private getSegmentsForSide(side: LatheEntry[], zeroX: number): Segment[] {
+  private getSegmentsForSide(side: readonly LatheEntry[], zeroX: number): Segment[] {
     const specs: ProfileSegmentSpec[] = [];
     let z = 0;
-    for (let commentsAndLine of side) {
-      let line = commentsAndLine[1];
+    for (let entry of side) {
+      let line = entry.line;
       let startX: number;
       let endX: number;
       if (isStraightLine(line)) {
-        startX = endX = line[3] / (line[2] === 'D' ? 2 : 1) * this.unitsMultiplier;
+        startX = endX = line.size / (line.sizeType === 'D' ? 2 : 1) * this.unitsMultiplier;
       } else if (isCurvedLine(line)) {
-        startX = line[3] / (line[2] === 'DS' ? 2 : 1) * this.unitsMultiplier;
-        endX = line[5] / (line[4] === 'DE' ? 2 : 1) * this.unitsMultiplier;
+        startX = line.start / (line.startType === 'DS' ? 2 : 1) * this.unitsMultiplier;
+        endX = line.end / (line.endType === 'DE' ? 2 : 1) * this.unitsMultiplier;
       } else if (isPartingLine(line)) {
         startX = zeroX;
         endX = zeroX;
@@ -436,7 +433,7 @@ export class LatheCode {
         throw new Error('unimplemented ' + line);
       }
       const start = new Point(startX, z);
-      const end = new Point(endX, z += line[1] * this.unitsMultiplier);
+      const end = new Point(endX, z += line.length * this.unitsMultiplier);
       specs.push({
         line,
         segment: new Segment(getLineSegmentType(line), start, end),
@@ -496,7 +493,7 @@ export class LatheCode {
       throw new Error('Error: chamfers and fillets are not supported for CONV or CONC segments');
     }
 
-    const size = feature[1] * this.unitsMultiplier;
+    const size = feature.value * this.unitsMultiplier;
     const edgePoint = endpoint === 'start' ? spec.segment.start : spec.segment.end;
     const radialDelta = neighborRadius - edgePoint.x;
     const radialGap = Math.abs(radialDelta);
@@ -519,7 +516,7 @@ export class LatheCode {
       throw new Error('Error: chamfer or fillet requires a corner angle');
     }
 
-    if (feature[0] === 'CH') {
+    if (feature.name === 'CH') {
       const segmentPoint = pointAtHorizontalTrim(spec.segment, endpoint, size);
       const radialPoint = addVector(edgePoint, scaleVector(radialDirection, size));
       this.validateEndpointFeatureFit(size, radialGap);
@@ -600,20 +597,20 @@ export class LatheCode {
   }
 
   reverse(): string {
-    const insideBlock = this.data[15];
-    const firstLLine = this.data[14].length
+    const insideBlock = this.data.inside;
+    const firstLLine = this.data.outside.length
       ? findLineStart(this.text, 'L')
       : findLineStart(this.text, 'L', findLineStart(this.text, 'INSIDE'));
     if (firstLLine === -1) return this.text;
     const preambula = this.text.substring(0, firstLLine);
     const result: string[] = [];
-    result.push(...reverseEntries(this.data[14]));
+    result.push(...reverseEntries(this.data.outside));
     if (insideBlock) {
-      if (this.data[14].length) {
-        result.push(...insideBlock[0].map(commentToString));
-        result.push(insideDirectiveToString(insideBlock[1]));
+      if (this.data.outside.length) {
+        result.push(...insideBlock.comments.map(commentToString));
+        result.push(insideDirectiveToString(insideBlock.directive));
       }
-      result.push(...reverseEntries(insideBlock[2]));
+      result.push(...reverseEntries(insideBlock.entries));
     }
     return (preambula ? preambula + '\n' : '') + result.join('\n');
   }
@@ -627,47 +624,47 @@ export class LatheCode {
     const scaledPartDiameter = partDimensions ? scaleNumber(partDimensions.diameter, xScale) : null;
     const lines: string[] = [];
     const pushComments = (comments: CommentList) => lines.push(...comments.map(commentToString));
-    const pushEntries = (entries: LatheEntry[]) => {
+    const pushEntries = (entries: readonly LatheEntry[]) => {
       for (const entry of entries) {
-        pushComments(entry[0]);
-        lines.push(scaleLatheLine(entry[1], xScale, zScale));
+        pushComments(entry.comments);
+        lines.push(scaleLatheLine(entry.line, xScale, zScale));
       }
     };
 
-    pushComments(this.data[0]);
-    if (this.data[1]) lines.push(unitsDirectiveToString(this.data[1]));
-    pushComments(this.data[2]);
-    if (this.data[3]) lines.push(stockDirectiveToString(scaleStockDirective(this.data[3], xScale, scaledPartDiameter)));
-    pushComments(this.data[4]);
-    if (this.data[5]) lines.push(toolDirectiveToString(this.data[5]));
-    pushComments(this.data[6]);
-    if (this.data[7]) lines.push(depthDirectiveToString(this.data[7]));
-    pushComments(this.data[8]);
-    if (this.data[9]) lines.push(feedDirectiveToString(this.data[9]));
-    pushComments(this.data[10]);
-    if (this.data[11]) lines.push(modeDirectiveToString(this.data[11]));
-    pushComments(this.data[12]);
-    if (this.data[13]) lines.push(axesDirectiveToString(this.data[13]));
-    pushEntries(this.data[14]);
+    pushComments(this.data.leadingComments);
+    if (this.data.units) lines.push(unitsDirectiveToString(this.data.units));
+    pushComments(this.data.afterUnitsComments);
+    if (this.data.stock) lines.push(stockDirectiveToString(scaleStockDirective(this.data.stock, xScale, scaledPartDiameter)));
+    pushComments(this.data.afterStockComments);
+    if (this.data.tool) lines.push(toolDirectiveToString(this.data.tool));
+    pushComments(this.data.afterToolComments);
+    if (this.data.depth) lines.push(depthDirectiveToString(this.data.depth));
+    pushComments(this.data.afterDepthComments);
+    if (this.data.feed) lines.push(feedDirectiveToString(this.data.feed));
+    pushComments(this.data.afterFeedComments);
+    if (this.data.mode) lines.push(modeDirectiveToString(this.data.mode));
+    pushComments(this.data.afterModeComments);
+    if (this.data.axes) lines.push(axesDirectiveToString(this.data.axes));
+    pushEntries(this.data.outside);
 
-    const insideBlock = this.data[15];
+    const insideBlock = this.data.inside;
     if (insideBlock) {
-      pushComments(insideBlock[0]);
-      lines.push(insideDirectiveToString(insideBlock[1]));
-      pushEntries(insideBlock[2]);
+      pushComments(insideBlock.comments);
+      lines.push(insideDirectiveToString(insideBlock.directive));
+      pushEntries(insideBlock.entries);
     }
 
-    pushComments(this.data[16]);
+    pushComments(this.data.trailingComments);
     return lines.join('\n');
   }
 }
 
-function reverseEntries(entries: LatheEntry[]): string[] {
-  return entries.map(line => reverseLine(line[1])).reverse();
+function reverseEntries(entries: readonly LatheEntry[]): string[] {
+  return entries.map(entry => reverseLine(entry.line)).reverse();
 }
 
-function insideDirectiveToString(directive: ['INSIDE', string]): string {
-  return `INSIDE${formatComment(directive[1])}`;
+function insideDirectiveToString(directive: InsideDirective): string {
+  return `INSIDE${formatComment(directive.comment)}`;
 }
 
 function findLineStart(text: string, lineStart: string, fromIndex = 0): number {
@@ -677,38 +674,32 @@ function findLineStart(text: string, lineStart: string, fromIndex = 0): number {
 }
 
 function reverseLine(line: LatheLine): string {
-  if (line[0] !== 'L') throw new Error('Expected L line');
   if (isCurvedLine(line)) {
-    return latheLineToString([
-      'L',
-      line[1],
-      line[2],
-      line[5],
-      line[4],
-      line[3],
-      line[6],
-      line[7],
-      line[9],
-      line[8],
-    ]);
+    return latheLineToString({
+      ...line,
+      start: line.end,
+      end: line.start,
+      startFeature: line.endFeature,
+      endFeature: line.startFeature,
+    });
   }
   return latheLineToString(line);
 }
 
-function getProfileLineDimensions(entries: LatheEntry[]): {maxRadius: number, materialLength: number} | null {
+function getProfileLineDimensions(entries: readonly LatheEntry[]): {maxRadius: number, materialLength: number} | null {
   let maxRadius = 0;
   let materialLength = 0;
   for (const entry of entries) {
-    const line = entry[1];
+    const line = entry.line;
     if (isPartingLine(line)) continue;
-    materialLength += line[1];
+    materialLength += line.length;
     if (isStraightLine(line)) {
-      maxRadius = Math.max(maxRadius, line[3] / (line[2] === 'D' ? 2 : 1));
+      maxRadius = Math.max(maxRadius, line.size / (line.sizeType === 'D' ? 2 : 1));
     } else if (isCurvedLine(line)) {
       maxRadius = Math.max(
         maxRadius,
-        line[3] / (line[2] === 'DS' ? 2 : 1),
-        line[5] / (line[4] === 'DE' ? 2 : 1),
+        line.start / (line.startType === 'DS' ? 2 : 1),
+        line.end / (line.endType === 'DE' ? 2 : 1),
       );
     }
   }
@@ -716,66 +707,52 @@ function getProfileLineDimensions(entries: LatheEntry[]): {maxRadius: number, ma
 }
 
 function getStockDirectiveDiameterInLatheUnits(directive: StockDirective): number {
-  const stock = directive[2];
-  return stock[1] * (stock[0] === 'D' ? 1 : 2);
+  return directive.size * (directive.sizeType === 'D' ? 1 : 2);
 }
 
 function scaleStockDirective(directive: StockDirective, xScale: number, scaledPartDiameter: number | null): StockDirective {
-  const stock = directive[2];
-  const stockHole = scaleNumericParam(stock[2], xScale);
+  const stockHole = scaleNumericParam(directive.hole, xScale);
   const scaledStockDiameter = scaleNumber(getStockDirectiveDiameterInLatheUnits(directive), xScale);
-  const stockHoleDiameter = stockHole ? stockHole[1] * (stockHole[0] === 'ID' ? 1 : 2) : 0;
+  const stockHoleDiameter = stockHole ? stockHole.value * (stockHole.name === 'ID' ? 1 : 2) : 0;
   const stockDiameter = scaledPartDiameter !== null && scaledPartDiameter > stockHoleDiameter
     ? scaledPartDiameter
     : scaledStockDiameter;
-  return [
-    directive[0],
-    directive[1],
-    [
-      stock[0],
-      stock[0] === 'D' ? stockDiameter : scaleNumber(stockDiameter / 2, 1),
-      stockHole,
-      stock[3],
-    ],
-    directive[3],
-  ];
+  return {
+    ...directive,
+    size: directive.sizeType === 'D' ? stockDiameter : scaleNumber(stockDiameter / 2, 1),
+    hole: stockHole,
+  };
 }
 
 function scaleLatheLine(line: LatheLine, xScale: number, zScale: number): string {
   if (isCurvedLine(line)) {
-    return latheLineToString([
-      'L',
-      scaleNumber(line[1], zScale),
-      line[2],
-      scaleNumber(line[3], xScale),
-      line[4],
-      scaleNumber(line[5], xScale),
-      line[6],
-      line[7],
-      scaleEdgeFeature(line[8], xScale),
-      scaleEdgeFeature(line[9], xScale),
-    ]);
+    return latheLineToString({
+      ...line,
+      length: scaleNumber(line.length, zScale),
+      start: scaleNumber(line.start, xScale),
+      end: scaleNumber(line.end, xScale),
+      startFeature: scaleEdgeFeature(line.startFeature, xScale),
+      endFeature: scaleEdgeFeature(line.endFeature, xScale),
+    });
   }
   if (isStraightLine(line)) {
-    return latheLineToString([
-      'L',
-      scaleNumber(line[1], zScale),
-      line[2],
-      scaleNumber(line[3], xScale),
-      line[4],
-      scaleEdgeFeature(line[5], xScale),
-      scaleEdgeFeature(line[6], xScale),
-    ]);
+    return latheLineToString({
+      ...line,
+      length: scaleNumber(line.length, zScale),
+      size: scaleNumber(line.size, xScale),
+      startFeature: scaleEdgeFeature(line.startFeature, xScale),
+      endFeature: scaleEdgeFeature(line.endFeature, xScale),
+    });
   }
   return latheLineToString(line);
 }
 
 function scaleNumericParam<Name extends string>(param: NumericParam<Name> | null, scale: number): NumericParam<Name> | null {
-  return param ? [param[0], scaleNumber(param[1], scale)] : null;
+  return param ? {...param, value: scaleNumber(param.value, scale)} : null;
 }
 
 function scaleEdgeFeature(feature: EdgeFeature | null, scale: number): EdgeFeature | null {
-  return feature ? [feature[0], scaleNumber(feature[1], scale)] : null;
+  return feature ? {...feature, value: scaleNumber(feature.value, scale)} : null;
 }
 
 function scaleNumber(value: number, scale: number): number {
@@ -799,66 +776,65 @@ function formatComment(comment: string): string {
 }
 
 function unitsDirectiveToString(directive: UnitsDirective): string {
-  return `UNITS ${directive[2]}${formatComment(directive[3])}`;
+  return `UNITS ${directive.unit}${formatComment(directive.comment)}`;
 }
 
 function stockDirectiveToString(directive: StockDirective, options: {includeHole?: boolean} = {}): string {
   const includeHole = options.includeHole ?? true;
-  const stock = directive[2];
-  const stockHole = includeHole && stock[2] ? ` ${stock[2][0]}${numberToString(stock[2][1])}` : '';
-  const allowance = stock[3] ? ` ${stock[3][0]}${numberToString(stock[3][1])}` : '';
-  return `STOCK ${stock[0]}${numberToString(stock[1])}${stockHole}${allowance}${formatComment(directive[3])}`;
+  const stockHole = includeHole && directive.hole ? ` ${directive.hole.name}${numberToString(directive.hole.value)}` : '';
+  const allowance = directive.allowance ? ` ${directive.allowance.name}${numberToString(directive.allowance.value)}` : '';
+  return `STOCK ${directive.sizeType}${numberToString(directive.size)}${stockHole}${allowance}${formatComment(directive.comment)}`;
 }
 
 function toolDirectiveToString(directive: ToolDirective): string {
-  const params = numericParamsToString(directive[4]);
-  return `TOOL ${directive[2]}${params.length ? ' ' + params.join(' ') : ''}${formatComment(directive[5])}`;
+  const params = numericParamsToString([directive.radius, directive.length, directive.height, directive.angle, directive.noseAngle]);
+  return `TOOL ${directive.type}${params.length ? ' ' + params.join(' ') : ''}${formatComment(directive.comment)}`;
 }
 
 function depthDirectiveToString(directive: DepthDirective): string {
-  const params = numericParamsToString(directive[2]);
-  return `DEPTH ${params.join(' ')}${formatComment(directive[3])}`;
+  const params = numericParamsToString([directive.cut, directive.finish]);
+  return `DEPTH ${params.join(' ')}${formatComment(directive.comment)}`;
 }
 
 function feedDirectiveToString(directive: FeedDirective): string {
-  const params = numericParamsToString(directive[2]);
-  return `FEED ${params.join(' ')}${formatComment(directive[3])}`;
+  const params = numericParamsToString([directive.move, directive.pass, directive.part]);
+  return `FEED ${params.join(' ')}${formatComment(directive.comment)}`;
 }
 
 function numericParamsToString(params: readonly (NumericParam<string> | null)[]): string[] {
-  return params.flatMap(param => param ? [`${param[0]}${numberToString(param[1])}`] : []);
+  return params.flatMap(param => param ? [`${param.name}${numberToString(param.value)}`] : []);
 }
 
 function edgeFeatureToString(feature: EdgeFeature | null): string {
-  return feature ? ` ${feature[0]}${numberToString(feature[1])}` : '';
+  return feature ? ` ${feature.name}${numberToString(feature.value)}` : '';
 }
 
 function edgeFeaturesEqual(a: EdgeFeature | null, b: EdgeFeature | null): boolean {
   if (!a || !b) return a === b;
-  return a[0] === b[0] && a[1] === b[1];
+  return a.name === b.name && a.value === b.value;
 }
 
 function modeDirectiveToString(directive: ModeDirective): string {
-  return `MODE ${directive[2]}${formatComment(directive[3])}`;
+  return `MODE ${directive.mode}${formatComment(directive.comment)}`;
 }
 
 function axesDirectiveToString(directive: AxesDirective): string {
-  return `AXES ${directive[2][0]} ${directive[2][2]}${formatComment(directive[3])}`;
+  return `AXES ${directive.zDirection} ${directive.xDirection}${formatComment(directive.comment)}`;
 }
 
 function latheLineToString(line: LatheLine): string {
   if (isCurvedLine(line)) {
-    return `L${numberToString(line[1])} ${line[2]}${numberToString(line[3])}${edgeFeatureToString(line[8])} ${line[4]}${numberToString(line[5])}${edgeFeatureToString(line[9])}${line[6] ? ' ' + line[6] : ''}${formatComment(line[7])}`;
+    return `L${numberToString(line.length)} ${line.startType}${numberToString(line.start)}${edgeFeatureToString(line.startFeature)} ${line.endType}${numberToString(line.end)}${edgeFeatureToString(line.endFeature)}${line.curveType ? ' ' + line.curveType : ''}${formatComment(line.comment)}`;
   }
   if (isStraightLine(line)) {
-    if (!edgeFeaturesEqual(line[5], line[6])) {
-      const startType = line[2] === 'D' ? 'DS' : 'RS';
-      const endType = line[2] === 'D' ? 'DE' : 'RE';
-      return `L${numberToString(line[1])} ${startType}${numberToString(line[3])}${edgeFeatureToString(line[5])} ${endType}${numberToString(line[3])}${edgeFeatureToString(line[6])}${formatComment(line[4])}`;
+    if (!edgeFeaturesEqual(line.startFeature, line.endFeature)) {
+      const startType = line.sizeType === 'D' ? 'DS' : 'RS';
+      const endType = line.sizeType === 'D' ? 'DE' : 'RE';
+      return `L${numberToString(line.length)} ${startType}${numberToString(line.size)}${edgeFeatureToString(line.startFeature)} ${endType}${numberToString(line.size)}${edgeFeatureToString(line.endFeature)}${formatComment(line.comment)}`;
     }
-    return `L${numberToString(line[1])} ${line[2]}${numberToString(line[3])}${edgeFeatureToString(line[5])}${formatComment(line[4])}`;
+    return `L${numberToString(line.length)} ${line.sizeType}${numberToString(line.size)}${edgeFeatureToString(line.startFeature)}${formatComment(line.comment)}`;
   }
-  return `L${numberToString(line[1])}${formatComment(line[2])}`;
+  return `L${numberToString(line.length)}${formatComment(line.comment)}`;
 }
 
 function numberToString(value: number): string {
@@ -889,23 +865,23 @@ export function removeEmptySegments(segments: Segment[]): Segment[] {
 }
 
 function getLineSegmentType(line: LatheLine): string {
-  return isCurvedLine(line) ? line[6] || 'LINE' : 'LINE';
+  return isCurvedLine(line) ? line.curveType || 'LINE' : 'LINE';
 }
 
 function getLineStartFeature(line: LatheLine): EdgeFeature | null {
-  if (isStraightLine(line)) return line[5];
-  if (isCurvedLine(line)) return line[8];
+  if (isStraightLine(line)) return line.startFeature;
+  if (isCurvedLine(line)) return line.startFeature;
   return null;
 }
 
 function getLineEndFeature(line: LatheLine): EdgeFeature | null {
-  if (isStraightLine(line)) return line[6];
-  if (isCurvedLine(line)) return line[9];
+  if (isStraightLine(line)) return line.endFeature;
+  if (isCurvedLine(line)) return line.endFeature;
   return null;
 }
 
 function normalizeEdgeFeature(feature: EdgeFeature | null): EdgeFeature | null {
-  return feature && feature[1] > 0 ? feature : null;
+  return feature && feature.value > 0 ? feature : null;
 }
 
 function appendSegments(result: Segment[], segments: Segment[]): void {
@@ -1011,13 +987,13 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function isStraightLine(line: LatheLine): line is StraightLine {
-  return line[2] === 'D' || line[2] === 'R';
+  return line.kind === 'straight';
 }
 
 function isCurvedLine(line: LatheLine): line is CurvedLine {
-  return line[2] === 'DS' || line[2] === 'RS';
+  return line.kind === 'curved';
 }
 
 function isPartingLine(line: LatheLine) {
-  return line.length === 3 || line[2] === 'D' && !line[3];
+  return line.kind === 'parting' || line.kind === 'straight' && line.sizeType === 'D' && !line.size;
 }

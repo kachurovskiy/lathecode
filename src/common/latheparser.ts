@@ -9,57 +9,135 @@ export type SegmentStartType = 'DS' | 'RS';
 export type SegmentEndType = 'DE' | 'RE';
 export type CurveType = 'CONV' | 'CONC';
 export type EdgeFeatureType = 'CH' | 'FI';
-export type CommentList = string[];
-export type NumericParam<Name extends string> = [Name, number];
+export type CommentList = readonly string[];
+
+export interface NumericParam<Name extends string> {
+  readonly name: Name;
+  readonly value: number;
+}
+
 export type EdgeFeature = NumericParam<EdgeFeatureType>;
 
-export type UnitsDirective = ['UNITS', null, UnitType, string];
-export type StockDirective = ['STOCK', null, [RadiusDiameterType, number, NumericParam<StockHoleType> | null, NumericParam<'A'> | null], string];
-export type ToolDirective = ['TOOL', null, ToolType, null, [
-  NumericParam<'R'> | null,
-  NumericParam<'L'> | null,
-  NumericParam<'H'> | null,
-  NumericParam<'A'> | null,
-  NumericParam<'NA'> | null,
-], string];
-export type DepthDirective = ['DEPTH', null, [
-  NumericParam<'CUT'> | null,
-  NumericParam<'FINISH'> | null,
-], string];
-export type FeedDirective = ['FEED', null, [
-  NumericParam<'MOVE'> | null,
-  NumericParam<'PASS'> | null,
-  NumericParam<'PART'> | null,
-], string];
-export type ModeDirective = ['MODE', null, ModeType, string];
-export type AxesDirective = ['AXES', null, [ZDirection, null, XDirection], string];
+export interface UnitsDirective {
+  readonly keyword: 'UNITS';
+  readonly unit: UnitType;
+  readonly comment: string;
+}
 
-export type PartingLine = ['L', number, string];
-export type StraightLine = ['L', number, RadiusDiameterType, number, string, EdgeFeature | null, EdgeFeature | null];
-export type CurvedLine = ['L', number, SegmentStartType, number, SegmentEndType, number, CurveType | null, string, EdgeFeature | null, EdgeFeature | null];
+export interface StockDirective {
+  readonly keyword: 'STOCK';
+  readonly sizeType: RadiusDiameterType;
+  readonly size: number;
+  readonly hole: NumericParam<StockHoleType> | null;
+  readonly allowance: NumericParam<'A'> | null;
+  readonly comment: string;
+}
+
+export interface ToolDirective {
+  readonly keyword: 'TOOL';
+  readonly type: ToolType;
+  readonly radius: NumericParam<'R'> | null;
+  readonly length: NumericParam<'L'> | null;
+  readonly height: NumericParam<'H'> | null;
+  readonly angle: NumericParam<'A'> | null;
+  readonly noseAngle: NumericParam<'NA'> | null;
+  readonly comment: string;
+}
+
+export interface DepthDirective {
+  readonly keyword: 'DEPTH';
+  readonly cut: NumericParam<'CUT'> | null;
+  readonly finish: NumericParam<'FINISH'> | null;
+  readonly comment: string;
+}
+
+export interface FeedDirective {
+  readonly keyword: 'FEED';
+  readonly move: NumericParam<'MOVE'> | null;
+  readonly pass: NumericParam<'PASS'> | null;
+  readonly part: NumericParam<'PART'> | null;
+  readonly comment: string;
+}
+
+export interface ModeDirective {
+  readonly keyword: 'MODE';
+  readonly mode: ModeType;
+  readonly comment: string;
+}
+
+export interface AxesDirective {
+  readonly keyword: 'AXES';
+  readonly zDirection: ZDirection;
+  readonly xDirection: XDirection;
+  readonly comment: string;
+}
+
+export interface InsideDirective {
+  readonly keyword: 'INSIDE';
+  readonly comment: string;
+}
+
+export interface PartingLine {
+  readonly kind: 'parting';
+  readonly length: number;
+  readonly comment: string;
+}
+
+export interface StraightLine {
+  readonly kind: 'straight';
+  readonly length: number;
+  readonly sizeType: RadiusDiameterType;
+  readonly size: number;
+  readonly comment: string;
+  readonly startFeature: EdgeFeature | null;
+  readonly endFeature: EdgeFeature | null;
+}
+
+export interface CurvedLine {
+  readonly kind: 'curved';
+  readonly length: number;
+  readonly startType: SegmentStartType;
+  readonly start: number;
+  readonly endType: SegmentEndType;
+  readonly end: number;
+  readonly curveType: CurveType | null;
+  readonly comment: string;
+  readonly startFeature: EdgeFeature | null;
+  readonly endFeature: EdgeFeature | null;
+}
+
 export type LatheLine = PartingLine | StraightLine | CurvedLine;
-export type LatheEntry = [CommentList, LatheLine];
-export type InsideBlock = [CommentList, ['INSIDE', string], LatheEntry[]];
 
-export type ParserData = [
-  CommentList,
-  UnitsDirective | null,
-  CommentList,
-  StockDirective | null,
-  CommentList,
-  ToolDirective | null,
-  CommentList,
-  DepthDirective | null,
-  CommentList,
-  FeedDirective | null,
-  CommentList,
-  ModeDirective | null,
-  CommentList,
-  AxesDirective | null,
-  LatheEntry[],
-  InsideBlock | null,
-  CommentList,
-];
+export interface LatheEntry {
+  readonly comments: CommentList;
+  readonly line: LatheLine;
+}
+
+export interface InsideBlock {
+  readonly comments: CommentList;
+  readonly directive: InsideDirective;
+  readonly entries: readonly LatheEntry[];
+}
+
+export interface ParserData {
+  readonly leadingComments: CommentList;
+  readonly units: UnitsDirective | null;
+  readonly afterUnitsComments: CommentList;
+  readonly stock: StockDirective | null;
+  readonly afterStockComments: CommentList;
+  readonly tool: ToolDirective | null;
+  readonly afterToolComments: CommentList;
+  readonly depth: DepthDirective | null;
+  readonly afterDepthComments: CommentList;
+  readonly feed: FeedDirective | null;
+  readonly afterFeedComments: CommentList;
+  readonly mode: ModeDirective | null;
+  readonly afterModeComments: CommentList;
+  readonly axes: AxesDirective | null;
+  readonly outside: readonly LatheEntry[];
+  readonly inside: InsideBlock | null;
+  readonly trailingComments: CommentList;
+}
 
 export class LatheCodeSyntaxError extends Error {
   constructor(message: string, readonly line: number, readonly column: number) {
@@ -103,7 +181,7 @@ class LatheCodeParser {
       this.fail(`Unexpected line "${this.lines[this.lineIndex]}"`);
     }
 
-    return [
+    return {
       leadingComments,
       units,
       afterUnitsComments,
@@ -121,7 +199,7 @@ class LatheCodeParser {
       outside,
       inside,
       trailingComments,
-    ];
+    };
   }
 
   private takeOptionalDirective<T>(keyword: string, parseDirective: (line: string, lineNumber: number) => T): T | null {
@@ -140,7 +218,7 @@ class LatheCodeParser {
         this.lineIndex = startIndex;
         break;
       }
-      entries.push([comments, parseLathe(this.lines[this.lineIndex], this.lineIndex + 1)]);
+      entries.push({comments, line: parseLathe(this.lines[this.lineIndex], this.lineIndex + 1)});
       this.lineIndex++;
     }
     return entries;
@@ -160,11 +238,11 @@ class LatheCodeParser {
     if (!entries.length) {
       this.fail('Expected lathe line after INSIDE');
     }
-    return [comments, inside, entries];
+    return {comments, directive: inside, entries};
   }
 
   private takeComments(): CommentList {
-    const comments: CommentList = [];
+    const comments: string[] = [];
     while (!this.isDone() && isCommentLine(this.lines[this.lineIndex])) {
       comments.push(commentText(this.lines[this.lineIndex]));
       this.lineIndex++;
@@ -222,7 +300,7 @@ class LineCursor {
   maybeParam<Name extends string>(name: Name): NumericParam<Name> | null {
     if (!this.line.startsWith(name, this.position)) return null;
     this.literal(name);
-    return [name, this.float()];
+    return {name, value: this.float()};
   }
 
   maybeCurveType(): CurveType | null {
@@ -233,7 +311,7 @@ class LineCursor {
   maybeEdgeFeature(): EdgeFeature | null {
     if (!this.line.startsWith('CH', this.position) && !this.line.startsWith('FI', this.position)) return null;
     const type = this.oneOf(['CH', 'FI'] as const);
-    return [type, this.float()];
+    return {name: type, value: this.float()};
   }
 
   lineStartsWith(text: string): boolean {
@@ -260,99 +338,110 @@ class LineCursor {
 
 function parseUnits(line: string, lineNumber: number): UnitsDirective {
   const cursor = new LineCursor(line, lineNumber);
-  return [
-    cursor.literal('UNITS'),
-    cursor.spaces(),
-    cursor.oneOf(['MM', 'CM', 'M', 'FT', 'IN'] as const),
-    cursor.comment(),
-  ];
+  cursor.literal('UNITS');
+  cursor.spaces();
+  return {
+    keyword: 'UNITS',
+    unit: cursor.oneOf(['MM', 'CM', 'M', 'FT', 'IN'] as const),
+    comment: cursor.comment(),
+  };
 }
 
 function parseStock(line: string, lineNumber: number): StockDirective {
   const cursor = new LineCursor(line, lineNumber);
   cursor.literal('STOCK');
-  const spaces = cursor.spaces();
+  cursor.spaces();
   const sizeType = cursor.oneOf(['R', 'D'] as const);
   const size = cursor.float();
   const hole = cursor.lineStartsWith('ID') || cursor.lineStartsWith('IR')
-    ? [cursor.oneOf(['ID', 'IR'] as const), cursor.float()] as NumericParam<StockHoleType>
+    ? {name: cursor.oneOf(['ID', 'IR'] as const), value: cursor.float()} as NumericParam<StockHoleType>
     : null;
   const allowance = cursor.maybeParam('A');
-  return ['STOCK', spaces, [sizeType, size, hole, allowance], cursor.comment()];
+  return {
+    keyword: 'STOCK',
+    sizeType,
+    size,
+    hole,
+    allowance,
+    comment: cursor.comment(),
+  };
 }
 
 function parseTool(line: string, lineNumber: number): ToolDirective {
   const cursor = new LineCursor(line, lineNumber);
-  return [
-    cursor.literal('TOOL'),
-    cursor.spaces(),
-    cursor.oneOf(['RECT', 'ROUND', 'ANG'] as const),
-    cursor.spaces(),
-    [
-      cursor.maybeParam('R'),
-      cursor.maybeParam('L'),
-      cursor.maybeParam('H'),
-      cursor.maybeParam('A'),
-      cursor.maybeParam('NA'),
-    ],
-    cursor.comment(),
-  ];
+  cursor.literal('TOOL');
+  cursor.spaces();
+  const type = cursor.oneOf(['RECT', 'ROUND', 'ANG'] as const);
+  cursor.spaces();
+  return {
+    keyword: 'TOOL',
+    type,
+    radius: cursor.maybeParam('R'),
+    length: cursor.maybeParam('L'),
+    height: cursor.maybeParam('H'),
+    angle: cursor.maybeParam('A'),
+    noseAngle: cursor.maybeParam('NA'),
+    comment: cursor.comment(),
+  };
 }
 
 function parseDepth(line: string, lineNumber: number): DepthDirective {
   const cursor = new LineCursor(line, lineNumber);
-  return [
-    cursor.literal('DEPTH'),
-    cursor.spaces(),
-    [
-      cursor.maybeParam('CUT'),
-      cursor.maybeParam('FINISH'),
-    ],
-    cursor.comment(),
-  ];
+  cursor.literal('DEPTH');
+  cursor.spaces();
+  return {
+    keyword: 'DEPTH',
+    cut: cursor.maybeParam('CUT'),
+    finish: cursor.maybeParam('FINISH'),
+    comment: cursor.comment(),
+  };
 }
 
 function parseFeed(line: string, lineNumber: number): FeedDirective {
   const cursor = new LineCursor(line, lineNumber);
-  return [
-    cursor.literal('FEED'),
-    cursor.spaces(),
-    [
-      cursor.maybeParam('MOVE'),
-      cursor.maybeParam('PASS'),
-      cursor.maybeParam('PART'),
-    ],
-    cursor.comment(),
-  ];
+  cursor.literal('FEED');
+  cursor.spaces();
+  return {
+    keyword: 'FEED',
+    move: cursor.maybeParam('MOVE'),
+    pass: cursor.maybeParam('PASS'),
+    part: cursor.maybeParam('PART'),
+    comment: cursor.comment(),
+  };
 }
 
 function parseMode(line: string, lineNumber: number): ModeDirective {
   const cursor = new LineCursor(line, lineNumber);
-  return [
-    cursor.literal('MODE'),
-    cursor.spaces(),
-    cursor.oneOf(['FACE', 'TURN'] as const),
-    cursor.comment(),
-  ];
+  cursor.literal('MODE');
+  cursor.spaces();
+  return {
+    keyword: 'MODE',
+    mode: cursor.oneOf(['FACE', 'TURN'] as const),
+    comment: cursor.comment(),
+  };
 }
 
 function parseAxes(line: string, lineNumber: number): AxesDirective {
   const cursor = new LineCursor(line, lineNumber);
-  return [
-    cursor.literal('AXES'),
-    cursor.spaces(),
-    [
-      cursor.oneOf(['LEFT', 'RIGHT'] as const),
-      cursor.spaces(),
-      cursor.oneOf(['UP', 'DOWN'] as const),
-    ],
-    cursor.comment(),
-  ];
+  cursor.literal('AXES');
+  cursor.spaces();
+  const zDirection = cursor.oneOf(['LEFT', 'RIGHT'] as const);
+  cursor.spaces();
+  return {
+    keyword: 'AXES',
+    zDirection,
+    xDirection: cursor.oneOf(['UP', 'DOWN'] as const),
+    comment: cursor.comment(),
+  };
 }
 
-function parseInside(line: string, lineNumber: number): ['INSIDE', string] {
+function parseInside(line: string, lineNumber: number): InsideDirective {
   const cursor = new LineCursor(line, lineNumber);
-  return [cursor.literal('INSIDE'), cursor.comment()];
+  cursor.literal('INSIDE');
+  return {
+    keyword: 'INSIDE',
+    comment: cursor.comment(),
+  };
 }
 
 function parseLathe(line: string, lineNumber: number): LatheLine {
@@ -363,28 +452,33 @@ function parseLathe(line: string, lineNumber: number): LatheLine {
 }
 
 function parsePartingLine(cursor: LineCursor): PartingLine {
-  return [cursor.literal('L'), cursor.float(), cursor.comment()];
+  cursor.literal('L');
+  return {
+    kind: 'parting',
+    length: cursor.float(),
+    comment: cursor.comment(),
+  };
 }
 
 function parseStraightLine(cursor: LineCursor): StraightLine {
-  const lineType = cursor.literal('L');
+  cursor.literal('L');
   const length = cursor.float();
   const sizeType = cursor.oneOf(['D', 'R'] as const);
   const size = cursor.float();
   const feature = cursor.maybeEdgeFeature();
-  return [
-    lineType,
+  return {
+    kind: 'straight',
     length,
     sizeType,
     size,
-    cursor.comment(),
-    feature,
-    feature,
-  ];
+    comment: cursor.comment(),
+    startFeature: feature,
+    endFeature: feature,
+  };
 }
 
 function parseCurvedLine(cursor: LineCursor): CurvedLine {
-  const lineType = cursor.literal('L');
+  cursor.literal('L');
   const length = cursor.float();
   const startType = cursor.oneOf(['DS', 'RS'] as const);
   const start = cursor.float();
@@ -393,18 +487,18 @@ function parseCurvedLine(cursor: LineCursor): CurvedLine {
   const end = cursor.float();
   const endFeature = cursor.maybeEdgeFeature();
   const curveType = cursor.maybeCurveType();
-  return [
-    lineType,
+  return {
+    kind: 'curved',
     length,
     startType,
     start,
     endType,
     end,
     curveType,
-    cursor.comment(),
+    comment: cursor.comment(),
     startFeature,
     endFeature,
-  ];
+  };
 }
 
 function tryParseLatheVariant<T extends LatheLine>(line: string, lineNumber: number, parseVariant: (cursor: LineCursor) => T): T | null {
