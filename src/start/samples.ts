@@ -617,22 +617,6 @@ L7 DS22 DE28 CONV
 L4 D30`,
       },
       {
-        id: 'b-spline-sampler',
-        title: 'B-Spline Sampler',
-        description: 'A smooth freeform profile controlled by interior diameter guide values instead of circular arcs.',
-        text: `; B-Spline Sampler
-
-STOCK D32
-TOOL ROUND R3
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-MODE TURN
-
-L3 D10
-L24 DS10 DE22 BSPLINE D14 D26 D18 D28
-L4 D28 CH0.5`,
-      },
-      {
         id: 'concave-convex-wave',
         title: 'Concave/Convex Wave',
         description: 'Alternating inward and outward arcs that make curve direction differences obvious.',
@@ -727,6 +711,189 @@ L0.08 D0.36
 L0.24 D0.68
 L0.16 D0.88
 L0.08 D0.88`,
+      },
+    ],
+  },
+  {
+    id: 'spline-profiles',
+    title: 'Spline Profiles',
+    description: 'Smooth B-spline profiles for useful handles, stoppers, knobs, feet, and nozzle blanks where circular arcs would be too stiff.',
+    samples: [
+      {
+        id: 'b-spline-sampler',
+        title: 'B-Spline Sampler',
+        description: 'A compact reference shape controlled by interior diameter guide values instead of circular arcs.',
+        text: `; B-Spline Sampler
+
+STOCK D32
+TOOL ROUND R3
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L3 D10
+L24 DS10 DE22 BSPLINE D14 D26 D18 D28
+L4 D28 CH0.5`,
+      },
+      {
+        id: 'ergonomic-file-handle',
+        title: 'Ergonomic File Handle',
+        description: 'Smooth handle blank with a narrow tang end, palm swell, and larger chuck-side shoulder.',
+        text: `; Ergonomic File Handle
+
+STOCK D36
+TOOL ROUND R3
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L5 D12
+L26 DS12 DE28 BSPLINE D18 D32 D24 D30
+L5 D34 CH0.5`,
+      },
+      {
+        id: 'bottle-stopper-spline',
+        title: 'Bottle-Stopper Spline',
+        description: 'Useful stopper blank with a gentle plug taper and a smooth rounded grip cap.',
+        text: `; Bottle-Stopper Spline
+
+STOCK D34
+TOOL ROUND R2.5
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L8 DS12 DE20 BSPLINE D13 D16 D18 D20
+L10 DS20 DE30 BSPLINE D26 D32 D28
+L4 D32 CH0.5`,
+      },
+      {
+        id: 'soft-bumper-button-spline',
+        title: 'Soft Bumper Button',
+        description: 'Domed bumper or foot shape with a small locating neck and broad rounded contact face.',
+        text: `; Soft Bumper Button
+
+STOCK D32
+TOOL ROUND R2.5
+DEPTH CUT0.4 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L2 D8
+L14 DS8 DE24 BSPLINE D16 D30 D22
+L5 D28 CH0.5`,
+      },
+      {
+        id: 'hantel-dumbbell-spline',
+        title: 'Hantel / Dumbbell Profile',
+        description: 'Long dumbbell-like turning with two rounded end masses, a long waisted grip, and a heavier chuck-side knob.',
+        text: `; Hantel / Dumbbell Profile
+
+STOCK D40
+TOOL ROUND R3
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L5 DS30 CH0.4 DE30 CH0
+L10 DS30 DE16 BSPLINE D34 D28 D20
+L18 DS16 DE18 BSPLINE D13 D12 D20 D14
+L10 DS18 DE34 BSPLINE D22 D30 D36
+L5 D36 CH0.5`,
+      },
+      {
+        id: 'cucumber-spline',
+        title: 'Cucumber Spline',
+        description: 'Long gently uneven cylinder with rounded ends, small organic diameter changes, and a supported chuck-side cap.',
+        text: `; Cucumber Spline
+
+STOCK D32
+TOOL ROUND R2.5
+DEPTH CUT0.4 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L5 DS8 DE22 BSPLINE D12 D18 D24
+L20 DS22 DE25 BSPLINE D27 D23 D26 D24
+L20 DS25 DE23 BSPLINE D22 D28 D24 D27
+L8 DS23 DE28 BSPLINE D25 D30 D27
+L4 D30 CH0.4`,
+      },
+      {
+        id: 'pear-spline',
+        title: 'Pear Spline',
+        description: 'Long pear-like silhouette with a small neck, broad lower belly, and a short chuck-side foot.',
+        text: `; Pear Spline
+
+STOCK D42
+TOOL ROUND R3
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L3 D8
+L10 DS8 DE18 BSPLINE D9 D12 D16
+L18 DS18 DE36 BSPLINE D24 D38 D40 D34
+L8 DS36 DE30 BSPLINE D40 D34 D30
+L5 D36 CH0.5`,
+      },
+      {
+        id: 'torus-donut-ring-spline',
+        title: 'Torus / Donut Ring',
+        description: 'Short bored ring with a rounded doughnut-like outside profile and straight through-hole.',
+        text: `; Torus / Donut Ring
+
+STOCK D36 ID10
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE190 PASS38 PART9
+
+L2 D20
+L10 DS20 DE20 BSPLINE D28 D34 D28
+L2 D22
+
+INSIDE
+L14 D12`,
+      },
+      {
+        id: 'spline-nozzle-blank',
+        title: 'Spline Nozzle Blank',
+        description: 'Outside bell and internal flow passage shaped with splines for a compact nozzle-style blank.',
+        text: `; Spline Nozzle Blank
+
+STOCK D34 ID8
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE190 PASS38 PART9
+
+L4 D16
+L18 DS16 DE28 BSPLINE D18 D24 D30 D26
+L8 D30
+
+INSIDE
+L6 D12
+L20 DS12 DE20 BSPLINE D14 D18 D22 D18
+L4 D20`,
+      },
+      {
+        id: 'bellmouth-bushing-spline',
+        title: 'Bellmouth Bushing',
+        description: 'Through-bored bushing with a smooth flared entry and a heavier chuck-side flange.',
+        text: `; Bellmouth Bushing
+
+STOCK D36 ID10
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE190 PASS38 PART9
+
+L6 D22
+L18 DS22 DE30 BSPLINE D24 D34 D28 D32
+L6 D34
+
+INSIDE
+L8 D20
+L12 DS20 DE12 BSPLINE D18 D14 D12
+L10 D12`,
       },
     ],
   },
