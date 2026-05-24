@@ -56,6 +56,7 @@ Lathecode syntax:
 - Numeric parameter names and values are joined with no space: write CUT1, FINISH0.2, MOVE100, R5, L10, DS5, RE10, CH0.5, FI0.5. Do not write CUT 1, MOVE 100, R 5, CH 0.5, or L 10.
 - A bare L<length> line is a parting or cutoff-width line.
 - INSIDE begins an internal/bore profile. Inside profile radii must stay inside the outside profile and stock.
+- For closed-bottom hollow parts such as glasses, cups, and vases, make the outside profile extend through the full part length, but stop the INSIDE profile at the cavity depth where the solid bottom begins. A shorter inside profile is inferred as a closed bottom: solid stock closes to D0, and tube stock closes to the stock ID. Do not continue the bore through the bottom unless the request asks for a through-hole.
 - Keep all lengths positive. Keep outside radii at or below stock radius. Make stock large enough for the whole part.
 - Choose realistic default tooling when unspecified, for example TOOL RECT R0.2 L2 for simple stepped/tapered work or TOOL ROUND R3 for outside concave forms.
 - Prefer concise assumption comments when source dimensions are incomplete.`;

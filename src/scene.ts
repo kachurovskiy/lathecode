@@ -188,8 +188,8 @@ function createLatheMesh(latheCode: LatheCode, options: LatheRenderOptions = {})
 }
 
 function createCombinedLatheMesh(latheCode: LatheCode, options: LatheRenderOptions = {}): THREE.Object3D {
-  const outside = segmentsToVectors(latheCode.getOutsideProfileSegments());
-  const inside = segmentsToVectors(latheCode.getInsideProfileSegments());
+  const outside = segmentsToVectors(latheCode.getOutsidePartProfileSegments());
+  const inside = segmentsToVectors(latheCode.getInsidePartProfileSegments());
   if (outside.length < 2 || inside.length < 2) throw new Error('Unable to build combined inside/outside profile');
 
   const profile = removeConsecutiveVectorDuplicates([

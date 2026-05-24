@@ -18,6 +18,17 @@ describe('3D scene rendering', () => {
 
     expect(geometry.parameters.phiLength).toBeCloseTo(Math.PI * 1.5);
   });
+
+  it('does not include outside parting slots in mixed-profile mesh length', () => {
+    const geometry = getLatheGeometry(createLatheRenderObjects(
+      new LatheCode('STOCK D12\nTOOL RECT R0.2 L2\nL5 R5\nL2\nINSIDE\nL5 R3'),
+    ).latheMesh);
+    geometry.computeBoundingBox();
+    const size = new THREE.Vector3();
+    geometry.boundingBox!.getSize(size);
+
+    expect(size.y).toBeCloseTo(5);
+  });
 });
 
 function getLatheGeometry(object: THREE.Object3D): THREE.LatheGeometry {

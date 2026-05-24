@@ -313,14 +313,33 @@ describe('Editor', () => {
     expect(partingButton.textContent).toBe('Add parting');
   });
 
-  it('adds outside parting before an inside profile', () => {
+  it('adds and removes outside parting before an inside profile', async () => {
     const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4\nINSIDE\nL5 R2');
+    const editor = new Editor(container);
+    const planned: string[] = [];
+    editor.addEventListener('plan', event => {
+      planned.push((event as PlanEvent).latheCode.getText());
+    });
 
-    new Editor(container);
-    container.querySelector<HTMLButtonElement>('.partingButton')!.click();
+    const partingButton = container.querySelector<HTMLButtonElement>('.partingButton')!;
+    partingButton.click();
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
       .toBe('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4\nL2\nINSIDE\nL5 R2');
+    expect(partingButton.textContent).toBe('Remove parting');
+
+    container.querySelector<HTMLButtonElement>('.insidePlanButton')!.click();
+    container.querySelector<HTMLButtonElement>('.outsidePlanButton')!.click();
+    await waitForAsyncClick();
+    expect(planned).toEqual([
+      'STOCK D10\nTOOL RECT R0.2 L2\nINSIDE\nL5 R2',
+      'STOCK D10\nTOOL RECT R0.2 L2\nL5 R4\nL2',
+    ]);
+
+    partingButton.click();
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4\nINSIDE\nL5 R2');
+    expect(partingButton.textContent).toBe('Add parting');
   });
 
   it('uses current units for the parting line length', () => {

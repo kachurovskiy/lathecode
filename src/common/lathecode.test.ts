@@ -245,6 +245,25 @@ L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsideProfileSegments();
     expect(latheCode.getSingleProfile()).toBeNull();
   });
 
+  it('extends shorter mixed profiles to the side-specific default boundary', () => {
+    const insideShort = new LatheCode('STOCK D12\nL4 R5\nINSIDE\nL2 R3');
+    expect(pointsToString(insideShort.getInsideProfileSegments())).toBe('LINE:3,0-3,2 LINE:3,2-0,2 LINE:0,2-0,4');
+    expect(pointsToString(insideShort.getInsideSegments())).toBe('LINE:6,4-6,0 LINE:6,0-3,0 LINE:3,0-3,2 LINE:3,2-0,2 LINE:0,2-0,4 LINE:0,4-6,4');
+    expect(insideShort.getStock()?.length).toBe(4);
+
+    const outsideShort = new LatheCode('STOCK D12\nL2 R5\nINSIDE\nL4 R3');
+    expect(pointsToString(outsideShort.getOutsideProfileSegments())).toBe('LINE:5,0-5,4');
+    expect(pointsToString(outsideShort.getOutsideSegments())).toBe('LINE:0,4-0,0 LINE:0,0-5,0 LINE:5,0-5,4 LINE:5,4-0,4');
+    expect(outsideShort.getStock()?.length).toBe(4);
+  });
+
+  it('extends mixed profiles while preserving inferred stock diameter', () => {
+    const latheCode = new LatheCode('L4 R5\nINSIDE\nL2 R3');
+
+    expect(latheCode.getStock()).toEqual({diameter: 10, length: 4, innerDiameter: 0});
+    expect(pointsToString(latheCode.getInsideSegments())).toBe('LINE:5,4-5,0 LINE:5,0-3,0 LINE:3,0-3,2 LINE:3,2-0,2 LINE:0,2-0,4 LINE:0,4-5,4');
+  });
+
   it('creates outside-only lathecode from a mixed profile', () => {
     const latheCode = new LatheCode('STOCK D10\nTOOL RECT R0.2 L2\nL2 R4\nINSIDE\nL2 R2');
 
@@ -261,6 +280,41 @@ L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsideProfileSegments();
     const latheCode = new LatheCode('STOCK D10\nTOOL RECT R0.2 L2\nL2 R4\nINSIDE\nL2 R2');
 
     expect(latheCode.getLatheCodeForProfile('inside')?.getText()).toBe('STOCK D10\nTOOL RECT R0.2 L2\nINSIDE\nL2 R2');
+  });
+
+  it('extends shorter profile-specific lathecode split from a mixed profile', () => {
+    const outsideShort = new LatheCode('STOCK D12\nL2 D10\nINSIDE\nL4 D6');
+    expect(outsideShort.getLatheCodeForProfile('outside')?.getText()).toBe('STOCK D12\nL2 D10\nL2 D10');
+    expect(outsideShort.getLatheCodeForProfile('inside')?.getText()).toBe('STOCK D12\nINSIDE\nL4 D6');
+
+    const insideShort = new LatheCode('STOCK D12\nL4 R5\nINSIDE\nL2 R3');
+    expect(insideShort.getLatheCodeForProfile('outside')?.getText()).toBe('STOCK D12\nL4 R5');
+    expect(insideShort.getLatheCodeForProfile('inside')?.getText()).toBe('STOCK D12\nINSIDE\nL2 R3\nL2 D0');
+  });
+
+  it('forms a mixed-profile bottom by extending a shorter inside profile to centerline', () => {
+    const latheCode = new LatheCode('STOCK D60\nL10 D60\nINSIDE\nL8 D50');
+
+    expect(pointsToString(latheCode.getInsideProfileSegments())).toBe('LINE:25,0-25,8 LINE:25,8-0,8 LINE:0,8-0,10');
+    expect(latheCode.getLatheCodeForProfile('inside')?.getText()).toBe('STOCK D60\nINSIDE\nL8 D50\nL2 D0');
+  });
+
+  it('extends shorter inside profiles to the stock ID when tube stock has a through-hole', () => {
+    const latheCode = new LatheCode('STOCK D60 ID10\nL10 D60\nINSIDE\nL8 D50');
+
+    expect(pointsToString(latheCode.getInsideProfileSegments())).toBe('LINE:25,0-25,8 LINE:25,8-5,8 LINE:5,8-5,10');
+    expect(latheCode.getLatheCodeForProfile('inside')?.getText()).toBe('STOCK D60 ID10\nINSIDE\nL8 D50\nL2 D10');
+  });
+
+  it('does not extend mixed profiles through trailing parting moves', () => {
+    const latheCode = new LatheCode('STOCK D12\nTOOL RECT R0.2 L2\nL5 R5\nL2\nINSIDE\nL5 R3');
+
+    expect(pointsToString(latheCode.getOutsideProfileSegments())).toBe('LINE:5,0-5,5 LINE:5,5-0,5 LINE:0,5-0,7');
+    expect(pointsToString(latheCode.getInsideProfileSegments())).toBe('LINE:3,0-3,5');
+    expect(pointsToString(latheCode.getOutsidePartProfileSegments())).toBe('LINE:5,0-5,5');
+    expect(pointsToString(latheCode.getInsidePartProfileSegments())).toBe('LINE:3,0-3,5');
+    expect(latheCode.getLatheCodeForProfile('outside')?.getText()).toBe('STOCK D12\nTOOL RECT R0.2 L2\nL5 R5\nL2');
+    expect(latheCode.getLatheCodeForProfile('inside')?.getText()).toBe('STOCK D12\nTOOL RECT R0.2 L2\nINSIDE\nL5 R3');
   });
 
   it('getCutoffStarts empty', () => {

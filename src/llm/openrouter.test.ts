@@ -108,6 +108,22 @@ L2 D10 CH 0.5`,
     expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
   });
 
+  it('tells the model how to make closed-bottom hollow parts', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D60\nL10 D60\nINSIDE\nL8 D50',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createLatheCodeFromPrompt('closed bottom glass');
+
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.messages[0].content).toContain('closed-bottom hollow parts');
+    expect(request.messages[0].content).toContain('stop the INSIDE profile at the cavity depth');
+    expect(request.messages[0].content).toContain('A shorter inside profile is inferred as a closed bottom');
+    expect(request.messages[0].content).toContain('solid stock closes to D0');
+    expect(request.messages[0].content).toContain('Do not continue the bore through the bottom');
+  });
+
   it('includes chamfer and fillet syntax in repair prompts', async () => {
     const fetchMock = mockOpenRouterResponses([
       'STOCK D10\nL2 D10 BAD',

@@ -166,10 +166,13 @@ type Vector = {
   z: number;
 };
 
+type ProfileSizeType = 'D' | 'R';
+
 export class LatheCode {
   private data: ParserData;
   private unitsMultiplier = 1;
   private outsideMaxRadius = 0;
+  private commonMaterialEndZ = 0;
   private outside: Segment[];
   private outsideSegments: Segment[];
   private inside: Segment[];
@@ -180,9 +183,13 @@ export class LatheCode {
     this.unitsMultiplier = this.data.units ? UNITS[this.data.units.unit] : 1;
     // console.log('this.data', this.data);
     const stockInnerRadius = this.getStockInnerDiameter() / 2;
-    this.outside = this.getSegmentsForSide(this.data.outside, stockInnerRadius);
-    this.outsideMaxRadius = this.outside.length ? Math.max(...this.outside.flatMap(segmentRadii)) : 0;
-    this.inside = this.data.inside ? this.getSegmentsForSide(this.data.inside.entries, this.getStockDiameter() / 2) : [];
+    const outside = this.getSegmentsForSide(this.data.outside, stockInnerRadius);
+    this.outsideMaxRadius = outside.length ? Math.max(...outside.flatMap(segmentRadii)) : 0;
+    const inside = this.data.inside ? this.getSegmentsForSide(this.data.inside.entries, this.getStockDiameter() / 2) : [];
+    const outsideMaterialEndZ = getProfileMaterialEndZ(this.data.outside, this.unitsMultiplier);
+    const insideMaterialEndZ = this.data.inside ? getProfileMaterialEndZ(this.data.inside.entries, this.unitsMultiplier) : 0;
+    this.commonMaterialEndZ = Math.max(outsideMaterialEndZ, insideMaterialEndZ);
+    [this.outside, this.inside] = extendMixedProfilesToCommonEnd(outside, inside, this.commonMaterialEndZ, stockInnerRadius);
     this.outsideSegments = this.closeLoop(this.outside, stockInnerRadius);
     this.insideSegments = this.getStockDiameter() > 0 ? this.closeLoop(this.inside, this.getStockDiameter() / 2) : [];
     this.getStock(); // validate the stock
@@ -288,6 +295,11 @@ export class LatheCode {
     return this.outside.concat();
   }
 
+  /** Open outside part boundary, excluding trailing cutoff/parting moves. */
+  getOutsidePartProfileSegments(): Segment[] {
+    return truncateProfileToZ(this.outside, this.commonMaterialEndZ);
+  }
+
   /** Segments forming the part after inside cuts. */
   getInsideSegments(): Segment[] {
     return this.insideSegments.concat();
@@ -296,6 +308,11 @@ export class LatheCode {
   /** Open inside profile path before it is closed to the stock outer radius. */
   getInsideProfileSegments(): Segment[] {
     return this.inside.concat();
+  }
+
+  /** Open inside part boundary, excluding trailing cutoff/parting moves. */
+  getInsidePartProfileSegments(): Segment[] {
+    return truncateProfileToZ(this.inside, this.commonMaterialEndZ);
   }
 
   /** Explicitly named profiles present in this lathe code. */
@@ -323,6 +340,8 @@ export class LatheCode {
       lines.push(`INSIDE${formatComment(insideBlock?.directive.comment || '')}`);
     }
     lines.push(...entries.map(entry => latheLineToString(entry.line)));
+    const extensionLine = this.getProfileExtensionLine(side);
+    if (extensionLine) lines.push(extensionLine);
     return new LatheCode(lines.join('\n'));
   }
 
@@ -404,6 +423,32 @@ export class LatheCode {
     pushComments(this.data.afterModeComments);
     if (this.data.axes) lines.push(axesDirectiveToString(this.data.axes));
     return lines;
+  }
+
+  private getProfileExtensionLine(side: ProfileSide): string | null {
+    if (!this.data.outside.length || !this.data.inside?.entries.length) return null;
+    const entries = side === 'outside' ? this.data.outside : this.data.inside.entries;
+    const otherEntries = side === 'outside' ? this.data.inside.entries : this.data.outside;
+    const materialEndZ = getProfileMaterialEndZ(entries, this.unitsMultiplier);
+    const extraLengthMm = getProfileMaterialEndZ(otherEntries, this.unitsMultiplier)
+      - materialEndZ;
+    if (extraLengthMm <= EDGE_FEATURE_EPSILON) return null;
+
+    if (side === 'inside') {
+      const stockInnerDiameter = this.getStockInnerDiameter() / this.unitsMultiplier;
+      return `L${numberToString(extraLengthMm / this.unitsMultiplier)} D${numberToString(stockInnerDiameter)}`;
+    }
+
+    const sizeType = getProfileEndSizeType(entries);
+    if (!sizeType) return null;
+
+    const profile = side === 'outside' ? this.outside : this.inside;
+    const materialProfile = truncateProfileToZ(profile, materialEndZ);
+    const last = materialProfile.at(-1);
+    if (!last) return null;
+    const radius = last.end.x / this.unitsMultiplier;
+    const size = sizeType === 'D' ? radius * 2 : radius;
+    return `L${numberToString(extraLengthMm / this.unitsMultiplier)} ${sizeType}${numberToString(size)}`;
   }
 
   private closeLoop(mainSequence: Segment[], x: number): Segment[] {
@@ -683,6 +728,17 @@ function reverseEntries(entries: readonly LatheEntry[]): string[] {
   return entries.map(entry => reverseLine(entry.line)).reverse();
 }
 
+function getProfileEndSizeType(entries: readonly LatheEntry[]): ProfileSizeType | null {
+  for (const entry of [...entries].reverse()) {
+    const line = entry.line;
+    if (isPartingLine(line)) continue;
+    if (isStraightLine(line)) return line.sizeType;
+    if (isCurvedLine(line)) return line.endType === 'DE' ? 'D' : 'R';
+    if (isSplineLine(line)) return line.endType === 'DE' ? 'D' : 'R';
+  }
+  return null;
+}
+
 function insideDirectiveToString(directive: InsideDirective): string {
   return `INSIDE${formatComment(directive.comment)}`;
 }
@@ -743,8 +799,80 @@ function getProfileLineDimensions(entries: readonly LatheEntry[]): {maxRadius: n
   return maxRadius > 0 && materialLength > 0 ? {maxRadius, materialLength} : null;
 }
 
+function getProfileMaterialEndZ(entries: readonly LatheEntry[], unitsMultiplier: number): number {
+  let z = 0;
+  let endZ = 0;
+  for (const entry of entries) {
+    z += entry.line.length * unitsMultiplier;
+    if (!isPartingLine(entry.line)) endZ = z;
+  }
+  return endZ;
+}
+
 function getStockDirectiveDiameterInLatheUnits(directive: StockDirective): number {
   return directive.size * (directive.sizeType === 'D' ? 1 : 2);
+}
+
+function extendMixedProfilesToCommonEnd(
+  outside: Segment[],
+  inside: Segment[],
+  targetZ: number,
+  insideExtensionX: number,
+): [Segment[], Segment[]] {
+  if (!outside.length || !inside.length) return [outside, inside];
+  return [extendProfileToZ(outside, targetZ), extendInsideProfileToZ(inside, targetZ, insideExtensionX)];
+}
+
+function extendProfileToZ(profile: Segment[], targetZ: number): Segment[] {
+  const last = profile.at(-1);
+  if (!last || targetZ - last.end.z <= EDGE_FEATURE_EPSILON) return profile;
+  return removeColinearSegments([
+    ...profile,
+    new Segment('LINE', last.end, new Point(last.end.x, targetZ)),
+  ]);
+}
+
+function extendInsideProfileToZ(profile: Segment[], targetZ: number, extensionX: number): Segment[] {
+  const last = profile.at(-1);
+  if (!last || targetZ - last.end.z <= EDGE_FEATURE_EPSILON) return profile;
+  const extension = Math.abs(last.end.x - extensionX) <= EDGE_FEATURE_EPSILON
+    ? [new Segment('LINE', last.end, new Point(extensionX, targetZ))]
+    : [
+        new Segment('LINE', last.end, new Point(extensionX, last.end.z)),
+        new Segment('LINE', new Point(extensionX, last.end.z), new Point(extensionX, targetZ)),
+      ];
+  return removeColinearSegments([
+    ...profile,
+    ...extension,
+  ]);
+}
+
+function truncateProfileToZ(profile: Segment[], targetZ: number): Segment[] {
+  const result: Segment[] = [];
+  for (const segment of profile) {
+    if (segment.start.z > targetZ + EDGE_FEATURE_EPSILON) break;
+    if (segment.end.z > targetZ + EDGE_FEATURE_EPSILON) {
+      const trimmed = trimSegmentEndToZ(segment, targetZ);
+      if (trimmed) result.push(trimmed);
+      break;
+    }
+    if (Math.abs(segment.end.z - segment.start.z) <= EDGE_FEATURE_EPSILON
+      && segment.start.z >= targetZ - EDGE_FEATURE_EPSILON) break;
+    result.push(segment);
+  }
+  return result;
+}
+
+function trimSegmentEndToZ(segment: Segment, targetZ: number): Segment | null {
+  if (segment.type !== 'LINE') return null;
+  const span = segment.end.z - segment.start.z;
+  if (span <= EDGE_FEATURE_EPSILON) return null;
+  const ratio = (targetZ - segment.start.z) / span;
+  if (ratio <= EDGE_FEATURE_EPSILON || ratio >= 1) return null;
+  return new Segment('LINE', segment.start, new Point(
+    segment.start.x + (segment.end.x - segment.start.x) * ratio,
+    targetZ,
+  ));
 }
 
 function segmentRadii(segment: Segment): number[] {

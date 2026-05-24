@@ -137,8 +137,8 @@ function appendProfilePath(
 }
 
 function getPartLoops(latheCode: LatheCode): Point[][] {
-  const outside = segmentsToPoints(latheCode.getOutsideProfileSegments());
-  const inside = segmentsToPoints(latheCode.getInsideProfileSegments());
+  const outside = segmentsToPoints(latheCode.getOutsidePartProfileSegments());
+  const inside = segmentsToPoints(latheCode.getInsidePartProfileSegments());
   if (outside.length >= 2 && inside.length >= 2) {
     return [removeConsecutivePointDuplicates([
       inside[0],

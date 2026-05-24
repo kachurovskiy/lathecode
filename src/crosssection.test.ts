@@ -43,6 +43,17 @@ describe('CrossSection', () => {
     expect(container.querySelectorAll('.crossSectionInsideProfile').length).toBe(2);
   });
 
+  it('does not count an outside parting slot as mixed-profile part length', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const crossSection = new CrossSection(container);
+
+    crossSection.setLatheCode(new LatheCode('STOCK D12\nTOOL RECT R0.2 L2\nL5 R5\nL2\nINSIDE\nL5 R3'));
+
+    expect(container.querySelector('.crossSectionDimensions')?.textContent).toContain('L5mm');
+    expect(container.querySelector('.crossSectionDimensions')?.textContent).not.toContain('L7mm');
+  });
+
   it('renders convex arcs without folding back along the profile', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
