@@ -12,6 +12,130 @@ export type SampleSection = {
   samples: readonly SampleDefinition[];
 };
 
+type MorseTaperSize = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+type MorseTaperExtensionRow = {
+  outerMt: MorseTaperSize;
+  innerMt: MorseTaperSize;
+  bodyDiameterMm: number;
+  taperDiameterMm: number;
+  taperLengthMm: number;
+  bodyLengthMm: number;
+};
+
+const MORSE_TAPER_LARGE_DIAMETERS_MM: Record<MorseTaperSize, number> = {
+  1: 12.065,
+  2: 17.78,
+  3: 23.825,
+  4: 31.267,
+  5: 44.399,
+  6: 63.348,
+  7: 83.058,
+};
+
+const MORSE_TAPER_DIAMETER_SLOPES_MM_PER_MM: Record<MorseTaperSize, number> = {
+  1: 0.04988,
+  2: 0.04995,
+  3: 0.0502,
+  4: 0.0513,
+  5: 0.05239,
+  6: 0.05212,
+  7: 0.05205,
+};
+
+const MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM = 8.4;
+
+const MORSE_TAPER_EXTENSION_ROWS: readonly MorseTaperExtensionRow[] = [
+  {outerMt: 1, innerMt: 1, bodyDiameterMm: 20, taperDiameterMm: 12.065, taperLengthMm: 62, bodyLengthMm: 83},
+  {outerMt: 1, innerMt: 2, bodyDiameterMm: 30, taperDiameterMm: 12.065, taperLengthMm: 62, bodyLengthMm: 98},
+  {outerMt: 2, innerMt: 1, bodyDiameterMm: 20, taperDiameterMm: 17.78, taperLengthMm: 75, bodyLengthMm: 85},
+  {outerMt: 2, innerMt: 2, bodyDiameterMm: 30, taperDiameterMm: 17.78, taperLengthMm: 75, bodyLengthMm: 100},
+  {outerMt: 2, innerMt: 3, bodyDiameterMm: 36, taperDiameterMm: 17.78, taperLengthMm: 75, bodyLengthMm: 121},
+  {outerMt: 2, innerMt: 4, bodyDiameterMm: 48, taperDiameterMm: 17.78, taperLengthMm: 75, bodyLengthMm: 140},
+  {outerMt: 3, innerMt: 1, bodyDiameterMm: 20, taperDiameterMm: 23.825, taperLengthMm: 94, bodyLengthMm: 79},
+  {outerMt: 3, innerMt: 2, bodyDiameterMm: 30, taperDiameterMm: 23.825, taperLengthMm: 94, bodyLengthMm: 100},
+  {outerMt: 3, innerMt: 3, bodyDiameterMm: 36, taperDiameterMm: 23.825, taperLengthMm: 94, bodyLengthMm: 121},
+  {outerMt: 3, innerMt: 4, bodyDiameterMm: 48, taperDiameterMm: 23.825, taperLengthMm: 94, bodyLengthMm: 146},
+  {outerMt: 3, innerMt: 5, bodyDiameterMm: 63, taperDiameterMm: 23.825, taperLengthMm: 94, bodyLengthMm: 174},
+  {outerMt: 4, innerMt: 1, bodyDiameterMm: 20, taperDiameterMm: 31.267, taperLengthMm: 117.5, bodyLengthMm: 82.5},
+  {outerMt: 4, innerMt: 2, bodyDiameterMm: 30, taperDiameterMm: 31.267, taperLengthMm: 117.5, bodyLengthMm: 97.5},
+  {outerMt: 4, innerMt: 3, bodyDiameterMm: 36, taperDiameterMm: 31.267, taperLengthMm: 117.5, bodyLengthMm: 122.5},
+  {outerMt: 4, innerMt: 4, bodyDiameterMm: 48, taperDiameterMm: 31.267, taperLengthMm: 117.5, bodyLengthMm: 147.5},
+  {outerMt: 4, innerMt: 5, bodyDiameterMm: 63, taperDiameterMm: 31.267, taperLengthMm: 117.5, bodyLengthMm: 182.5},
+  {outerMt: 5, innerMt: 1, bodyDiameterMm: 20, taperDiameterMm: 44.399, taperLengthMm: 149.5, bodyLengthMm: 82.5},
+  {outerMt: 5, innerMt: 2, bodyDiameterMm: 30, taperDiameterMm: 44.399, taperLengthMm: 149.5, bodyLengthMm: 97.5},
+  {outerMt: 5, innerMt: 3, bodyDiameterMm: 36, taperDiameterMm: 44.399, taperLengthMm: 149.5, bodyLengthMm: 118.5},
+  {outerMt: 5, innerMt: 4, bodyDiameterMm: 48, taperDiameterMm: 44.399, taperLengthMm: 149.5, bodyLengthMm: 150.5},
+  {outerMt: 5, innerMt: 5, bodyDiameterMm: 63, taperDiameterMm: 44.399, taperLengthMm: 149.5, bodyLengthMm: 185.5},
+  {outerMt: 5, innerMt: 6, bodyDiameterMm: 83, taperDiameterMm: 44.399, taperLengthMm: 149.5, bodyLengthMm: 247.5},
+  {outerMt: 6, innerMt: 2, bodyDiameterMm: 30, taperDiameterMm: 63.348, taperLengthMm: 210, bodyLengthMm: 99},
+  {outerMt: 6, innerMt: 3, bodyDiameterMm: 36, taperDiameterMm: 63.348, taperLengthMm: 210, bodyLengthMm: 120},
+  {outerMt: 6, innerMt: 4, bodyDiameterMm: 48, taperDiameterMm: 63.348, taperLengthMm: 210, bodyLengthMm: 145},
+  {outerMt: 6, innerMt: 5, bodyDiameterMm: 61, taperDiameterMm: 63.348, taperLengthMm: 210, bodyLengthMm: 180},
+  {outerMt: 6, innerMt: 6, bodyDiameterMm: 83, taperDiameterMm: 63.348, taperLengthMm: 210, bodyLengthMm: 242},
+  {outerMt: 6, innerMt: 7, bodyDiameterMm: 105, taperDiameterMm: 63.348, taperLengthMm: 210, bodyLengthMm: 328},
+];
+
+function createMorseTaperExtensionSample(row: MorseTaperExtensionRow): SampleDefinition {
+  const title = `MT${row.outerMt} to MT${row.innerMt} Extension`;
+  const maxDiameter = Math.max(row.bodyDiameterMm, row.taperDiameterMm);
+  const stockDiameter = Math.ceil(maxDiameter + 4);
+  const cutDepth = maxDiameter >= 80 ? 1 : maxDiameter >= 50 ? 0.75 : 0.5;
+  const bodyOnChuckSide = row.bodyDiameterMm >= row.taperDiameterMm;
+  const socketReliefLength = Math.min(8, Math.max(4, row.bodyLengthMm * 0.06));
+  const socketLength = row.bodyLengthMm - socketReliefLength;
+  const outerSmallDiameter = getMorseTaperSmallDiameter(row.outerMt, row.taperDiameterMm, row.taperLengthMm, MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM + 0.6);
+  const innerLargeDiameter = MORSE_TAPER_LARGE_DIAMETERS_MM[row.innerMt];
+  const innerSmallDiameter = getMorseTaperSmallDiameter(row.innerMt, innerLargeDiameter, socketLength, MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM);
+  const outsideProfile = bodyOnChuckSide
+    ? [
+      `L${formatSampleNumber(row.taperLengthMm)} DS${formatSampleNumber(outerSmallDiameter)} DE${formatSampleNumber(row.taperDiameterMm)}`,
+      `L${formatSampleNumber(row.bodyLengthMm)} D${formatSampleNumber(row.bodyDiameterMm)}`,
+    ]
+    : [
+      `L${formatSampleNumber(row.bodyLengthMm)} D${formatSampleNumber(row.bodyDiameterMm)}`,
+      `L${formatSampleNumber(row.taperLengthMm)} DS${formatSampleNumber(outerSmallDiameter)} DE${formatSampleNumber(row.taperDiameterMm)}`,
+    ];
+  const insideProfile = bodyOnChuckSide
+    ? [
+      `L${formatSampleNumber(row.taperLengthMm)} D${formatSampleNumber(MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM)}`,
+      `L${formatSampleNumber(socketReliefLength)} D${formatSampleNumber(MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM)}`,
+      `L${formatSampleNumber(socketLength)} DS${formatSampleNumber(innerSmallDiameter)} DE${formatSampleNumber(innerLargeDiameter)}`,
+    ]
+    : [
+      `L${formatSampleNumber(socketLength)} DS${formatSampleNumber(innerLargeDiameter)} DE${formatSampleNumber(innerSmallDiameter)}`,
+      `L${formatSampleNumber(socketReliefLength)} D${formatSampleNumber(MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM)}`,
+      `L${formatSampleNumber(row.taperLengthMm)} D${formatSampleNumber(MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM)}`,
+    ];
+
+  return {
+    id: `mt${row.outerMt}-to-mt${row.innerMt}-extension`,
+    title,
+    description: `Morse extension with external MT${row.outerMt}, internal MT${row.innerMt}, table D${formatSampleNumber(row.bodyDiameterMm)}, D1 ${formatSampleNumber(row.taperDiameterMm)}, L ${formatSampleNumber(row.taperLengthMm)}, and L1 ${formatSampleNumber(row.bodyLengthMm)}.`,
+    text: `; ${title}
+
+STOCK D${formatSampleNumber(stockDiameter)} ID8
+TOOL ANG R0.15 L2.2 A120 NA55
+DEPTH CUT${formatSampleNumber(cutDepth)} FINISH0.1
+FEED MOVE190 PASS38 PART9
+
+${outsideProfile.join('\n')}
+
+INSIDE
+${insideProfile.join('\n')}`,
+  };
+}
+
+function getMorseTaperSmallDiameter(size: MorseTaperSize, largeDiameter: number, length: number, minimumDiameter: number): number {
+  return Math.max(minimumDiameter, largeDiameter - MORSE_TAPER_DIAMETER_SLOPES_MM_PER_MM[size] * length);
+}
+
+function formatSampleNumber(value: number): string {
+  const rounded = Math.round(value * 1000) / 1000;
+  if (Number.isInteger(rounded)) return rounded.toFixed(0);
+  return rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
 export const SAMPLE_SECTIONS: readonly SampleSection[] = [
   {
     id: 'start-here-tiny-wins',
@@ -2244,6 +2368,12 @@ L13 D26.992
 L158 DS26.992 DE31.267`,
       },
     ],
+  },
+  {
+    id: 'morse-taper-extensions',
+    title: 'Morse Taper Extensions',
+    description: 'Morse taper extension adapters matching the MT1-MT1 through MT6-MT7 table rows, with the listed body diameter, outer taper diameter, taper length, and socket body length.',
+    samples: MORSE_TAPER_EXTENSION_ROWS.map(createMorseTaperExtensionSample),
   },
   {
     id: 'f1-boring-head-adapters',
