@@ -30,6 +30,7 @@ Stock can also specify an existing internal through-hole with `ID` or `IR`. For 
 ## Cones
 
 Instead of specifying diameter as `D`, specify diameter-start as `DS` and diameter-end as `DE` - or use radii as `RS` and `RE`.
+For a cone with a known taper angle from the centerline, provide either the start or end dimension plus `A<degrees>`. Positive angles increase radius from the segment start to end; negative angles decrease it. Angle-defined cones may end at the centerline, but cannot cross it.
 
 ```
 ; specify start and end diameter or radius
@@ -38,6 +39,11 @@ DEPTH CUT1
 L80 DS14.9 DE17.78
 L2 DS17.78 DE15.733; spacer
 L24 DS15.733 DE14.5
+
+; equivalent cones using a centerline angle
+L80 DE17.78 A1.031
+L2 DS17.78 DE15.733; spacer
+L24 DS15.733 A-1.471
 ```
 
 ![image](https://github.com/kachurovskiy/lathecode/assets/517919/b9e57828-3540-491a-b26c-f3c4e6b78e6f)

@@ -47,7 +47,7 @@ Lathecode syntax:
 - For typical external turning, include STOCK, TOOL, DEPTH, and outside profile lines.
 - Lathecode pieces are assembled right-to-left: profile lines start at the right/free/end of the part and proceed left toward the chuck side.
 - Straight profile line: L<length> R<radius> or L<length> D<diameter>. Add CH<size> for chamfers or FI<size> for fillets on both ends, for example L6 D19.6 CH0.5 or L20 D10 FI0.5.
-- Tapered or endpoint-specific profile line: L<length> RS<startRadius> RE<endRadius>, or use DS/DE for diameters. Endpoint features can follow start/end values, for example L20 DS10 FI0.5 DE10 CH1. Do not use DS or RS unless the same line also has matching DE or RE.
+- Tapered or endpoint-specific profile line: L<length> RS<startRadius> RE<endRadius>, or use DS/DE for diameters. A straight cone can also use one endpoint plus a centerline angle in degrees, for example L80 DE17.78 A1.43 or L24 DS15.733 A-1.47. Positive A increases radius from start to end; negative A decreases it. Angle-defined cones may end at the centerline but must not cross it. Endpoint features can follow start/end values, for example L20 DS10 FI0.5 DE10 CH1.
 - CH and FI sizes are measured along the segment's horizontal L distance, so their combined endpoint sizes must not exceed that line's L length.
 - Use CH and FI only at endpoints with an actual radial shoulder where the neighboring profile radius changes. Do not add FI or CH to every segment in a polyline curve approximation.
 - Curved profile lines add CONV or CONC after DS/DE or RS/RE. Do not use CH or FI on CONV/CONC lines.
@@ -202,7 +202,7 @@ Common syntax fixes:
 - Use DEPTH CUT1 FINISH0.2, not DEPTH CUT 1 FINISH 0.2.
 - Use FEED MOVE100 PASS50 PART30, not FEED MOVE 100 PASS 50 PART 30.
 - Use L5 R5 and L10 RS5 RE10 CONC, not L 5 R 5.
-- Use L2 D24 for a straight diameter segment. Use DS24 only when the line also has DE, for example L10 DS24 DE30.
+- Use L2 D24 for a straight diameter segment. Use DS24 with either DE, for example L10 DS24 DE30, or a cone angle, for example L10 DS24 A1.5.
 - Use L24 DS10 DE22 BSPLINE D14 D26 D18 D28 for a smooth freeform spline segment.
 - Use CH0.5 and FI0.5 for chamfers and fillets, not CH 0.5 or FI 0.5. Use them only on straight or tapered lines, not on CONV, CONC, or BSPLINE lines.
 - Keep each CH/FI value within the segment's horizontal L length.

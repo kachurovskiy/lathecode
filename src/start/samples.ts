@@ -23,6 +23,57 @@ type MorseTaperExtensionRow = {
   bodyLengthMm: number;
 };
 
+const TAPER_ANGLE_TABLE = {
+  morse: {
+    MT0: {taperPerFootIn: 0.6246, angleFromCenterlineDeg: 1.4908, includedAngleDeg: 2.9816},
+    MT1: {taperPerFootIn: 0.5986, angleFromCenterlineDeg: 1.4287, includedAngleDeg: 2.8574},
+    MT2: {taperPerFootIn: 0.5994, angleFromCenterlineDeg: 1.4307, includedAngleDeg: 2.8614},
+    MT3: {taperPerFootIn: 0.6024, angleFromCenterlineDeg: 1.4377, includedAngleDeg: 2.8754},
+    MT4: {taperPerFootIn: 0.6233, angleFromCenterlineDeg: 1.4876, includedAngleDeg: 2.9752},
+    MT4_5: {taperPerFootIn: 0.6240, angleFromCenterlineDeg: 1.4894, includedAngleDeg: 2.9788},
+    MT5: {taperPerFootIn: 0.6315, angleFromCenterlineDeg: 1.5073, includedAngleDeg: 3.0146},
+    MT6: {taperPerFootIn: 0.6257, angleFromCenterlineDeg: 1.4933, includedAngleDeg: 2.9866},
+    MT7: {taperPerFootIn: 0.6240, angleFromCenterlineDeg: 1.4894, includedAngleDeg: 2.9788},
+  },
+  jarno: {
+    allSizes: {taperPerFootIn: 0.6000, angleFromCenterlineDeg: 1.4321, includedAngleDeg: 2.8642},
+  },
+  brownSharpe: {
+    mostSizes: {taperPerFootIn: 0.5000, angleFromCenterlineDeg: 1.1935, includedAngleDeg: 2.3870},
+    number10: {taperPerFootIn: 0.5161, angleFromCenterlineDeg: 1.2320, includedAngleDeg: 2.4640},
+  },
+  jacobs: {
+    JT0: {taperPerFootIn: 0.5915, angleFromCenterlineDeg: 1.4117, includedAngleDeg: 2.8234},
+    JT1: {taperPerFootIn: 0.9251, angleFromCenterlineDeg: 2.2074, includedAngleDeg: 4.4148},
+    JT2: {taperPerFootIn: 0.9786, angleFromCenterlineDeg: 2.3350, includedAngleDeg: 4.6700},
+    JT3: {taperPerFootIn: 0.6390, angleFromCenterlineDeg: 1.5251, includedAngleDeg: 3.0502},
+    JT4: {taperPerFootIn: 0.6289, angleFromCenterlineDeg: 1.5009, includedAngleDeg: 3.0018},
+    JT5: {taperPerFootIn: 0.6201, angleFromCenterlineDeg: 1.4801, includedAngleDeg: 2.9602},
+    JT6: {taperPerFootIn: 0.6229, angleFromCenterlineDeg: 1.4868, includedAngleDeg: 2.9736},
+    JT33: {taperPerFootIn: 0.7619, angleFromCenterlineDeg: 1.8184, includedAngleDeg: 3.6368},
+  },
+  steep724: {
+    ansiNmtbCatBt: {taperPerFootIn: 3.5000, angleFromCenterlineDeg: 8.2971, includedAngleDeg: 16.5943},
+  },
+  r8: {
+    standard: {taperPerFootIn: 3.5547, angleFromCenterlineDeg: 8.4250, includedAngleDeg: 16.8500},
+  },
+  spindleNose: {
+    shortA1A2B1B2D1: {taperPerFootIn: 3.0000, angleFromCenterlineDeg: 7.1250, includedAngleDeg: 14.2500},
+    longL: {taperPerFootIn: 3.5000, angleFromCenterlineDeg: 8.2972, includedAngleDeg: 16.5944},
+  },
+} as const;
+
+const MORSE_TAPER_ANGLE_DEGREES: Record<MorseTaperSize, number> = {
+  1: TAPER_ANGLE_TABLE.morse.MT1.angleFromCenterlineDeg,
+  2: TAPER_ANGLE_TABLE.morse.MT2.angleFromCenterlineDeg,
+  3: TAPER_ANGLE_TABLE.morse.MT3.angleFromCenterlineDeg,
+  4: TAPER_ANGLE_TABLE.morse.MT4.angleFromCenterlineDeg,
+  5: TAPER_ANGLE_TABLE.morse.MT5.angleFromCenterlineDeg,
+  6: TAPER_ANGLE_TABLE.morse.MT6.angleFromCenterlineDeg,
+  7: TAPER_ANGLE_TABLE.morse.MT7.angleFromCenterlineDeg,
+};
+
 const MORSE_TAPER_LARGE_DIAMETERS_MM: Record<MorseTaperSize, number> = {
   1: 12.065,
   2: 17.78,
@@ -31,16 +82,6 @@ const MORSE_TAPER_LARGE_DIAMETERS_MM: Record<MorseTaperSize, number> = {
   5: 44.399,
   6: 63.348,
   7: 83.058,
-};
-
-const MORSE_TAPER_DIAMETER_SLOPES_MM_PER_MM: Record<MorseTaperSize, number> = {
-  1: 0.04988,
-  2: 0.04995,
-  3: 0.0502,
-  4: 0.0513,
-  5: 0.05239,
-  6: 0.05212,
-  7: 0.05205,
 };
 
 const MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM = 8.4;
@@ -84,26 +125,24 @@ function createMorseTaperExtensionSample(row: MorseTaperExtensionRow): SampleDef
   const bodyOnChuckSide = row.bodyDiameterMm >= row.taperDiameterMm;
   const socketReliefLength = Math.min(8, Math.max(4, row.bodyLengthMm * 0.06));
   const socketLength = row.bodyLengthMm - socketReliefLength;
-  const outerSmallDiameter = getMorseTaperSmallDiameter(row.outerMt, row.taperDiameterMm, row.taperLengthMm, MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM + 0.6);
   const innerLargeDiameter = MORSE_TAPER_LARGE_DIAMETERS_MM[row.innerMt];
-  const innerSmallDiameter = getMorseTaperSmallDiameter(row.innerMt, innerLargeDiameter, socketLength, MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM);
   const outsideProfile = bodyOnChuckSide
     ? [
-      `L${formatSampleNumber(row.taperLengthMm)} DS${formatSampleNumber(outerSmallDiameter)} DE${formatSampleNumber(row.taperDiameterMm)}`,
+      `L${formatSampleNumber(row.taperLengthMm)} DE${formatSampleNumber(row.taperDiameterMm)} A${formatSampleTaperAngle(getMorseTaperAngle(row.outerMt))}`,
       `L${formatSampleNumber(row.bodyLengthMm)} D${formatSampleNumber(row.bodyDiameterMm)}`,
     ]
     : [
       `L${formatSampleNumber(row.bodyLengthMm)} D${formatSampleNumber(row.bodyDiameterMm)}`,
-      `L${formatSampleNumber(row.taperLengthMm)} DS${formatSampleNumber(outerSmallDiameter)} DE${formatSampleNumber(row.taperDiameterMm)}`,
+      `L${formatSampleNumber(row.taperLengthMm)} DE${formatSampleNumber(row.taperDiameterMm)} A${formatSampleTaperAngle(getMorseTaperAngle(row.outerMt))}`,
     ];
   const insideProfile = bodyOnChuckSide
     ? [
       `L${formatSampleNumber(row.taperLengthMm)} D${formatSampleNumber(MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM)}`,
       `L${formatSampleNumber(socketReliefLength)} D${formatSampleNumber(MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM)}`,
-      `L${formatSampleNumber(socketLength)} DS${formatSampleNumber(innerSmallDiameter)} DE${formatSampleNumber(innerLargeDiameter)}`,
+      `L${formatSampleNumber(socketLength)} DE${formatSampleNumber(innerLargeDiameter)} A${formatSampleTaperAngle(getMorseTaperAngle(row.innerMt))}`,
     ]
     : [
-      `L${formatSampleNumber(socketLength)} DS${formatSampleNumber(innerLargeDiameter)} DE${formatSampleNumber(innerSmallDiameter)}`,
+      `L${formatSampleNumber(socketLength)} DS${formatSampleNumber(innerLargeDiameter)} A${formatSampleTaperAngle(-getMorseTaperAngle(row.innerMt))}`,
       `L${formatSampleNumber(socketReliefLength)} D${formatSampleNumber(MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM)}`,
       `L${formatSampleNumber(row.taperLengthMm)} D${formatSampleNumber(MORSE_EXTENSION_THROUGH_BORE_DIAMETER_MM)}`,
     ];
@@ -126,14 +165,18 @@ ${insideProfile.join('\n')}`,
   };
 }
 
-function getMorseTaperSmallDiameter(size: MorseTaperSize, largeDiameter: number, length: number, minimumDiameter: number): number {
-  return Math.max(minimumDiameter, largeDiameter - MORSE_TAPER_DIAMETER_SLOPES_MM_PER_MM[size] * length);
+function getMorseTaperAngle(size: MorseTaperSize): number {
+  return MORSE_TAPER_ANGLE_DEGREES[size];
 }
 
 function formatSampleNumber(value: number): string {
   const rounded = Math.round(value * 1000) / 1000;
   if (Number.isInteger(rounded)) return rounded.toFixed(0);
   return rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function formatSampleTaperAngle(value: number): string {
+  return value.toFixed(4);
 }
 
 export const SAMPLE_SECTIONS: readonly SampleSection[] = [
@@ -663,181 +706,7 @@ L5 D32`,
       },
     ],
   },
-  {
-    id: 'lathe-technique-demonstrators',
-    title: 'Lathe Technique Demonstrators',
-    description: 'Purpose-built samples for learning how steps, shoulders, tapers, radii, bores, grooves, parting reliefs, and units appear in lathecode.',
-    samples: [
-      {
-        id: 'diameter-ladder',
-        title: 'Diameter Ladder',
-        description: 'Five increasing diameters in one part, with each land long enough to read clearly in 2D and 3D.',
-        text: `; Diameter Ladder
 
-STOCK D30
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.55 FINISH0.1
-FEED MOVE200 PASS45 PART10
-
-L4 D8
-L4 D12
-L4 D16
-L4 D20
-L4 D24
-L4 D28`,
-      },
-      {
-        id: 'shoulder-sampler',
-        title: 'Shoulder Sampler',
-        description: 'Square shoulders, narrow lands, and relief grooves arranged from small nose to large chuck side.',
-        text: `; Shoulder Sampler
-
-STOCK D30
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE210 PASS45 PART11
-
-L4 D10
-L1.5 D8
-L5 D14
-L1.5 D10
-L4 D18
-L1.5 D14
-L5 D24
-L3 D28`,
-      },
-      {
-        id: 'taper-sampler',
-        title: 'Taper Sampler',
-        description: 'Shallow, medium, and steep tapers in sequence, ending with a broad chuck-side shoulder.',
-        text: `; Taper Sampler
-
-STOCK D32
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.55 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L3 D8
-L8 DS8 DE12
-L6 DS12 DE20
-L4 DS20 DE28
-L4 D30`,
-      },
-      {
-        id: 'radius-sampler',
-        title: 'Radius Sampler',
-        description: 'Small, medium, and large convex radii, each stepping up toward the chuck.',
-text: `; Radius Sampler
-
-STOCK D32
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D8
-L3 DS8 DE14 CONV
-L5 DS14 DE22 CONV
-L7 DS22 DE28 CONV
-L4 D30`,
-      },
-      {
-        id: 'concave-convex-wave',
-        title: 'Concave/Convex Wave',
-        description: 'Alternating inward and outward arcs that make curve direction differences obvious.',
-text: `; Concave/Convex Wave
-
-STOCK D32
-TOOL ROUND R1.5
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D10
-L4 DS10 DE22 CONV
-L4 DS22 DE14 CONC
-L4 DS14 DE26 CONV
-L4 DS26 DE18 CONC
-L4 DS18 DE30 CONV
-L3 D30`,
-      },
-      {
-        id: 'bore-sampler',
-        title: 'Bore Sampler',
-        description: 'Through-bore, counterbore, and internal taper in one simple outside sleeve.',
-        text: `; Bore Sampler
-
-STOCK D32 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L26 D28
-
-INSIDE
-L5 D18
-L5 D16
-L7 DS16 DE10
-L9 D10`,
-      },
-      {
-        id: 'tool-clearance-puzzle',
-        title: 'Tool Clearance Puzzle',
-        description: 'Tight grooves and narrow steps for seeing where a real-width tool can and cannot fit.',
-        text: `; Tool Clearance Puzzle
-
-STOCK D28
-TOOL RECT R0.1 L1.2 H3
-DEPTH CUT0.35 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L3 D12
-L1.2 D9
-L2.2 D16
-L1.2 D11
-L2.2 D18
-L1.2 D13
-L4 D22
-L1.2 D17
-L6 D26`,
-      },
-      {
-        id: 'parting-relief-demo',
-        title: 'Parting Relief Demo',
-        description: 'A narrow relief groove before final cutoff, with a heavier chuck-side section behind it.',
-        text: `; Parting Relief Demo
-
-STOCK D26
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE210 PASS45 PART11
-
-L5 D12
-L8 D16
-L1.5 D10
-L6 D22
-L3 D24
-L1.5`,
-      },
-      {
-        id: 'units-demo-pair',
-        title: 'Units Demo Pair',
-        description: 'An inch-unit companion shape using the same stepped-part idea as the metric samples.',
-        text: `; Units Demo Pair
-
-UNITS IN
-STOCK D1.1
-TOOL ANG R0.01 L0.28 A32.5 NA55
-DEPTH CUT0.025 FINISH0.004
-FEED MOVE8 PASS2 PART0.5
-
-L0.12 D0.32
-L0.18 D0.45
-L0.08 D0.36
-L0.24 D0.68
-L0.16 D0.88
-L0.08 D0.88`,
-      },
-    ],
-  },
   {
     id: 'spline-profiles',
     title: 'Spline Profiles',
@@ -1021,364 +890,8 @@ L10 D12`,
       },
     ],
   },
-  {
-    id: 'machine-workshop-accessories',
-    title: 'Machine & Workshop Accessories',
-    description: 'Useful shop fixtures and machine-adjacent blanks that show arbors, collars, caps, spacers, and backplate-style geometry.',
-    samples: [
-      {
-        id: 'mini-test-arbor',
-        title: 'Mini Test Arbor',
-        description: 'A generic long taper with a short pilot nose and a larger chuck-side shoulder.',
-        text: `; Mini Test Arbor
 
-STOCK D28
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.55 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
 
-L4 D8
-L20 DS8 DE20
-L4 D24
-L3 D26`,
-      },
-      {
-        id: 'drill-chuck-arbor-silhouette',
-        title: 'Drill-Chuck Arbor Silhouette',
-        description: 'Two different tapers separated by a shoulder, reading like a small drill-chuck arbor blank.',
-        text: `; Drill-Chuck Arbor Silhouette
-
-STOCK D32
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.55 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
-
-L3 D7
-L8 DS7 DE14
-L3 D18
-L14 DS18 DE26
-L4 D30`,
-      },
-      {
-        id: 'mandrel-with-reliefs',
-        title: 'Mandrel with Reliefs',
-        description: 'Shaft lands, relief grooves, and locating shoulders arranged as a practical mandrel blank.',
-        text: `; Mandrel with Reliefs
-
-STOCK D28
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE210 PASS45 PART11
-MODE TURN
-
-L5 D12
-L1.5 D9
-L8 D16
-L1.5 D12
-L6 D20
-L1.5 D15
-L6 D24
-L3 D26`,
-      },
-      {
-        id: 'tailstock-ram-stop-collar',
-        title: 'Tailstock Ram Stop Collar',
-        description: 'A collar-style ring with stepped bore and raised outside body, without modeling a set screw.',
-        text: `; Tailstock Ram Stop Collar
-
-STOCK D34 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D28
-L6 D30
-L4 D28
-L4 D32
-
-INSIDE
-L6 D20
-L6 D18
-L6 D16`,
-      },
-      {
-        id: 'spindle-bore-dust-plug',
-        title: 'Spindle Bore Dust Plug',
-        description: 'A stepped plug with a rounded pull knob and a broad shoulder for covering a spindle bore.',
-        text: `; Spindle Bore Dust Plug
-
-STOCK D30
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L5 D12
-L4 D18
-L4 D16
-L4 DS16 DE26 CONV
-L4 DS26 DE20 CONV
-L3 D28`,
-      },
-      {
-        id: 'center-protector-cap',
-        title: 'Center Protector Cap',
-        description: 'A hollow cap for a live or dead center tip, with a rounded nose and internal taper.',
-        text: `; Center Protector Cap
-
-STOCK D30 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D20
-L5 DS20 DE22 CONV
-L8 D24
-L4 D28
-
-INSIDE
-L5 D18
-L6 DS18 DE10
-L8 D10`,
-      },
-      {
-        id: 'oil-cup-button-cap',
-        title: 'Oil-Cup Button Cap',
-        description: 'A tiny domed cap with a locating skirt and a small internal relief.',
-        text: `; Oil-Cup Button Cap
-
-STOCK D24 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D16
-L4 DS16 DE18 CONV
-L4 D18
-L4 D22
-
-INSIDE
-L4 D14
-L4 D12
-L6 D10`,
-      },
-      {
-        id: 'drawbar-spacer-stack',
-        title: 'Drawbar Spacer Stack',
-        description: 'A batch of matching drawbar spacers separated by parting gaps and a chuck-side holding shoulder.',
-        text: `; Drawbar Spacer Stack
-
-STOCK D24
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L3 D18
-L1.5
-L3 D18
-L1.5
-L3 D18
-L1.5
-L3 D18
-L4 D22`,
-      },
-      {
-        id: 'chuck-backplate-profile-demo',
-        title: 'Chuck-Backplate Profile Demo',
-        description: 'Hub, broad face, shallow recess, and center bore in a compact backplate-style profile.',
-        text: `; Chuck-Backplate Profile Demo
-
-STOCK D42 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.55 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L5 D24
-L4 D34
-L4 D28
-L8 D40
-L4 D40
-
-INSIDE
-L6 D20
-L6 D18
-L13 D14`,
-      },
-    ],
-  },
-  {
-    id: 'everyday-useful-objects',
-    title: 'Everyday Useful Objects',
-    description: 'Small practical objects and household blanks that demonstrate rounded faces, plugs, sleeves, beads, feet, and knobs.',
-    samples: [
-      {
-        id: 'cabinet-pull-knob',
-        title: 'Cabinet Pull Knob',
-        description: 'Rounded face, narrow neck, and broad base flange for a simple cabinet pull blank.',
-        text: `; Cabinet Pull Knob
-
-STOCK D30
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D8
-L5 DS8 DE24 CONV
-L4 DS24 DE14 CONV
-L5 D12
-L4 D24
-L3 D28`,
-      },
-      {
-        id: 'lamp-finial',
-        title: 'Lamp Finial',
-        description: 'Decorative onion, ball, and cone finial profile without threads.',
-        text: `; Lamp Finial
-
-STOCK D30
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D6
-L4 DS6 DE16 CONV
-L4 DS16 DE12 CONV
-L5 DS12 DE22 CONV
-L4 DS22 DE28
-L3 D28`,
-      },
-      {
-        id: 'furniture-foot',
-        title: 'Furniture Foot',
-        description: 'Wide foot with rounded floor-contact form and a stronger chuck-side mounting shoulder.',
-        text: `; Furniture Foot
-
-STOCK D34
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.5 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D12
-L5 DS12 DE28 CONV
-L4 DS28 DE22 CONV
-L5 D24
-L4 D32
-L3 D32`,
-      },
-      {
-        id: 'cable-grommet-insert',
-        title: 'Cable Grommet Insert',
-        description: 'Flanged sleeve with a center hole for routing a cable through a panel.',
-        text: `; Cable Grommet Insert
-
-STOCK D30 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D18
-L8 D20
-L3 D28
-L3 D28
-
-INSIDE
-L18 D12`,
-      },
-      {
-        id: 'shelf-peg-spacer',
-        title: 'Shelf Peg Spacer',
-        description: 'Simple shoulder peg with a small locating nose and larger spacer body.',
-        text: `; Shelf Peg Spacer
-
-STOCK D24
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.5 FINISH0.1
-FEED MOVE200 PASS45 PART10
-MODE TURN
-
-L6 D8
-L5 D12
-L3 D10
-L8 D20
-L3 D22`,
-      },
-      {
-        id: 'pen-end-plug',
-        title: 'Pen End Plug',
-        description: 'Small stepped plug with a domed end and a chuck-side shoulder for trimming.',
-        text: `; Pen End Plug
-
-STOCK D22
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D6
-L4 DS6 DE14 CONV
-L4 DS14 DE10 CONV
-L4 D12
-L4 D18
-L3 D20`,
-      },
-      {
-        id: 'cord-pull-bead',
-        title: 'Cord Pull Bead',
-        description: 'Smooth bead with a through-hole and a small chuck-side land for workholding.',
-        text: `; Cord Pull Bead
-
-STOCK D28 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D14
-L6 DS14 DE22 CONV
-L6 DS22 DE14 CONV
-L4 D24
-L2 D24
-
-INSIDE
-L20 D12`,
-      },
-      {
-        id: 'drawer-bumper-button',
-        title: 'Drawer Bumper Button',
-        description: 'Shallow rubber-bumper-like button with a low dome and broad base flange.',
-        text: `; Drawer Bumper Button
-
-STOCK D28
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D10
-L4 DS10 DE22 CONV
-L4 DS22 DE16 CONV
-L3 D20
-L3 D26
-L2 D26`,
-      },
-      {
-        id: 'tiny-handle-knob',
-        title: 'Tiny Handle Knob',
-        description: 'Mushroom knob profile with a screw-on-style neck and wide chuck-side base.',
-        text: `; Tiny Handle Knob
-
-STOCK D30
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D8
-L5 DS8 DE24 CONV
-L5 DS24 DE12 CONV
-L4 D12
-L4 D26
-L3 D28`,
-      },
-    ],
-  },
   {
     id: 'curvy-showpieces',
     title: 'Curvy Showpieces',
@@ -1795,411 +1308,8 @@ L3 D32`,
       },
     ],
   },
-  {
-    id: 'curious-can-a-lathe-do-that-designs',
-    title: 'Curious / "Can a Lathe Do That?" Designs',
-    description: 'Odd but still lathe-friendly designs that show how far axisymmetric steps, grooves, waves, tapers, and hollow profiles can go.',
-    samples: [
-      {
-        id: 'fake-thread-bolt',
-        title: 'Fake Thread Bolt',
-        description: 'Repeated annular grooves that read like thread pitch in profile, explicitly without a real helix.',
-        text: `; Fake Thread Bolt
 
-STOCK D28
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE210 PASS45 PART11
 
-L3 D12
-L1.5 D16
-L1.5 D12
-L1.5 D16
-L1.5 D12
-L1.5 D16
-L1.5 D12
-L5 D16
-L5 D24
-L3 D26`,
-      },
-      {
-        id: 'morse-code-bead-sos',
-        title: 'Morse-Code Bead: SOS',
-        description: 'Long and short raised rings encode SOS as a tactile turned bead pattern.',
-        text: `; Morse-Code Bead: SOS
-
-STOCK D28
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE210 PASS45 PART11
-MODE TURN
-
-L2 D12
-L1.5 D18
-L1.5 D12
-L1.5 D18
-L1.5 D12
-L1.5 D18
-L1.5 D12
-L3 D20
-L1.5 D12
-L3 D20
-L1.5 D12
-L3 D20
-L1.5 D12
-L1.5 D18
-L1.5 D12
-L1.5 D18
-L1.5 D12
-L1.5 D18
-L4 D24`,
-      },
-      {
-        id: 'sound-wave-totem',
-        title: 'Sound-Wave Totem',
-        description: 'Stepped diameters approximate a waveform while staying completely axisymmetric.',
-        text: `; Sound-Wave Totem
-
-STOCK D32
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.5 FINISH0.1
-FEED MOVE200 PASS45 PART10
-
-L2 D10
-L2 D18
-L2 D12
-L2 D22
-L2 D14
-L2 D20
-L2 D16
-L2 D24
-L2 D18
-L4 D30`,
-      },
-      {
-        id: 'alien-chess-pawn',
-        title: 'Alien Chess Pawn',
-        description: 'Pawn base with an oversized smooth head and an exaggerated little neck.',
-text: `; Alien Chess Pawn
-
-STOCK D36
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D8
-L6 DS8 DE30 CONV
-L6 DS30 DE12 CONV
-L4 D10
-L4 D22
-L5 D34`,
-      },
-      {
-        id: 'matryoshka-silhouette',
-        title: 'Matryoshka Silhouette',
-        description: 'Nested-doll outline as one solid turning, with a small head and large rounded body.',
-        text: `; Matryoshka Silhouette
-
-STOCK D38
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D10
-L5 DS10 DE20 CONV
-L4 DS20 DE16 CONV
-L6 DS16 DE32 CONV
-L6 DS32 DE24 CONV
-L4 D36`,
-      },
-      {
-        id: 'lava-lamp-capsule',
-        title: 'Lava Lamp Capsule',
-        description: 'A stretched capsule with a bulbous center and heavier chuck-side end cap.',
-        text: `; Lava Lamp Capsule
-
-STOCK D38
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D10
-L8 DS10 DE28 CONV
-L6 DS28 DE34 CONV
-L8 DS34 DE16 CONV
-L4 D36`,
-      },
-      {
-        id: 'rocket-nozzle-cross-section',
-        title: 'Rocket Nozzle Cross-Section',
-        description: 'Outside cone with a converging throat and diverging internal nozzle profile.',
-        text: `; Rocket Nozzle Cross-Section
-
-STOCK D36 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L3 D20
-L14 DS20 DE30
-L5 D32
-L3 D34
-
-INSIDE
-L5 D18
-L6 DS18 DE10
-L6 DS10 DE16
-L8 D16`,
-      },
-      {
-        id: 'wobbly-looking-but-symmetric',
-        title: 'Wobbly Looking but Symmetric',
-        description: 'Alternating concave and convex bulges that look playful but remain perfectly rotational.',
-text: `; Wobbly Looking but Symmetric
-
-STOCK D36
-TOOL ROUND R1.5
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D10
-L4 DS10 DE24 CONV
-L4 DS24 DE14 CONC
-L4 DS14 DE28 CONV
-L4 DS28 DE18 CONC
-L4 DS18 DE30 CONV
-L4 D34`,
-      },
-      {
-        id: 'not-a-vase-vase',
-        title: '"Not a Vase" Vase',
-        description: 'Absurdly tiny mouth, huge belly, and hollow interior, built as a lathe-only vase joke.',
-        text: `; "Not a Vase" Vase
-
-STOCK D40 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D16
-L6 DS16 DE24 CONV
-L7 DS24 DE34 CONV
-L6 DS34 DE18 CONV
-L5 D36
-L3 D38
-
-INSIDE
-L4 D12
-L7 DS12 DE22
-L7 D18
-L12 D10`,
-      },
-    ],
-  },
-  {
-    id: 'multi-part-sets',
-    title: 'Multi-Part Sets',
-    description: 'Batch-oriented lathecode samples with multiple related parts separated by tool-width cutoff gaps and a heavier chuck-side section.',
-    samples: [
-      {
-        id: 'washer-assortment',
-        title: 'Washer Assortment',
-        description: 'Five washers cut from tube stock, keeping the same bore while increasing the outside diameter.',
-        text: `; Washer Assortment
-
-STOCK D32 ID10
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L2 D16
-L1.5
-L2.5 D18
-L1.5
-L3 D22
-L1.5
-L3.5 D26
-L1.5
-L4 D30
-L3 D30`,
-      },
-      {
-        id: 'spacer-assortment',
-        title: 'Spacer Assortment',
-        description: 'Same-diameter spacers in several lengths, separated by realistic parting-tool-width gaps.',
-        text: `; Spacer Assortment
-
-STOCK D24
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L2 D16
-L1.5
-L4 D16
-L1.5
-L6 D16
-L1.5
-L9 D16
-L4 D22`,
-      },
-      {
-        id: 'bead-bracelet-set',
-        title: 'Bead Bracelet Set',
-        description: 'A small run of rounded beads, each with a different diameter, cut with a round form tool.',
-        text: `; Bead Bracelet Set
-
-STOCK D30
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D8
-L3 DS8 DE16 CONV
-L3 DS16 DE8 CONV
-L3
-L2 D10
-L3.5 DS10 DE20 CONV
-L3.5 DS20 DE10 CONV
-L3
-L2 D12
-L4 DS12 DE24 CONV
-L4 DS24 DE12 CONV
-L3
-L2 D14
-L4 DS14 DE26 CONV
-L4 DS26 DE14 CONV
-L4 D28`,
-      },
-      {
-        id: 'chess-pawns-x4',
-        title: 'Chess Pawns x4',
-        description: 'Four repeated pawn blanks in one setup, with enough clearance between pieces for the form tool.',
-        text: `; Chess Pawns x4
-
-STOCK D28
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L2 D8
-L2.5 DS8 DE16 CONV
-L2.5 DS16 DE10 CONV
-L2 D12
-L3
-L2 D8
-L2.5 DS8 DE16 CONV
-L2.5 DS16 DE10 CONV
-L2 D12
-L3
-L2 D8
-L2.5 DS8 DE16 CONV
-L2.5 DS16 DE10 CONV
-L2 D12
-L3
-L2 D8
-L2.5 DS8 DE16 CONV
-L2.5 DS16 DE10 CONV
-L2 D12
-L4 D24`,
-      },
-      {
-        id: 'stacking-toy-rings',
-        title: 'Stacking Toy Rings',
-        description: 'Graduated ring blanks from tube stock, arranged from smallest free-end ring to largest chuck-side ring.',
-        text: `; Stacking Toy Rings
-
-STOCK D36 ID10
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L2 D14
-L1.5
-L2.5 D18
-L1.5
-L3 D22
-L1.5
-L3.5 D26
-L1.5
-L4 D32
-L3 D34`,
-      },
-      {
-        id: 'rocket-fleet',
-        title: 'Rocket Fleet',
-        description: 'Three tiny rocket silhouettes with different tapered noses and a broad chuck-side holder.',
-        text: `; Rocket Fleet
-
-STOCK D32
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L2 D6
-L4 DS6 DE16
-L3 D18
-L3
-L2 D7
-L5 DS7 DE20
-L3 D22
-L3
-L2 D8
-L6 DS8 DE24
-L3 D26
-L4 D30`,
-      },
-      {
-        id: 'calibration-rod-set',
-        title: 'Calibration Rod Set',
-        description: 'Three short stepped rods for checking diameter recognition, each larger toward the chuck side.',
-        text: `; Calibration Rod Set
-
-STOCK D32
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L2 D8
-L2 D12
-L2 D16
-L1.5
-L2 D10
-L2 D14
-L2 D20
-L1.5
-L2 D12
-L2 D18
-L3 D24
-L4 D30`,
-      },
-      {
-        id: 'desk-totem-kit',
-        title: 'Desk Totem Kit',
-        description: 'Separate base, column, bead, and finial blanks in one bar, with curved parts cut by a round form tool.',
-        text: `; Desk Totem Kit
-
-STOCK D34
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D20
-L3 D24
-L3
-L8 D12
-L3
-L2 D10
-L4 DS10 DE24 CONV
-L4 DS24 DE10 CONV
-L3
-L2 D8
-L4 DS8 DE20 CONV
-L4 D28
-L4 D32`,
-      },
-    ],
-  },
   {
     id: 'morse-taper-arbor-adapters',
     title: 'Morse Taper Adapter Sleeves',
@@ -2211,17 +1321,17 @@ L4 D32`,
         description: 'Reducer drill sleeve with MT2-size outside, MT1-size bore, L92, D17.78, d12.065.',
         text: `; MT1-MT2 Adapter Sleeve
 
-STOCK D22 ID8
+STOCK D22 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.45 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L8 D13.64
-L84 DS13.64 DE17.78
+L84 DE17.78 A${formatSampleTaperAngle(getMorseTaperAngle(2))}
 
 INSIDE
 L8 D9.765
-L84 DS9.765 DE12.065`,
+L84 DE12.065 A${formatSampleTaperAngle(getMorseTaperAngle(1))}`,
       },
       {
         id: 'mt1-mt3-adapter-sleeve',
@@ -2229,17 +1339,17 @@ L84 DS9.765 DE12.065`,
         description: 'Reducer drill sleeve with MT3-size outside, MT1-size bore, L99, D23.825, d12.065.',
         text: `; MT1-MT3 Adapter Sleeve
 
-STOCK D28 ID8
+STOCK D28 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.45 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L8 D19.37
-L91 DS19.37 DE23.825
+L91 DE23.825 A${formatSampleTaperAngle(getMorseTaperAngle(3))}
 
 INSIDE
 L8 D9.59
-L91 DS9.59 DE12.065`,
+L91 DE12.065 A${formatSampleTaperAngle(getMorseTaperAngle(1))}`,
       },
       {
         id: 'mt1-mt4-adapter-sleeve',
@@ -2247,17 +1357,17 @@ L91 DS9.59 DE12.065`,
         description: 'Reducer drill sleeve with MT4-size outside, MT1-size bore, L124, D31.267, d12.065.',
         text: `; MT1-MT4 Adapter Sleeve
 
-STOCK D36 ID8
+STOCK D36 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.45 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L10 D25.687
-L114 DS25.687 DE31.267
+L114 DE31.267 A${formatSampleTaperAngle(getMorseTaperAngle(4))}
 
 INSIDE
 L10 D8.965
-L114 DS8.965 DE12.065`,
+L114 DE12.065 A${formatSampleTaperAngle(getMorseTaperAngle(1))}`,
       },
       {
         id: 'mt2-mt3-adapter-sleeve',
@@ -2265,17 +1375,17 @@ L114 DS8.965 DE12.065`,
         description: 'Reducer drill sleeve with MT3-size outside, MT2-size bore, L112, D23.825, d17.78.',
         text: `; MT2-MT3 Adapter Sleeve
 
-STOCK D28 ID8
+STOCK D28 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.45 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L9 D18.785
-L103 DS18.785 DE23.825
+L103 DE23.825 A${formatSampleTaperAngle(getMorseTaperAngle(3))}
 
 INSIDE
 L9 D14.98
-L103 DS14.98 DE17.78`,
+L103 DE17.78 A${formatSampleTaperAngle(getMorseTaperAngle(2))}`,
       },
       {
         id: 'mt2-mt4-adapter-sleeve',
@@ -2283,17 +1393,17 @@ L103 DS14.98 DE17.78`,
         description: 'Reducer drill sleeve with MT4-size outside, MT2-size bore, L124, D31.267, d17.78.',
         text: `; MT2-MT4 Adapter Sleeve
 
-STOCK D36 ID8
+STOCK D36 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.45 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L10 D25.687
-L114 DS25.687 DE31.267
+L114 DE31.267 A${formatSampleTaperAngle(getMorseTaperAngle(4))}
 
 INSIDE
 L10 D14.68
-L114 DS14.68 DE17.78`,
+L114 DE17.78 A${formatSampleTaperAngle(getMorseTaperAngle(2))}`,
       },
       {
         id: 'mt2-mt5-adapter-sleeve',
@@ -2301,17 +1411,17 @@ L114 DS14.68 DE17.78`,
         description: 'Reducer drill sleeve with MT5-size outside, MT2-size bore, L156, D44.399, d17.78.',
         text: `; MT2-MT5 Adapter Sleeve
 
-STOCK D50 ID8
+STOCK D50 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.6 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L12 D37.379
-L144 DS37.379 DE44.399
+L144 DE44.399 A${formatSampleTaperAngle(getMorseTaperAngle(5))}
 
 INSIDE
 L12 D13.88
-L144 DS13.88 DE17.78`,
+L144 DE17.78 A${formatSampleTaperAngle(getMorseTaperAngle(2))}`,
       },
       {
         id: 'mt3-mt4-adapter-sleeve',
@@ -2319,17 +1429,17 @@ L144 DS13.88 DE17.78`,
         description: 'Reducer drill sleeve with MT4-size outside, MT3-size bore, L140, D31.267, d23.825.',
         text: `; MT3-MT4 Adapter Sleeve
 
-STOCK D36 ID8
+STOCK D36 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.45 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L11 D24.967
-L129 DS24.967 DE31.267
+L129 DE31.267 A${formatSampleTaperAngle(getMorseTaperAngle(4))}
 
 INSIDE
 L11 D20.325
-L129 DS20.325 DE23.825`,
+L129 DE23.825 A${formatSampleTaperAngle(getMorseTaperAngle(3))}`,
       },
       {
         id: 'mt3-mt5-adapter-sleeve',
@@ -2337,17 +1447,17 @@ L129 DS20.325 DE23.825`,
         description: 'Reducer drill sleeve with MT5-size outside, MT3-size bore, L156, D44.399, d23.825.',
         text: `; MT3-MT5 Adapter Sleeve
 
-STOCK D50 ID8
+STOCK D50 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.6 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L12 D37.379
-L144 DS37.379 DE44.399
+L144 DE44.399 A${formatSampleTaperAngle(getMorseTaperAngle(5))}
 
 INSIDE
 L12 D19.925
-L144 DS19.925 DE23.825`,
+L144 DE23.825 A${formatSampleTaperAngle(getMorseTaperAngle(3))}`,
       },
       {
         id: 'mt4-mt5-adapter-sleeve',
@@ -2355,17 +1465,17 @@ L144 DS19.925 DE23.825`,
         description: 'Reducer drill sleeve with MT5-size outside, MT4-size bore, L171, D44.399, d31.267.',
         text: `; MT4-MT5 Adapter Sleeve
 
-STOCK D50 ID8
+STOCK D50 ID5
 TOOL ANG R0.15 L2.2 A120 NA55
 DEPTH CUT0.6 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L13 D36.704
-L158 DS36.704 DE44.399
+L158 DE44.399 A${formatSampleTaperAngle(getMorseTaperAngle(5))}
 
 INSIDE
 L13 D26.992
-L158 DS26.992 DE31.267`,
+L158 DE31.267 A${formatSampleTaperAngle(getMorseTaperAngle(4))}`,
       },
     ],
   },
@@ -2392,7 +1502,7 @@ DEPTH CUT0.55 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L10 D30
-L24 DS30 DE44
+L24 DE44 A${formatSampleTaperAngle(TAPER_ANGLE_TABLE.steep724.ansiNmtbCatBt.angleFromCenterlineDeg)}
 L8 D48
 L12 D50
 L20 D50
@@ -2412,7 +1522,7 @@ DEPTH CUT0.55 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L10 D31
-L22 DS31 DE42
+L22 DE42 A${formatSampleTaperAngle(TAPER_ANGLE_TABLE.steep724.ansiNmtbCatBt.angleFromCenterlineDeg)}
 L6 D46
 L10 D52
 L8 D46
@@ -2433,7 +1543,7 @@ DEPTH CUT0.45 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L8 D14.7
-L56 DS14.7 DE17.78
+L56 DE17.78 A${formatSampleTaperAngle(getMorseTaperAngle(2))}
 L8 D34
 L14 D40
 
@@ -2452,7 +1562,7 @@ DEPTH CUT0.5 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L8 D19.8
-L70 DS19.8 DE23.825
+L70 DE23.825 A${formatSampleTaperAngle(getMorseTaperAngle(3))}
 L8 D38
 L14 D46
 
@@ -2471,7 +1581,7 @@ DEPTH CUT0.6 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L10 D25.9
-L88 DS25.9 DE31.267
+L88 DE31.267 A${formatSampleTaperAngle(getMorseTaperAngle(4))}
 L8 D48
 L16 D58
 
@@ -2526,7 +1636,7 @@ DEPTH CUT0.65 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L12 D38
-L32 DS38 DE56
+L32 DE56 A${formatSampleTaperAngle(TAPER_ANGLE_TABLE.steep724.ansiNmtbCatBt.angleFromCenterlineDeg)}
 L10 D60
 L18 D62
 L20 D58
@@ -2546,7 +1656,7 @@ DEPTH CUT0.65 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L12 D39
-L30 DS39 DE54
+L30 DE54 A${formatSampleTaperAngle(TAPER_ANGLE_TABLE.steep724.ansiNmtbCatBt.angleFromCenterlineDeg)}
 L8 D60
 L12 D64
 L10 D58
@@ -2567,7 +1677,8 @@ DEPTH CUT0.5 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L12 D18
-L55 DS18 DE22
+L13.5 DE22 A${formatSampleTaperAngle(TAPER_ANGLE_TABLE.r8.standard.angleFromCenterlineDeg)}
+L41.5 D22
 L8 D32
 L18 D42
 
@@ -2586,7 +1697,8 @@ DEPTH CUT0.5 FINISH0.1
 FEED MOVE190 PASS38 PART9
 
 L12 D18
-L55 DS18 DE22
+L13.5 DE22 A${formatSampleTaperAngle(TAPER_ANGLE_TABLE.r8.standard.angleFromCenterlineDeg)}
+L41.5 D22
 L8 D32
 L18 D42
 
@@ -3663,1158 +2775,10 @@ L4 D26`,
       },
     ],
   },
-  {
-    id: 'mandrels-expanding-blanks-workholding',
-    title: 'Mandrels, Expanding Blanks & Workholding',
-    description: 'Mandrels, arbors, workholding plugs, centers, and center accessories with practical shoulders, tapers, bores, and tool-width grooves.',
-    samples: [
-      {
-        id: 'plain-mandrel',
-        title: 'Plain Mandrel',
-        description: 'Long straight holding cylinder with a larger chuck-side register.',
-        text: `; Plain Mandrel
 
-STOCK D26
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-MODE TURN
 
-L40 D14
-L6 D24`,
-      },
-      {
-        id: 'stepped-mandrel',
-        title: 'Stepped Mandrel',
-        description: 'Several mounting diameters on one shaft, increasing toward the chuck side.',
-        text: `; Stepped Mandrel
 
-STOCK D32
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-MODE TURN
 
-L10 D10
-L10 D14
-L10 D18
-L8 D24
-L4 D30`,
-      },
-      {
-        id: 'taper-mandrel',
-        title: 'Taper Mandrel',
-        description: 'Long gentle taper for press-fitting rings or checking taper contact.',
-        text: `; Taper Mandrel
-
-STOCK D34
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.5 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
-
-L5 D10
-L34 DS10 DE28
-L4 D32`,
-      },
-      {
-        id: 'ring-mandrel',
-        title: 'Ring Mandrel',
-        description: 'Long conical mandrel for rings or bushings, with a stout rear shoulder.',
-        text: `; Ring Mandrel
-
-STOCK D38
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.5 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
-
-L4 D10
-L40 DS10 DE32
-L5 D36`,
-      },
-      {
-        id: 'saw-arbor-blank',
-        title: 'Saw Arbor Blank',
-        description: 'Shaft, flange, blade seat, and nut land as a practical arbor blank.',
-        text: `; Saw Arbor Blank
-
-STOCK D36
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L8 D12
-L8 D18
-L6 D30
-L5 D20
-L4 D34`,
-      },
-      {
-        id: 'faceplate-stub-arbor',
-        title: 'Faceplate Stub Arbor',
-        description: 'Flange, pilot, and through-bore for a compact faceplate stub arbor.',
-        text: `; Faceplate Stub Arbor
-
-STOCK D38 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L6 D16
-L7 D30
-L5 D36
-
-INSIDE
-L18 D14`,
-      },
-      {
-        id: 'collet-arbor-blank',
-        title: 'Collet Arbor Blank',
-        description: 'Taper nose and straight shank placeholder without collet slots.',
-        text: `; Collet Arbor Blank
-
-STOCK D32
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
-
-L8 DS8 DE18
-L18 D18
-L6 D28
-L3 D30`,
-      },
-      {
-        id: 'soft-jaw-button',
-        title: 'Soft Jaw Button',
-        description: 'Round stepped button for soft-jaw setup and repeatable clamping practice.',
-        text: `; Soft Jaw Button
-
-STOCK D32
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L4 D14
-L5 D24
-L5 D30
-L3 D30`,
-      },
-      {
-        id: 'expanding-plug-blank',
-        title: 'Expanding Plug Blank',
-        description: 'Tapered cone and matching sleeve silhouette separated by a compact tool-width gap.',
-        text: `; Expanding Plug Blank
-
-STOCK D34
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L3 D10
-L12 DS10 DE24
-L3
-L4 D18
-L10 DS18 DE28
-L5 D32`,
-      },
-      {
-        id: 'threaded-workholding-plug-placeholder',
-        title: 'Threaded Workholding Plug Placeholder',
-        description: 'Round workholding plug with reachable fake thread grooves and rear shoulder.',
-        text: `; Threaded Workholding Plug Placeholder
-
-STOCK D30
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L2 D12
-L1.5 D16
-L1.5 D12
-L1.5 D16
-L1.5 D12
-L8 D18
-L5 D26
-L3 D28`,
-      },
-      {
-        id: 'dead-center-blank',
-        title: 'Dead Center Blank',
-        description: 'Sixty-degree-style point, body, and tail shank represented as lathe-friendly tapers.',
-        text: `; Dead Center Blank
-
-STOCK D34
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L7 DS2 DE18
-L10 D20
-L8 DS20 DE30
-L4 D32`,
-      },
-      {
-        id: 'center-adapter-sleeve',
-        title: 'Center Adapter Sleeve',
-        description: 'Tapered outside and bored inside for a center adapter sleeve sketch.',
-        text: `; Center Adapter Sleeve
-
-STOCK D40 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D18
-L22 DS18 DE34
-L5 D38
-
-INSIDE
-L5 D14
-L21 DS14 DE24
-L5 D24`,
-      },
-      {
-        id: 'mini-center-set',
-        title: 'Mini Center Set',
-        description: 'Thirty-, forty-five-, sixty-, and ninety-degree-style point examples in one batch.',
-        text: `; Mini Center Set
-
-STOCK D34
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L4 DS2 DE14
-L3
-L4 DS3 DE18
-L3
-L4 DS4 DE22
-L3
-L4 DS5 DE28
-L5 D32`,
-      },
-    ],
-  },
-  {
-    id: 'bushings-bearings-spacers-practical-set',
-    title: 'Bushings, Bearings & Spacers - Practical Set',
-    description: 'Practical spacers, bushings, rollers, and seal-seat blanks with through-bores, shoulders, grooves, tapers, and repeatable tool-width details.',
-    samples: [
-      {
-        id: 'inner-race-spacer',
-        title: 'Inner Race Spacer',
-        description: 'Long narrow spacer tube with a through-bore and a thicker chuck-side grip land.',
-        text: `; Inner Race Spacer
-
-STOCK D24 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L24 D18
-L3 D22
-
-INSIDE
-L27 D12`,
-      },
-      {
-        id: 'stepped-bearing-spacer',
-        title: 'Stepped Bearing Spacer',
-        description: 'Two bearing-seat diameters on the outside with one continuous through-bore.',
-        text: `; Stepped Bearing Spacer
-
-STOCK D32 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L10 D22
-L8 D26
-L4 D30
-
-INSIDE
-L22 D16`,
-      },
-      {
-        id: 'preload-spacer-pair',
-        title: 'Preload Spacer Pair',
-        description: 'Two matched thin bearing spacers separated by a tool-width parting slot.',
-        text: `; Preload Spacer Pair
-
-STOCK D30 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L3 D24
-L2.2
-L3 D24
-L4 D28
-
-INSIDE
-L3 D16
-L2.2 D12
-L7 D16`,
-      },
-      {
-        id: 'bearing-stack-kit',
-        title: 'Bearing Stack Kit',
-        description: 'Several spacer lengths with the same bore and OD for stack-height experiments.',
-        text: `; Bearing Stack Kit
-
-STOCK D30 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L3 D22
-L2.2
-L5 D22
-L2.2
-L7 D22
-L4 D28
-
-INSIDE
-L3 D16
-L2.2 D12
-L5 D16
-L2.2 D12
-L11 D16`,
-      },
-      {
-        id: 'press-fit-bushing',
-        title: 'Press-Fit Bushing',
-        description: 'Slight lead-in taper, straight press body, and central bore for a simple bushing blank.',
-        text: `; Press-Fit Bushing
-
-STOCK D30 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L3 DS18 DE22
-L14 D24
-L4 D28
-
-INSIDE
-L21 D14`,
-      },
-      {
-        id: 'oilite-style-bushing-blank',
-        title: 'Oilite-Style Bushing Blank',
-        description: 'Rounded sleeve silhouette with a through-bore and stocky chuck-side shoulder.',
-        text: `; Oilite-Style Bushing Blank
-
-STOCK D30 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D16
-L4 DS16 DE24 CONV
-L9 D24
-L4 DS24 DE20 CONV
-L3 D28
-
-INSIDE
-L23 D14`,
-      },
-      {
-        id: 'v-groove-roller',
-        title: 'V-Groove Roller',
-        description: 'Bored roller with a broad V groove wide enough for the angled tool to clear.',
-        text: `; V-Groove Roller
-
-STOCK D36 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L5 D30
-L4 DS30 DE20
-L4 D20
-L4 DS20 DE30
-L5 D34
-
-INSIDE
-L22 D16`,
-      },
-      {
-        id: 'cable-roller',
-        title: 'Cable Roller',
-        description: 'Wide center groove for cord or cable guidance, with a through-bore for an axle.',
-        text: `; Cable Roller
-
-STOCK D36 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L5 D32
-L4 DS32 DE22
-L6 D22
-L4 DS22 DE32
-L5 D34
-
-INSIDE
-L24 D16`,
-      },
-      {
-        id: 'o-ring-groove-shaft',
-        title: 'O-Ring Groove Shaft',
-        description: 'Straight shaft with one reachable seal groove and a larger rear drive shoulder.',
-        text: `; O-Ring Groove Shaft
-
-STOCK D28
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L10 D18
-L1.5 D12
-L8 D20
-L4 D26`,
-      },
-      {
-        id: 'seal-driver-cup',
-        title: 'Seal Driver Cup',
-        description: 'Hollow cup-shaped driver with a broad pushing face and relieved internal bore.',
-        text: `; Seal Driver Cup
-
-STOCK D38 ID14
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L6 D30
-L8 D34
-L4 D36
-
-INSIDE
-L10 D22
-L8 D16`,
-      },
-      {
-        id: 'labyrinth-seal-demo',
-        title: 'Labyrinth Seal Demo',
-        description: 'Nested outside and inside steps showing the idea of a simple labyrinth path.',
-        text: `; Labyrinth Seal Demo
-
-STOCK D36 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L5 D26
-L5 D30
-L5 D28
-L4 D34
-
-INSIDE
-L5 D16
-L5 D22
-L5 D18
-L4 D24`,
-      },
-    ],
-  },
-  {
-    id: 'plumbing-fluid-nozzle-shapes',
-    title: 'Plumbing, Fluid & Nozzle Shapes',
-    description: 'Hose-barb blanks, nozzles, caps, ferrules, and tube fittings with practical tapers, bores, grooves, and chuck-side holding mass.',
-    samples: [
-      {
-        id: 'single-hose-barb-blank',
-        title: 'Single Hose Barb Blank',
-        description: 'One cone barb, neck, and stop flange for a simple hose fitting blank.',
-        text: `; Single Hose Barb Blank
-
-STOCK D32
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L4 D12
-L6 DS12 DE22
-L3 D18
-L4 D28
-L3 D30`,
-      },
-      {
-        id: 'double-hose-barb-blank',
-        title: 'Double Hose Barb Blank',
-        description: 'Two barb forms with a center stop and a heavier chuck-side land.',
-        text: `; Double Hose Barb Blank
-
-STOCK D34
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L3 D14
-L5 DS14 DE24
-L3 D18
-L4 D30
-L3 D18
-L5 DS18 DE26
-L3 D32`,
-      },
-      {
-        id: 'reducing-hose-nipple',
-        title: 'Reducing Hose Nipple',
-        description: 'Tapered outside and stepped internal bore for adapting between hose sizes.',
-        text: `; Reducing Hose Nipple
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L5 D16
-L10 DS16 DE26
-L5 D30
-
-INSIDE
-L6 D12
-L8 DS12 DE18
-L6 D18`,
-      },
-      {
-        id: 'beaded-tube-end',
-        title: 'Beaded Tube End',
-        description: 'Tube end with a raised bead and rear flange for hose-retention practice.',
-        text: `; Beaded Tube End
-
-STOCK D32 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L5 D20
-L3 D28
-L10 D20
-L4 D30
-
-INSIDE
-L22 D14`,
-      },
-      {
-        id: 'hose-barb-pitch-sampler',
-        title: 'Hose Barb Pitch Sampler',
-        description: 'Three short barb tapers separated by tool-width slots for comparing barb pitch.',
-        text: `; Hose Barb Pitch Sampler
-
-STOCK D34
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L3 D12
-L4 DS12 DE20
-L3
-L3 D14
-L5 DS14 DE24
-L3
-L3 D16
-L6 DS16 DE28
-L4 D32`,
-      },
-      {
-        id: 'converging-nozzle',
-        title: 'Converging Nozzle',
-        description: 'Outer body and internal taper narrowing toward the outlet.',
-        text: `; Converging Nozzle
-
-STOCK D36 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L5 D18
-L12 DS18 DE30
-L5 D34
-
-INSIDE
-L5 D12
-L12 DS12 DE20
-L5 D20`,
-      },
-      {
-        id: 'rocket-nozzle-demo',
-        title: 'Rocket Nozzle Demo',
-        description: 'A visible converging throat and diverging exit inside a tapered nozzle body.',
-        text: `; Rocket Nozzle Demo
-
-STOCK D40 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.5 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D24
-L8 DS24 DE34
-L8 D34
-L4 D38
-
-INSIDE
-L5 D16
-L5 DS16 DE12
-L6 DS12 DE22
-L8 D22`,
-      },
-      {
-        id: 'spray-nozzle-blank',
-        title: 'Spray Nozzle Blank',
-        description: 'Rounded nozzle body with a smaller outlet and larger rear bore.',
-        text: `; Spray Nozzle Blank
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D14
-L5 DS14 DE28 CONV
-L8 D30
-L4 D32
-
-INSIDE
-L6 D12
-L6 DS12 DE18
-L8 D18`,
-      },
-      {
-        id: 'funnel-adapter',
-        title: 'Funnel Adapter',
-        description: 'Wide-mouth adapter with matching inside and outside tapers.',
-        text: `; Funnel Adapter
-
-STOCK D40 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.5 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D18
-L16 DS18 DE34
-L4 D38
-
-INSIDE
-L4 D12
-L16 DS12 DE24
-L4 D24`,
-      },
-      {
-        id: 'pipe-plug-blank',
-        title: 'Pipe Plug Blank',
-        description: 'Tapered plug body with broad thread-like lands and a rear head.',
-        text: `; Pipe Plug Blank
-
-STOCK D30
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L3 D12
-L3 D15
-L3 D13
-L3 D17
-L3 D15
-L5 DS18 DE24
-L4 D28`,
-      },
-      {
-        id: 'blank-off-button',
-        title: 'Blank-Off Button',
-        description: 'Domed button plug with a short stem and larger chuck-side base.',
-        text: `; Blank-Off Button
-
-STOCK D30
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L4 D12
-L5 DS12 DE26 CONV
-L4 D28
-L3 D28`,
-      },
-      {
-        id: 'compression-ferrule',
-        title: 'Compression Ferrule',
-        description: 'Small double-cone ferrule with a continuous through-bore.',
-        text: `; Compression Ferrule
-
-STOCK D28 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 DS14 DE22
-L4 DS22 DE16
-L4 DS16 DE24
-L3 D26
-
-INSIDE
-L15 D12`,
-      },
-      {
-        id: 'olive-ferrule',
-        title: 'Olive Ferrule',
-        description: 'Rounded barrel ferrule with a small bore through the center.',
-        text: `; Olive Ferrule
-
-STOCK D30 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D16
-L5 DS16 DE26 CONV
-L5 DS26 DE18 CONV
-L3 D28
-
-INSIDE
-L16 D12`,
-      },
-      {
-        id: 'flared-tube-seat',
-        title: 'Flared Tube Seat',
-        description: 'Outer sleeve with a flared internal cone seat.',
-        text: `; Flared Tube Seat
-
-STOCK D32 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L8 D24
-L8 DS24 DE28
-L4 D30
-
-INSIDE
-L8 D16
-L8 DS16 DE24
-L4 D24`,
-      },
-      {
-        id: 'cone-washer-pair',
-        title: 'Cone Washer Pair',
-        description: 'Male and female cone washer blanks separated by a tool-width parting slot.',
-        text: `; Cone Washer Pair
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L3 D16
-L4 DS16 DE24
-L2.2
-L4 DS18 DE28
-L5 D30
-
-INSIDE
-L7 D12
-L2.2 D10
-L4 DS12 DE18
-L5 D18`,
-      },
-    ],
-  },
-  {
-    id: 'measurement-gauges-calibration',
-    title: 'Measurement, Gauges & Calibration',
-    description: 'Gauge blanks and calibration shapes for diameters, tapers, bores, wall thickness, finish comparison, and repeatable machine test pieces.',
-    samples: [
-      {
-        id: 'diameter-step-gauge',
-        title: 'Diameter Step Gauge',
-        description: 'Known-diameter ladder with steps increasing toward the chuck side.',
-        text: `; Diameter Step Gauge
-
-STOCK D28
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE220 PASS50 PART12
-MODE TURN
-
-L5 D6
-L5 D8
-L5 D10
-L5 D12
-L5 D16
-L4 D24`,
-      },
-      {
-        id: 'go-no-go-plug-gauge',
-        title: 'Go/No-Go Plug Gauge',
-        description: 'Two close plug diameters on one handle for fit-check demonstrations.',
-        text: `; Go/No-Go Plug Gauge
-
-STOCK D28
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.35 FINISH0.1
-FEED MOVE220 PASS48 PART12
-
-L8 D10
-L8 D11
-L6 D18
-L4 D24`,
-      },
-      {
-        id: 'go-no-go-ring-gauge',
-        title: 'Go/No-Go Ring Gauge',
-        description: 'Two ring-gauge blanks with slightly different bores and a tool-width gap.',
-        text: `; Go/No-Go Ring Gauge
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L6 D28
-L2.2
-L6 D30
-L4 D32
-
-INSIDE
-L6 D14
-L2.2 D10
-L6 D16
-L4 D16`,
-      },
-      {
-        id: 'morse-taper-plug-gauge',
-        title: 'Morse Taper Plug Gauge',
-        description: 'External taper plug with a chuck-side shoulder for contact checks.',
-        text: `; Morse Taper Plug Gauge
-
-STOCK D34
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
-
-L4 D10
-L28 DS10 DE24
-L5 D32`,
-      },
-      {
-        id: 'morse-taper-ring-gauge',
-        title: 'Morse Taper Ring Gauge',
-        description: 'Short ring gauge blank with a gentle internal taper.',
-        text: `; Morse Taper Ring Gauge
-
-STOCK D34 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D24
-L20 D28
-L4 D32
-
-INSIDE
-L4 D14
-L20 DS14 DE20
-L4 D20`,
-      },
-      {
-        id: 'sixty-degree-cone-gauge',
-        title: '60-Degree Cone Gauge',
-        description: 'Simple cone reference with a rear holding shoulder.',
-        text: `; 60-Degree Cone Gauge
-
-STOCK D36
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L14 DS2 DE28
-L5 D34`,
-      },
-      {
-        id: 'pipe-taper-visual-gauge',
-        title: 'Pipe-Taper Visual Gauge',
-        description: 'Short tapered plug with broad thread-like lands for visual pipe-taper checks.',
-        text: `; Pipe-Taper Visual Gauge
-
-STOCK D32
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L3 D12
-L3 D15
-L3 D13
-L3 D17
-L3 D15
-L6 DS18 DE26
-L4 D30`,
-      },
-      {
-        id: 'chamfer-angle-sampler',
-        title: 'Chamfer Angle Sampler',
-        description: 'Several short chamfer cones in one batch, each separated by a tool-width slot.',
-        text: `; Chamfer Angle Sampler
-
-STOCK D34
-TOOL ANG R0.15 L3 A32.5 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L3 DS4 DE14
-L3
-L4 DS5 DE18
-L3
-L5 DS6 DE22
-L3
-L6 DS8 DE28
-L5 D32`,
-      },
-      {
-        id: 'matched-taper-fit-demo',
-        title: 'Matched Taper Fit Demo',
-        description: 'External taper plug and matching tapered socket blank in one stock length.',
-        text: `; Matched Taper Fit Demo
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L8 DS10 DE20
-L2.2
-L8 D28
-L4 D32
-
-INSIDE
-L8 D12
-L2.2 D10
-L8 DS14 DE22
-L4 D22`,
-      },
-      {
-        id: 'thin-wall-tube-demo',
-        title: 'Thin-Wall Tube Demo',
-        description: 'Constant-wall sleeve with a small chuck-side allowance for checking wall thickness.',
-        text: `; Thin-Wall Tube Demo
-
-STOCK D24 ID14
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.3 FINISH0.1
-FEED MOVE190 PASS34 PART8
-
-L22 D20
-L4 D22
-
-INSIDE
-L26 D16`,
-      },
-      {
-        id: 'counterbore-depth-demo',
-        title: 'Counterbore Depth Demo',
-        description: 'Stepped internal bores that make counterbore depth visible in the cross-section.',
-        text: `; Counterbore Depth Demo
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L8 D24
-L8 D28
-L4 D32
-
-INSIDE
-L8 D14
-L6 D20
-L6 D24`,
-      },
-      {
-        id: 'internal-chamfer-demo',
-        title: 'Internal Chamfer Demo',
-        description: 'Bore with a clear entry chamfer and rear shoulder.',
-        text: `; Internal Chamfer Demo
-
-STOCK D32 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L12 D22
-L4 D28
-L3 D30
-
-INSIDE
-L5 DS12 DE18
-L10 D18
-L4 D18`,
-      },
-      {
-        id: 'bore-relief-demo',
-        title: 'Bore Relief Demo',
-        description: 'Internal relief pocket with straight entry and exit bores.',
-        text: `; Bore Relief Demo
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L8 D24
-L8 D28
-L4 D32
-
-INSIDE
-L6 D14
-L5 D22
-L9 D14`,
-      },
-      {
-        id: 'sectioned-nozzle-profile',
-        title: 'Sectioned Nozzle Profile',
-        description: 'Nozzle-style internal profile with visible bore changes for preview inspection.',
-        text: `; Sectioned Nozzle Profile
-
-STOCK D38 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D18
-L10 DS18 DE30
-L8 D34
-L4 D36
-
-INSIDE
-L4 D12
-L6 DS12 DE18
-L6 DS18 DE14
-L10 D22`,
-      },
-      {
-        id: 'facing-test-puck',
-        title: 'Facing Test Puck',
-        description: 'Short puck with a larger chuck-side land for facing and diameter checks.',
-        text: `; Facing Test Puck
-
-STOCK D34
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L4 D28
-L6 D32`,
-      },
-      {
-        id: 'turning-test-bar',
-        title: 'Turning Test Bar',
-        description: 'Long straight bar with a rear shoulder for straightness and finish checks.',
-        text: `; Turning Test Bar
-
-STOCK D28
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-MODE TURN
-
-L40 D18
-L5 D26`,
-      },
-      {
-        id: 'taper-test-bar',
-        title: 'Taper Test Bar',
-        description: 'Long shallow taper with a rear reference shoulder.',
-        text: `; Taper Test Bar
-
-STOCK D32
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-MODE TURN
-
-L4 D12
-L36 DS12 DE24
-L5 D30`,
-      },
-      {
-        id: 'radius-test-button',
-        title: 'Radius Test Button',
-        description: 'Several convex radius transitions on one button-like test shape.',
-        text: `; Radius Test Button
-
-STOCK D30
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L4 D12
-L5 DS12 DE24 CONV
-L4 DS24 DE18 CONV
-L4 D28`,
-      },
-      {
-        id: 'groove-width-test',
-        title: 'Groove Width Test',
-        description: 'Multiple reachable groove widths for checking parting and groove behavior.',
-        text: `; Groove Width Test
-
-STOCK D30
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L5 D20
-L1.5 D12
-L5 D20
-L2 D14
-L5 D22
-L3 D16
-L5 D26`,
-      },
-      {
-        id: 'parting-test-rod',
-        title: 'Parting Test Rod',
-        description: 'Repeated cutoff sections, each separated by a tool-width parting slot.',
-        text: `; Parting Test Rod
-
-STOCK D30
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L5 D14
-L1.5
-L5 D16
-L1.5
-L5 D18
-L1.5
-L5 D22
-L4 D26`,
-      },
-      {
-        id: 'finish-comparator-rod',
-        title: 'Finish Comparator Rod',
-        description: 'Several lands separated by grooves for comparing finishing settings.',
-        text: `; Finish Comparator Rod
-
-STOCK D30
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L6 D14
-L1.5 D10
-L6 D16
-L1.5 D12
-L6 D18
-L1.5 D14
-L6 D24`,
-      },
-    ],
-  },
   {
     id: 'v-belt-pulley-groove-standards',
     title: 'V-Belt Pulley Groove Standards',
@@ -5356,296 +3320,7 @@ L27.4 D14`,
       },
     ],
   },
-  {
-    id: 'handles-knobs-control-parts',
-    title: 'Handles, Knobs & Control Parts',
-    description: 'Knobs, handles, ferrules, caps, and end pieces with rounded profiles, practical shoulders, bores, and batch standoffs.',
-    samples: [
-      {
-        id: 'mushroom-knob',
-        title: 'Mushroom Knob',
-        description: 'Short neck, rounded head, and a chuck-side base for a small control knob.',
-        text: `; Mushroom Knob
 
-STOCK D34
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L5 D10
-L4 DS10 DE24 CONV
-L4 D28
-L4 DS28 DE20 CONV
-L3 D30`,
-      },
-      {
-        id: 'ball-knob',
-        title: 'Ball Knob',
-        description: 'Ball-like knob on a short stem with extra chuck-side holding stock.',
-        text: `; Ball Knob
-
-STOCK D36
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L4 D8
-L6 DS8 DE30 CONV
-L6 DS30 DE12 CONV
-L4 D34`,
-      },
-      {
-        id: 'tapered-control-knob',
-        title: 'Tapered Control Knob',
-        description: 'Conical control knob blank with a flat nose and rear shoulder.',
-        text: `; Tapered Control Knob
-
-STOCK D36
-TOOL ANG R0.2 L7.8 A32.5 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS40 PART10
-
-L4 D16
-L14 DS16 DE30
-L4 D34`,
-      },
-      {
-        id: 'pointerless-dial-knob',
-        title: 'Pointerless Dial Knob',
-        description: 'Round dial blank with a raised rim and no pointer detail.',
-        text: `; Pointerless Dial Knob
-
-STOCK D38
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L3 D30
-L8 D24
-L3 D34
-L4 D36`,
-      },
-      {
-        id: 'thumb-nut-blank',
-        title: 'Thumb Nut Blank',
-        description: 'Large round thumb nut blank with a central bore and raised outer faces.',
-        text: `; Thumb Nut Blank
-
-STOCK D40 ID12
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D36
-L6 D28
-L4 D36
-L4 D38
-
-INSIDE
-L18 D16`,
-      },
-      {
-        id: 'decorative-bead-knob',
-        title: 'Decorative Bead Knob',
-        description: 'Ornamental bead-and-cove knob profile cut with a small round form tool.',
-        text: `; Decorative Bead Knob
-
-STOCK D34
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D10
-L4 DS10 DE24 CONV
-L3 DS24 DE16 CONC
-L4 DS16 DE28 CONV
-L3 D32`,
-      },
-      {
-        id: 'file-handle-blank',
-        title: 'File Handle Blank',
-        description: 'Tapered handle body with a smaller front ferrule seat and softened rear end.',
-        text: `; File Handle Blank
-
-STOCK D36
-TOOL ROUND R1.5
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L4 D12
-L20 DS12 DE30
-L5 DS30 DE24 CONV
-L4 D34`,
-      },
-      {
-        id: 'tool-handle-ferrule',
-        title: 'Tool Handle Ferrule',
-        description: 'Short metal ferrule with tapered outside and tapered bore.',
-        text: `; Tool Handle Ferrule
-
-STOCK D30 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D20
-L12 DS20 DE26
-L4 D28
-
-INSIDE
-L4 D12
-L12 DS12 DE18
-L4 D18`,
-      },
-      {
-        id: 'screwdriver-handle-blank',
-        title: 'Screwdriver Handle Blank',
-        description: 'Rounded screwdriver handle silhouette without grip flutes.',
-        text: `; Screwdriver Handle Blank
-
-STOCK D38
-TOOL ROUND R1.5
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L4 D14
-L6 DS14 DE30 CONV
-L12 D30
-L5 DS30 DE24 CONV
-L4 D36`,
-      },
-      {
-        id: 'crank-handle-roller',
-        title: 'Crank Handle Roller',
-        description: 'Rotating handle sleeve with rounded outside profile and through-bore.',
-        text: `; Crank Handle Roller
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L4 D20
-L6 DS20 DE30 CONV
-L10 D30
-L4 D32
-
-INSIDE
-L24 D14`,
-      },
-      {
-        id: 'pull-handle-standoff',
-        title: 'Pull Handle Standoff',
-        description: 'Two matching turned posts for a drawer pull, separated by a tool-width slot.',
-        text: `; Pull Handle Standoff
-
-STOCK D30
-TOOL RECT R0.15 L1.5 H4
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE220 PASS50 PART12
-
-L5 D12
-L5 D22
-L1.5
-L5 D12
-L5 D24
-L4 D28`,
-      },
-      {
-        id: 'rod-end-cap',
-        title: 'Rod End Cap',
-        description: 'Hollow cap blank with a rounded nose and straight internal pocket.',
-        text: `; Rod End Cap
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L4 DS14 DE28 CONV
-L8 D30
-L4 D32
-
-INSIDE
-L4 D12
-L8 D20
-L4 D20`,
-      },
-      {
-        id: 'furniture-glide-foot',
-        title: 'Furniture Glide Foot',
-        description: 'Soft-looking rounded foot with a broad base and chuck-side holding mass.',
-        text: `; Furniture Glide Foot
-
-STOCK D36
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D24
-L5 DS24 DE34 CONV
-L4 D30
-L4 D36`,
-      },
-      {
-        id: 'domed-screw-cover',
-        title: 'Domed Screw Cover',
-        description: 'Hollow decorative cap for hiding a screw head, with a rounded outside dome.',
-        text: `; Domed Screw Cover
-
-STOCK D34 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L3 D16
-L5 DS16 DE28 CONV
-L4 D30
-L4 D32
-
-INSIDE
-L4 D12
-L8 D20
-L4 D20`,
-      },
-      {
-        id: 'rubber-bumper-shape',
-        title: 'Rubber-Bumper Shape',
-        description: 'Shallow bumper dome with a wide base flange.',
-        text: `; Rubber-Bumper Shape
-
-STOCK D36
-TOOL ROUND R1.5
-DEPTH CUT0.4 FINISH0.1
-FEED MOVE180 PASS36 PART9
-
-L4 D20
-L6 DS20 DE32 CONV
-L4 D34
-L4 D34`,
-      },
-      {
-        id: 'ferrule-cap',
-        title: 'Ferrule Cap',
-        description: 'Tapered cap for cane or tool ends with a simple tapered bore.',
-        text: `; Ferrule Cap
-
-STOCK D30 ID10
-TOOL ANG R0.15 L2.2 A120 NA55
-DEPTH CUT0.45 FINISH0.1
-FEED MOVE190 PASS38 PART9
-
-L4 D16
-L12 DS16 DE26
-L4 D28
-
-INSIDE
-L5 D12
-L10 DS12 DE18
-L5 D18`,
-      },
-    ],
-  },
 ] as const;
 
 export const START_SAMPLE_DEFINITIONS: readonly SampleDefinition[] = SAMPLE_SECTIONS.flatMap(section => section.samples);

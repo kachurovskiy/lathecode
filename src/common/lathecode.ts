@@ -14,6 +14,7 @@ import {
   type ModeType,
   type NumericParam,
   type ParserData,
+  type SegmentAnchorType,
   type SplineLine,
   type StockDirective,
   type StraightLine,
@@ -698,6 +699,8 @@ function reverseLine(line: LatheLine): string {
       ...line,
       start: line.end,
       end: line.start,
+      angle: line.angle ? {...line.angle, value: -line.angle.value} : null,
+      angleAnchorType: line.angleAnchorType ? reverseAngleAnchorType(line.angleAnchorType) : null,
       startFeature: line.endFeature,
       endFeature: line.startFeature,
     });
@@ -769,6 +772,7 @@ function scaleLatheLine(line: LatheLine, xScale: number, zScale: number): string
       length: scaleNumber(line.length, zScale),
       start: scaleNumber(line.start, xScale),
       end: scaleNumber(line.end, xScale),
+      angle: line.angle ? {...line.angle, value: scaleConeAngle(line.angle.value, xScale, zScale)} : null,
       startFeature: scaleEdgeFeature(line.startFeature, xScale),
       endFeature: scaleEdgeFeature(line.endFeature, xScale),
     });
@@ -810,6 +814,10 @@ function scaleNumber(value: number, scale: number): number {
   const rounded = Math.round(value * scale * multiplier) / multiplier;
   const integer = Math.round(rounded);
   return integer !== 0 && Math.abs(rounded - integer) <= 1 / multiplier ? integer : rounded;
+}
+
+function scaleConeAngle(angleDeg: number, xScale: number, zScale: number): number {
+  return scaleNumber(Math.atan(Math.tan(angleDeg * Math.PI / 180) * xScale / zScale) * 180 / Math.PI, 1);
 }
 
 function isPositiveFiniteNumber(value: number): boolean {
@@ -874,6 +882,12 @@ function axesDirectiveToString(directive: AxesDirective): string {
 
 function latheLineToString(line: LatheLine): string {
   if (isCurvedLine(line)) {
+    if (line.angle && line.angleAnchorType) {
+      const isStartAnchor = line.angleAnchorType === 'DS' || line.angleAnchorType === 'RS';
+      const anchor = isStartAnchor ? line.start : line.end;
+      const feature = isStartAnchor ? line.startFeature : line.endFeature;
+      return `L${numberToString(line.length)} ${line.angleAnchorType}${numberToString(anchor)}${edgeFeatureToString(feature)} A${numberToString(line.angle.value)}${formatComment(line.comment)}`;
+    }
     return `L${numberToString(line.length)} ${line.startType}${numberToString(line.start)}${edgeFeatureToString(line.startFeature)} ${line.endType}${numberToString(line.end)}${edgeFeatureToString(line.endFeature)}${line.curveType ? ' ' + line.curveType : ''}${formatComment(line.comment)}`;
   }
   if (isSplineLine(line)) {
@@ -895,6 +909,13 @@ function numberToString(value: number): string {
   const rounded = Math.round(value * 1e12) / 1e12;
   if (Number.isInteger(rounded)) return rounded.toFixed(0);
   return rounded.toFixed(12).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function reverseAngleAnchorType(anchorType: SegmentAnchorType): SegmentAnchorType {
+  if (anchorType === 'DS') return 'DE';
+  if (anchorType === 'DE') return 'DS';
+  if (anchorType === 'RS') return 'RE';
+  return 'RS';
 }
 
 export function removeColinearSegments(segments: Segment[]): Segment[] {

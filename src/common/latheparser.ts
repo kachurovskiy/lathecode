@@ -7,9 +7,12 @@ export type RadiusDiameterType = 'R' | 'D';
 export type StockHoleType = 'IR' | 'ID';
 export type SegmentStartType = 'DS' | 'RS';
 export type SegmentEndType = 'DE' | 'RE';
+export type SegmentAnchorType = SegmentStartType | SegmentEndType;
 export type CurveType = 'CONV' | 'CONC';
 export type EdgeFeatureType = 'CH' | 'FI';
 export type CommentList = readonly string[];
+
+const CENTERLINE_EPSILON = 1e-9;
 
 export interface NumericParam<Name extends string> {
   readonly name: Name;
@@ -101,6 +104,8 @@ export interface CurvedLine {
   readonly endType: SegmentEndType;
   readonly end: number;
   readonly curveType: CurveType | null;
+  readonly angle: NumericParam<'A'> | null;
+  readonly angleAnchorType: SegmentAnchorType | null;
   readonly comment: string;
   readonly startFeature: EdgeFeature | null;
   readonly endFeature: EdgeFeature | null;
@@ -302,7 +307,30 @@ class LineCursor {
   }
 
   float(): number {
+    return this.takeFloat(false);
+  }
+
+  signedFloat(): number {
+    return this.takeFloat(true);
+  }
+
+  maybeParam<Name extends string>(name: Name): NumericParam<Name> | null {
+    if (!this.line.startsWith(name, this.position)) return null;
+    this.literal(name);
+    return {name, value: this.float()};
+  }
+
+  maybeSignedParam<Name extends string>(name: Name): NumericParam<Name> | null {
+    if (!this.line.startsWith(name, this.position)) return null;
+    this.literal(name);
+    return {name, value: this.signedFloat()};
+  }
+
+  private takeFloat(allowSign: boolean): number {
     const start = this.position;
+    if (allowSign && (this.line[this.position] === '+' || this.line[this.position] === '-')) {
+      this.position++;
+    }
     this.takeDigits();
     if (this.line[this.position] === '.' && isDigit(this.line[this.position + 1])) {
       this.position++;
@@ -311,12 +339,6 @@ class LineCursor {
     const value = Number.parseFloat(this.line.substring(start, this.position));
     this.spaces();
     return value;
-  }
-
-  maybeParam<Name extends string>(name: Name): NumericParam<Name> | null {
-    if (!this.line.startsWith(name, this.position)) return null;
-    this.literal(name);
-    return {name, value: this.float()};
   }
 
   maybeCurveType(): CurveType | null {
@@ -497,13 +519,57 @@ function parseStraightLine(cursor: LineCursor): StraightLine {
 function parseCurvedLine(cursor: LineCursor): CurvedLine {
   cursor.literal('L');
   const length = cursor.float();
-  const startType = cursor.oneOf(['DS', 'RS'] as const);
-  const start = cursor.float();
-  const startFeature = cursor.maybeEdgeFeature();
-  const endType = cursor.oneOf(['DE', 'RE'] as const);
-  const end = cursor.float();
-  const endFeature = cursor.maybeEdgeFeature();
+  const firstType = cursor.oneOf(['DS', 'RS', 'DE', 'RE'] as const);
+  const first = cursor.float();
+  const firstFeature = cursor.maybeEdgeFeature();
+  if (firstType === 'DS' || firstType === 'RS') {
+    if (cursor.lineStartsWith('DE') || cursor.lineStartsWith('RE')) {
+      const endType = cursor.oneOf(['DE', 'RE'] as const);
+      const end = cursor.float();
+      const endFeature = cursor.maybeEdgeFeature();
+      const curveType = cursor.maybeCurveType();
+      return {
+        kind: 'curved',
+        length,
+        startType: firstType,
+        start: first,
+        endType,
+        end,
+        curveType,
+        angle: null,
+        angleAnchorType: null,
+        comment: cursor.comment(),
+        startFeature: firstFeature,
+        endFeature,
+      };
+    }
+  }
+  const angle = cursor.maybeSignedParam('A');
+  if (angle) return createAngleConeLine(length, firstType, first, firstFeature, angle, cursor);
+  cursor.fail('Expected end dimension or cone angle');
+}
+
+function createAngleConeLine(
+  length: number,
+  anchorType: SegmentAnchorType,
+  anchor: number,
+  anchorFeature: EdgeFeature | null,
+  angle: NumericParam<'A'>,
+  cursor: LineCursor,
+): CurvedLine {
+  const isDiameter = anchorType === 'DS' || anchorType === 'DE';
+  const delta = Math.tan(angle.value * Math.PI / 180) * length * (isDiameter ? 2 : 1);
+  if (!Number.isFinite(delta)) cursor.fail('Cone angle must be finite');
+  const startType = anchorType === 'RS' || anchorType === 'RE' ? 'RS' : 'DS';
+  const endType = anchorType === 'RS' || anchorType === 'RE' ? 'RE' : 'DE';
+  const isStartAnchor = anchorType === 'DS' || anchorType === 'RS';
+  const rawStart = isStartAnchor ? anchor : anchor - delta;
+  const rawEnd = isStartAnchor ? anchor + delta : anchor;
+  if (rawStart < -CENTERLINE_EPSILON || rawEnd < -CENTERLINE_EPSILON) throw new Error('Cone crosses centerline');
+  const start = rawStart <= CENTERLINE_EPSILON ? 0 : rawStart;
+  const end = rawEnd <= CENTERLINE_EPSILON ? 0 : rawEnd;
   const curveType = cursor.maybeCurveType();
+  if (curveType) cursor.fail('Cone angle cannot be combined with CONV or CONC');
   return {
     kind: 'curved',
     length,
@@ -511,10 +577,12 @@ function parseCurvedLine(cursor: LineCursor): CurvedLine {
     start,
     endType,
     end,
-    curveType,
+    curveType: null,
+    angle,
+    angleAnchorType: anchorType,
     comment: cursor.comment(),
-    startFeature,
-    endFeature,
+    startFeature: isStartAnchor ? anchorFeature : null,
+    endFeature: isStartAnchor ? null : anchorFeature,
   };
 }
 

@@ -97,6 +97,18 @@ describe('lathecode', () => {
     expectPoints('L2 R2\nL3 R3', 'LINE:0,5-0,0 LINE:0,0-2,0 LINE:2,0-2,2 LINE:2,2-3,2 LINE:3,2-3,5 LINE:3,5-0,5', '');
   })
 
+  it('defines cones from one endpoint and a centerline angle', () => {
+    expect(outsideProfilePoints('L2 RS1 A45')).toBe('LINE:1,0-3,2');
+    expect(outsideProfilePoints('L2 DS2 A45')).toBe('LINE:1,0-3,2');
+    expect(outsideProfilePoints('L2 RE1 A-45')).toBe('LINE:3,0-1,2');
+  });
+
+  it('rejects angle-defined cones that cross the centerline', () => {
+    expect(outsideProfilePoints('L1 RS1 A-45')).toBe('LINE:1,0-0,1');
+    expect(() => new LatheCode('L2 RS1 A-45')).toThrow('Cone crosses centerline');
+    expect(() => new LatheCode('L2 DE2 A45')).toThrow('Cone crosses centerline');
+  });
+
   it('adds chamfers to both ends of a segment', () => {
     expect(outsideProfilePoints('L6 D10 CH0.5')).toBe('LINE:4.5,0-5,0.5 LINE:5,0.5-5,5.5 LINE:5,5.5-4.5,6');
   });
@@ -317,6 +329,10 @@ L6 RS2 RE4 CONC`);
     expect(new LatheCode('STOCK D28\nL24 DS10 DE22 BSPLINE D14 R13 D18').scale(2, 3)).toBe('STOCK D52\nL72 DS20 DE44 BSPLINE D28 R26 D36');
   });
 
+  it('scales cone angles for non-uniform radial and length scaling', () => {
+    expect(new LatheCode('L2 RS1 A45').scale(2, 4)).toBe('L8 RS2 A26.5651');
+  });
+
   it('rounds scaled dimensions to compact decimal output', () => {
     expect(new LatheCode('STOCK D10 ID1\nTOOL RECT R0.2 L2\nL2 R1\nL1 RS1 RE2').scale(1 / 3)).toBe('STOCK D1.3333 ID0.3333\nTOOL RECT R0.2 L2\nL0.6667 R0.3333\nL0.3333 RS0.3333 RE0.6667');
   });
@@ -363,6 +379,10 @@ L3 DS4 DE6
 L1 ; cutoff`).reverse()).toEqual(`L1 ; cutoff
 L3 DS6 DE4
 L2 D4 ; line 1`);
+  });
+
+  it('reverses endpoint-angle cone lines', () => {
+    expect(new LatheCode('L2 RS1 A45 ; cone').reverse()).toBe('L2 RE1 A-45 ; cone');
   });
 
   it('reverses endpoint chamfers and fillets', () => {
