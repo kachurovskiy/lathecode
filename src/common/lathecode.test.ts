@@ -168,6 +168,19 @@ L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsideProfileSegments();
     expect(latheCode.getStock()?.diameter).toBe(26);
   });
 
+  it('keeps B-spline profiles that start and end on the centerline', () => {
+    const latheCode = new LatheCode('STOCK D55\nL80 DS0 DE0 BSPLINE D50 D50 D50');
+
+    expect(latheCode.getProfiles().map(profile => profile.side)).toEqual(['outside']);
+    expect(latheCode.getStock()).toEqual({diameter: 55, length: 80, innerDiameter: 0});
+    expect(pointsToString(latheCode.getOutsideSegments()))
+      .toBe('LINE:0,80-0,0 BSPLINE:0,0-0,80[0,0|25,20|25,40|25,60|0,80]');
+  });
+
+  it('ignores B-spline profiles with no enclosed material', () => {
+    expect(new LatheCode('STOCK D55\nL80 DS0 DE0 BSPLINE D0 D0 D0').getProfiles()).toEqual([]);
+  });
+
   it('face + shoulder + cutoff', () => {
     expectPoints('L1\nL2 R2\nL3 R3\nL2', 'LINE:0,6-0,1 LINE:0,1-2,1 LINE:2,1-2,3 LINE:2,3-3,3 LINE:3,3-3,6 LINE:3,6-0,6', '');
   });

@@ -108,6 +108,26 @@ L2 D10 CH 0.5`,
     expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
   });
 
+  it('accepts generated centerline-to-centerline B-spline profiles', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      `; Lemon shape
+UNITS MM
+STOCK D55
+TOOL ROUND R3
+DEPTH CUT2 FINISH0.5
+FEED MOVE100 PASS80 PART50
+
+L80 DS0 DE0 BSPLINE D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50`,
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('lemon shape');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toContain('L80 DS0 DE0 BSPLINE D50');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
   it('tells the model how to make closed-bottom hollow parts', async () => {
     const fetchMock = mockOpenRouterResponses([
       'STOCK D60\nL10 D60\nINSIDE\nL8 D50',

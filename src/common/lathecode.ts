@@ -467,7 +467,7 @@ export class LatheCode {
       result.unshift(result.pop()!);
       result = removeColinearSegments(result);
     }
-    return result.length < 3 ? [] : result;
+    return hasClosedProfileArea(result) ? result : [];
   }
 
   private getSegmentsForSide(side: readonly LatheEntry[], zeroX: number): Segment[] {
@@ -845,6 +845,16 @@ function extendInsideProfileToZ(profile: Segment[], targetZ: number, extensionX:
     ...profile,
     ...extension,
   ]);
+}
+
+function hasClosedProfileArea(segments: readonly Segment[]): boolean {
+  const points = segments.flatMap(segment => [segment.start, segment.end, ...segment.controlPoints]);
+  if (!points.length) return false;
+  const minX = Math.min(...points.map(point => point.x));
+  const maxX = Math.max(...points.map(point => point.x));
+  const minZ = Math.min(...points.map(point => point.z));
+  const maxZ = Math.max(...points.map(point => point.z));
+  return maxX - minX > EDGE_FEATURE_EPSILON && maxZ - minZ > EDGE_FEATURE_EPSILON;
 }
 
 function truncateProfileToZ(profile: Segment[], targetZ: number): Segment[] {
