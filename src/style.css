@@ -424,11 +424,14 @@ button.sampleDialogMoreCard:hover {
 }
 
 .toolDialogError:not(:empty) {
+  box-sizing: border-box;
+  width: min(100%, 680px);
   padding: 10px;
   background-color: #ff4c4c;
   color: white;
   margin-bottom: 12px;
   white-space: pre-wrap;
+  justify-self: start;
 }
 
 .toolApplyButton {

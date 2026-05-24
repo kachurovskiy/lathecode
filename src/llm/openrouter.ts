@@ -1,14 +1,23 @@
-import { LatheCode } from '../common/lathecode.ts';
-import { LatheCodeSyntaxError } from '../common/latheparser.ts';
 import {
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_OPENROUTER_VISION_MODEL,
   loadAppSettings,
   type AppSettings,
 } from '../common/settings.ts';
+import {
+  formatInvalidGeneratedLatheCodeError,
+  normalizeGeneratedLatheCode,
+  stripLatheCode,
+  validateOrRepairGeneratedLatheCode,
+} from './generatedlathecode.ts';
+import {
+  extractAssistantText,
+  formatNoOpenRouterContentError,
+  type OpenRouterResponse,
+} from './openrouterresponse.ts';
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MAX_REPAIR_ATTEMPTS = 3;
+const MAX_REPAIR_REQUESTS = 2;
 const OPENROUTER_PROVIDER_PRIVACY = {
   data_collection: 'deny',
   zdr: true,
@@ -28,17 +37,6 @@ type OpenRouterMessage = {
   content: string | OpenRouterContentPart[],
 };
 
-type OpenRouterResponse = {
-  choices?: {
-    message?: {
-      content?: unknown,
-    },
-  }[],
-  error?: {
-    message?: string,
-  },
-};
-
 const LATHECODE_SYSTEM_PROMPT = `You generate lathecode for a browser lathe CAM tool. Return only complete raw lathecode text, with no markdown, prose, JSON, or G-code.
 
 Lathecode syntax:
@@ -51,6 +49,7 @@ Lathecode syntax:
 - Straight profile line: L<length> R<radius> or L<length> D<diameter>. Add CH<size> for chamfers or FI<size> for fillets on both ends, for example L6 D19.6 CH0.5 or L20 D10 FI0.5.
 - Tapered or endpoint-specific profile line: L<length> RS<startRadius> RE<endRadius>, or use DS/DE for diameters. Endpoint features can follow start/end values, for example L20 DS10 FI0.5 DE10 CH1. Do not use DS or RS unless the same line also has matching DE or RE.
 - CH and FI sizes are measured along the segment's horizontal L distance, so their combined endpoint sizes must not exceed that line's L length.
+- Use CH and FI only at endpoints with an actual radial shoulder where the neighboring profile radius changes. Do not add FI or CH to every segment in a polyline curve approximation.
 - Curved profile lines add CONV or CONC after DS/DE or RS/RE. Do not use CH or FI on CONV/CONC lines.
 - Complex silhouettes may be approximated with many short L lines. Dozens of short straight segments are acceptable when a part has freeform, compound, or drawing-derived curves.
 - Numeric parameter names and values are joined with no space: write CUT1, FINISH0.2, MOVE100, R5, L10, DS5, RE10, CH0.5, FI0.5. Do not write CUT 1, MOVE 100, R 5, CH 0.5, or L 10.
@@ -108,7 +107,9 @@ ${notes.trim() || '(none)'}`,
 export async function modifyLatheCodeWithPrompt(currentLatheCode: string, modification: string): Promise<string> {
   const settings = ensureOpenRouterSettings();
   const model = settings.openRouterModel || DEFAULT_OPENROUTER_MODEL;
-  return generateValidLatheCode(settings, model, [
+  const current = splitInitialCommentPrefix(currentLatheCode);
+  const latheCodeForPrompt = current.body.trim() || currentLatheCode.trim();
+  const generated = await generateValidLatheCode(settings, model, [
     {role: 'system', content: LATHECODE_SYSTEM_PROMPT},
     {
       role: 'user',
@@ -120,9 +121,10 @@ User request:
 ${modification.trim()}
 
 Current lathecode:
-${currentLatheCode.trim()}`,
+${latheCodeForPrompt}`,
     },
   ]);
+  return prependInitialCommentPrefix(current.prefix, generated);
 }
 
 export function readImageFileAsDataUrl(file: File): Promise<TechnicalDrawingImage> {
@@ -148,6 +150,28 @@ function ensureOpenRouterSettings(): AppSettings {
   throw new Error('OpenRouter API key is required');
 }
 
+function splitInitialCommentPrefix(text: string): {prefix: string, body: string} {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  let bodyStart = 0;
+  while (bodyStart < lines.length && isInitialCommentPrefixLine(lines[bodyStart])) {
+    bodyStart++;
+  }
+  return {
+    prefix: lines.slice(0, bodyStart).join('\n').trimEnd(),
+    body: lines.slice(bodyStart).join('\n'),
+  };
+}
+
+function isInitialCommentPrefixLine(line: string): boolean {
+  return !line.trim() || /^\s*;/.test(line);
+}
+
+function prependInitialCommentPrefix(prefix: string, text: string): string {
+  const trimmedPrefix = prefix.trimEnd();
+  if (!trimmedPrefix) return text;
+  return `${trimmedPrefix}\n\n${text.trim()}`;
+}
+
 async function generateValidLatheCode(
   settings: AppSettings,
   model: string,
@@ -157,15 +181,14 @@ async function generateValidLatheCode(
   let lastError: Error | null = null;
   let lastText = '';
 
-  for (let attempt = 0; attempt < MAX_REPAIR_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt <= MAX_REPAIR_REQUESTS; attempt++) {
     lastText = normalizeGeneratedLatheCode(stripLatheCode(await sendOpenRouterChatCompletion(settings.openRouterApiKey, model, repairMessages)));
     try {
-      validateGeneratedLatheCode(lastText);
-      return lastText;
+      return validateOrRepairGeneratedLatheCode(lastText);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       repairMessages = [
-        ...messages,
+        ...repairMessages,
         {role: 'assistant', content: lastText},
         {
           role: 'user',
@@ -181,6 +204,7 @@ Common syntax fixes:
 - Use L2 D24 for a straight diameter segment. Use DS24 only when the line also has DE, for example L10 DS24 DE30.
 - Use CH0.5 and FI0.5 for chamfers and fillets, not CH 0.5 or FI 0.5. Use them only on straight or tapered lines, not on CONV or CONC lines.
 - Keep each CH/FI value within the segment's horizontal L length.
+- Use CH/FI only at real radial shoulders. Remove endpoint CH/FI when the neighboring line starts or ends at the same radius or diameter.
 - Do not introduce AXES directives.
 - Do not prefix real setup or profile lines with ";". Comments are fine, but ;STOCK D64 is only a comment and does not define stock.
 
@@ -224,9 +248,10 @@ async function sendOpenRouterChatCompletion(
     throw new Error(`OpenRouter request failed (${response.status}): ${data.error?.message ?? response.statusText}`);
   }
 
-  const content = data.choices?.[0]?.message?.content;
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
   const text = extractAssistantText(content);
-  if (!text.trim()) throw new Error('OpenRouter returned an empty response');
+  if (!text.trim()) throw new Error(formatNoOpenRouterContentError(choice));
   return text;
 }
 
@@ -241,127 +266,4 @@ async function readOpenRouterResponse(response: Response): Promise<OpenRouterRes
   } catch {
     return {};
   }
-}
-
-function extractAssistantText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.map(part => {
-    if (typeof part === 'string') return part;
-    if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string') return part.text;
-    return '';
-  }).join('');
-}
-
-function stripLatheCode(text: string): string {
-  const trimmed = text.trim();
-  const jsonLatheCode = tryReadJsonLatheCode(trimmed);
-  if (jsonLatheCode) return jsonLatheCode.trim();
-
-  const fenced = trimmed.match(/```(?:lathecode|text|txt)?\s*([\s\S]*?)```/i);
-  return (fenced?.[1] ?? trimmed).trim();
-}
-
-function normalizeGeneratedLatheCode(text: string): string {
-  return text
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map(normalizeGeneratedLatheCodeLine)
-    .join('\n')
-    .trim();
-}
-
-function normalizeGeneratedLatheCodeLine(line: string): string {
-  const uncommentedCode = getCommentedCodeLine(line);
-  if (uncommentedCode !== null) return normalizeGeneratedLatheCodeLine(uncommentedCode);
-  if (/^\s*;/.test(line)) return line.trimEnd();
-  const commentIndex = line.indexOf(';');
-  const code = commentIndex >= 0 ? line.substring(0, commentIndex) : line;
-  const comment = commentIndex >= 0 ? line.substring(commentIndex) : '';
-  const normalizedCode = normalizeLoneCurveStartParams(code.replace(
-    /\b(CUT|FINISH|MOVE|PASS|PART|ID|IR|DS|DE|RS|RE|CH|FI|NA|R|D|L|H|A)\s+([0-9]+(?:\.[0-9]*)?|\.[0-9]+)/g,
-    '$1$2',
-  ));
-  return `${normalizedCode.trimEnd()}${comment ? ` ${comment.trim()}` : ''}`;
-}
-
-function getCommentedCodeLine(line: string): string | null {
-  const uncommented = line.trimStart().match(/^;\s*(.*)$/)?.[1].trimStart();
-  if (!uncommented || !isLatheCodeLine(uncommented)) return null;
-  return uncommented;
-}
-
-function isLatheCodeLine(line: string): boolean {
-  return /^(UNITS|STOCK|TOOL|DEPTH|FEED|MODE|AXES|INSIDE)\b/.test(line) || /^L\s*([0-9]+(?:\.[0-9]*)?|\.[0-9]+)/.test(line);
-}
-
-function normalizeLoneCurveStartParams(code: string): string {
-  return code
-    .replace(/^(\s*L[0-9]+(?:\.[0-9]*)?\s+)DS([0-9]+(?:\.[0-9]*)?|\.[0-9]+)\s*$/i, '$1D$2')
-    .replace(/^(\s*L[0-9]+(?:\.[0-9]*)?\s+)RS([0-9]+(?:\.[0-9]*)?|\.[0-9]+)\s*$/i, '$1R$2');
-}
-
-function tryReadJsonLatheCode(text: string): string | null {
-  if (!text.startsWith('{')) return null;
-  try {
-    const parsed = JSON.parse(text) as {lathecode?: unknown, latheCode?: unknown};
-    if (typeof parsed.lathecode === 'string') return parsed.lathecode;
-    if (typeof parsed.latheCode === 'string') return parsed.latheCode;
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function validateGeneratedLatheCode(text: string) {
-  let latheCode: LatheCode;
-  try {
-    latheCode = new LatheCode(text);
-  } catch (error) {
-    throw new Error(formatLatheCodeValidationError(error, text));
-  }
-  if (!latheCode.getStock()) throw new Error('missing valid STOCK dimensions');
-  if (!latheCode.getProfiles().length) throw new Error('missing profile L lines');
-}
-
-function formatLatheCodeValidationError(error: unknown, text: string): string {
-  if (!(error instanceof LatheCodeSyntaxError)) {
-    return error instanceof Error ? error.message : String(error);
-  }
-
-  const line = text.split(/\n/)[error.line - 1] ?? '';
-  const hint = getSyntaxHint(error.message, line);
-  return `${error.message}
-Line ${error.line}: ${line || '(empty)'}${hint ? `\nHint: ${hint}` : ''}`;
-}
-
-function getSyntaxHint(message: string, line: string): string {
-  if (message.includes('Expected digit') && /\b(CUT|FINISH|MOVE|PASS|PART|ID|IR|DS|DE|RS|RE|CH|FI|NA|R|D|L|H|A)\s+[0-9.]/.test(line)) {
-    return 'lathecode numeric parameters have no space between the name and value, for example CUT1, MOVE100, L5, R5, DS5, RE10, CH0.5, or FI0.5.';
-  }
-  if (message.includes('Invalid lathe line') && /\b[DR]S[0-9.]+\s*$/.test(line)) {
-    return 'DS and RS are start values for curved or tapered lines and need matching DE or RE. Use D or R for a straight segment, for example L2 D24.';
-  }
-  if (message.includes('Unexpected line')) {
-    return 'only setup directives, L profile lines, INSIDE, and comment lines are allowed in generated lathecode.';
-  }
-  return '';
-}
-
-function formatInvalidGeneratedLatheCodeError(errorMessage: string, returnedText: string): string {
-  const fields = [
-    'OpenRouter returned invalid lathecode.',
-    '',
-    'Error:',
-    errorMessage,
-  ];
-  if (returnedText) {
-    fields.push('', 'Returned lathecode:', truncateText(returnedText, 800));
-  }
-  return fields.join('\n');
-}
-
-function truncateText(text: string, maxLength: number): string {
-  return text.length <= maxLength ? text : `${text.substring(0, maxLength)}...`;
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LatheCode } from '../common/lathecode';
-import { createLatheCodeFromPrompt } from './openrouter';
+import { createLatheCodeFromPrompt, modifyLatheCodeWithPrompt } from './openrouter';
 
 describe('OpenRouter lathecode generation', () => {
   beforeEach(() => {
@@ -89,18 +89,19 @@ L2 D10 CH 0.5`,
     expect(request.messages[0].content).toContain('FI<size>');
     expect(request.messages[0].content).toContain('L20 DS10 FI0.5 DE10 CH1');
     expect(request.messages[0].content).toContain("measured along the segment's horizontal L distance");
+    expect(request.messages[0].content).toContain('actual radial shoulder');
     expect(request.messages[0].content).toContain('Do not use CH or FI on CONV/CONC lines');
   });
 
   it('includes chamfer and fillet syntax in repair prompts', async () => {
     const fetchMock = mockOpenRouterResponses([
-      'STOCK D10\nL2 D10 CHX',
-      'STOCK D10\nL2 D10 CHX',
-      'STOCK D10\nL2 D10 CHX',
+      'STOCK D10\nL2 D10 BAD',
+      'STOCK D10\nL2 D10 BAD',
+      'STOCK D10\nL2 D10 BAD',
     ]);
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(createLatheCodeFromPrompt('invalid chamfer')).rejects.toThrow(/CHX/);
+    await expect(createLatheCodeFromPrompt('invalid profile')).rejects.toThrow(/BAD/);
 
     const repairRequest = JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string) as {
       messages: {content: string}[],
@@ -109,6 +110,7 @@ L2 D10 CH 0.5`,
     expect(repairPrompt).toContain('Use CH0.5 and FI0.5');
     expect(repairPrompt).toContain('not CH 0.5 or FI 0.5');
     expect(repairPrompt).toContain('not on CONV or CONC lines');
+    expect(repairPrompt).toContain('real radial shoulders');
   });
 
   it('formats invalid generated lathecode errors as multiline fields', async () => {
@@ -120,6 +122,42 @@ L2 D10 CH 0.5`,
 
     await expect(createLatheCodeFromPrompt('invalid axes')).rejects.toThrow(
       /OpenRouter returned invalid lathecode\.\n\nError:\nExpected "UP" or "DOWN".*\nLine 2: AXES RIGHT\n\nReturned lathecode:\nSTOCK D10\nAXES RIGHT\nL2 R3/s,
+    );
+  });
+
+  it('reports reasoning-only length responses as missing lathecode content', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      {
+        content: null,
+        finish_reason: 'length',
+        reasoning: 'I will think for too long before writing the lathecode.',
+      },
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createLatheCodeFromPrompt('simple cylinder')).rejects.toThrow(
+      /OpenRouter returned no lathecode content.*Finish reason: length.*reasoning text.*completion token limit.*Model response excerpt:\nI will think for too long/s,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes reasoning detail text when a provider returns no final content', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      {
+        content: null,
+        finish_reason: 'length',
+        reasoning_details: [
+          {
+            type: 'reasoning.text',
+            text: 'The model spent the whole response explaining a cup bottom instead of returning lathecode.',
+          },
+        ],
+      },
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createLatheCodeFromPrompt('add a cup bottom')).rejects.toThrow(
+      /Model response excerpt:\nThe model spent the whole response explaining a cup bottom/,
     );
   });
 
@@ -170,6 +208,122 @@ L0 DS48`,
     expect(new LatheCode(latheCodeText).getProfiles().length).toBe(2);
   });
 
+  it('keeps imported STL setup scaffold comments from becoming duplicate setup directives', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      `; Rooks.stl
+
+; Uncomment and modify lines below as needed
+; STOCK D5
+; TOOL RECT R0.2 L2
+; DEPTH CUT1 FINISH0.1
+; FEED MOVE200 PASS50 PART10 ; speeds mm/min
+; MODE TURN ; for classic style of material removal
+; AXES RIGHT DOWN ; for non-NanoEls controllers
+
+STOCK D41.520
+TOOL RECT R0.2 L2
+L7.000 R19.990
+L1.000 RS19.990 RE19.250`,
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('rook from STL');
+    const latheCode = new LatheCode(latheCodeText);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toContain('; STOCK D5');
+    expect(latheCodeText).toMatch(/^STOCK D41\.520$/m);
+    expect(latheCodeText).not.toMatch(/^STOCK D5$/m);
+    expect(latheCode.getStock()?.diameter).toBeCloseTo(41.52);
+    expect(latheCode.getProfiles().length).toBe(1);
+  });
+
+  it('comments active imported STL setup scaffold directives before validation', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      `; Rooks.stl
+
+; Uncomment and modify lines below as needed
+STOCK D5
+TOOL RECT R0.2 L2
+DEPTH CUT1 FINISH0.1
+FEED MOVE200 PASS50 PART10 ; speeds mm/min
+MODE TURN ; for classic style of material removal
+AXES RIGHT DOWN ; for non-NanoEls controllers
+
+STOCK D41.520
+TOOL RECT R0.2 L2
+L7.000 R19.990
+L1.000 RS19.990 RE19.250`,
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('rook from STL');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toMatch(/^STOCK D41\.520$/m);
+    expect(latheCodeText).not.toMatch(/^STOCK D5$/m);
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
+  it('collapses repeated setup blocks before asking OpenRouter to repair them', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      `; Rooks.stl
+STOCK D5
+TOOL RECT R0.2 L2
+DEPTH CUT1 FINISH0.1
+
+STOCK D41.520
+TOOL RECT R0.2 L2
+L7.000 R19.990
+L1.000 RS19.990 RE19.250`,
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('rook from STL');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toMatch(/^STOCK D41\.520$/m);
+    expect(latheCodeText).toMatch(/^DEPTH CUT1 FINISH0\.1$/m);
+    expect(latheCodeText).not.toMatch(/^STOCK D5$/m);
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
+  it('omits leading commented lathecode from modification prompts and reattaches it locally', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      `STOCK D41.520
+TOOL RECT R0.2 L2
+L5.000 R19.990`,
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const currentLatheCode = `; Rooks.stl
+
+; Uncomment and modify lines below as needed
+; STOCK D5
+; TOOL RECT R0.2 L2
+; DEPTH CUT1 FINISH0.1
+; FEED MOVE200 PASS50 PART10 ; speeds mm/min
+; MODE TURN ; for classic style of material removal
+; AXES RIGHT DOWN ; for non-NanoEls controllers
+
+STOCK D41.520
+TOOL RECT R0.2 L2
+L7.000 R19.990`;
+
+    const latheCodeText = await modifyLatheCodeWithPrompt(currentLatheCode, 'make it shorter');
+    const request = getOpenRouterRequest(fetchMock);
+    const prompt = request.messages[1].content;
+
+    expect(prompt).not.toContain('; Rooks.stl');
+    expect(prompt).not.toContain('Uncomment and modify lines below as needed');
+    expect(prompt).not.toContain('; STOCK D5');
+    expect(prompt).toContain('STOCK D41.520');
+    expect(prompt).toContain('L7.000 R19.990');
+    expect(latheCodeText).toMatch(/^; Rooks\.stl\n\n; Uncomment and modify lines below as needed/);
+    expect(latheCodeText).toContain('\n\nSTOCK D41.520\nTOOL RECT R0.2 L2\nL5.000 R19.990');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
   it('adds line context and syntax hints when invalid lathecode remains invalid', async () => {
     vi.stubGlobal('fetch', mockOpenRouterResponses([
       'STOCK D10\nDEPTH CUTX\nL2 R3',
@@ -179,9 +333,72 @@ L0 DS48`,
 
     await expect(createLatheCodeFromPrompt('invalid')).rejects.toThrow(/Line 2: DEPTH CUTX/);
   });
+
+  it('repairs same-radius generated fillets locally before asking OpenRouter', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D20\nL2 R5 FI0.5\nL2 R5',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('invalid fillet');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toContain('L2 RS5 FI0.5 RE5');
+    expect(latheCodeText).not.toContain('RE5 FI0.5');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
+  it('reduces oversized generated chamfers locally before asking OpenRouter', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D20\nL1 D10 CH0.6',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('oversized chamfer');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toContain('L1 D10 CH0.5');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
+  it('removes unsupported generated features from curved segments locally', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D12\nL5 DS0 FI0.5 DE10 CONV\nL1 D10',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('curved segment with bad fillet');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toContain('L5 DS0 DE10 CONV');
+    expect(latheCodeText).not.toContain('FI0.5');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
+  it('removes malformed generated chamfer tokens locally before asking OpenRouter', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D10\nL2 D10 CHX',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('malformed chamfer');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toBe('STOCK D10\nL2 D10');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
 });
 
-function mockOpenRouterResponses(contents: string[]) {
+type MockOpenRouterContent = string | {
+  content?: unknown,
+  finish_reason?: string | null,
+  native_finish_reason?: string | null,
+  reasoning?: unknown,
+  reasoning_details?: unknown,
+  refusal?: unknown,
+};
+
+function mockOpenRouterResponses(contents: MockOpenRouterContent[]) {
   let index = 0;
   return vi.fn().mockImplementation(async () => {
     const content = contents[Math.min(index, contents.length - 1)];
@@ -191,10 +408,24 @@ function mockOpenRouterResponses(contents: string[]) {
       status: 200,
       statusText: 'OK',
       json: async () => ({
-        choices: [{message: {content}}],
+        choices: [mockOpenRouterChoice(content)],
       }),
     };
   });
+}
+
+function mockOpenRouterChoice(content: MockOpenRouterContent) {
+  if (typeof content === 'string') return {message: {content}};
+  return {
+    finish_reason: content.finish_reason,
+    native_finish_reason: content.native_finish_reason,
+    message: {
+      content: content.content,
+      reasoning: content.reasoning,
+      reasoning_details: content.reasoning_details,
+      refusal: content.refusal,
+    },
+  };
 }
 
 function getOpenRouterRequest(fetchMock: ReturnType<typeof mockOpenRouterResponses>) {
