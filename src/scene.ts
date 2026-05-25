@@ -251,6 +251,7 @@ const PART_MATERIAL_COLOR = 0xe5e8ec;
 const PART_MATERIAL_OPACITY = 0.68;
 const STOCK_MATERIAL_COLOR = 0x7ed957;
 const STOCK_MATERIAL_OPACITY = 0.22;
+const CENTERLINE_EPSILON = 1e-9;
 
 function createMetalMaterial() {
   return new THREE.MeshStandardMaterial({
@@ -416,7 +417,10 @@ function polarToCartesian(radius: number, angleInDegrees: number) {
 }
 
 function segmentsToVectors(segments: Segment[]): THREE.Vector2[] {
-  return removeConsecutiveVectorDuplicates(approximateSegments(segments, 0.1).map(point => new THREE.Vector2(point.x, point.z)));
+  return removeConsecutiveVectorDuplicates(
+    approximateSegments(removeSolidCenterlineClosingSegment(segments), 0.1)
+      .map(point => new THREE.Vector2(point.x, point.z)),
+  );
 }
 
 function removeConsecutiveVectorDuplicates(points: THREE.Vector2[]): THREE.Vector2[] {
@@ -425,6 +429,19 @@ function removeConsecutiveVectorDuplicates(points: THREE.Vector2[]): THREE.Vecto
     if (!result.length || !result.at(-1)!.equals(point)) result.push(point);
   }
   return result;
+}
+
+function removeSolidCenterlineClosingSegment(segments: Segment[]): Segment[] {
+  const first = segments[0];
+  if (!first || segments.length < 2) return segments;
+  if (first.type !== 'LINE') return segments;
+  if (!isCenterlineX(first.start.x) || !isCenterlineX(first.end.x)) return segments;
+  if (!segments.slice(1).some(segment => !isCenterlineX(segment.start.x) || !isCenterlineX(segment.end.x))) return segments;
+  return segments.slice(1);
+}
+
+function isCenterlineX(x: number): boolean {
+  return Math.abs(x) <= CENTERLINE_EPSILON;
 }
 
 export function resetRotation(object: THREE.Object3D) {

@@ -29,8 +29,28 @@ describe('3D scene rendering', () => {
 
     expect(size.y).toBeCloseTo(5);
   });
+
+  it('revolves solid endpoint cones without a degenerate centerline closure', () => {
+    expect(getLatheProfilePoints('STOCK D30\nL50 DS0 DE30')).toEqual([
+      [0, 0],
+      [15, 50],
+      [0, 50],
+    ]);
+    expect(getLatheProfilePoints('STOCK D30\nL50 DS30 DE0')).toEqual([
+      [0, 0],
+      [15, 0],
+      [0, 50],
+    ]);
+  });
 });
 
 function getLatheGeometry(object: THREE.Object3D): THREE.LatheGeometry {
   return (object as THREE.Mesh<THREE.LatheGeometry>).geometry;
+}
+
+function getLatheProfilePoints(text: string): number[][] {
+  return getLatheGeometry(createLatheRenderObjects(new LatheCode(text)).latheMesh)
+    .parameters
+    .points
+    .map(point => [point.x, point.y]);
 }

@@ -323,6 +323,925 @@ describe('StartPanel', () => {
     expect(createObjectUrl).not.toHaveBeenCalled();
   });
 
+  it('starts a default lathecode from drawn dimensions', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+    document.title = 'lathecode editor';
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+
+    expect(document.querySelector('.profileDrawingDialogContainer')).not.toBeNull();
+    expect(document.title).toBe('Profile Designer');
+    expect(document.querySelector('.profileDrawingDialogContainer > h2')).toBeNull();
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingDiameter"]')!.value).toBe('30');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingLength"]')!.value).toBe('50');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingSnap"]')!.value).toBe('1');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingGrid"]')!.value).toBe('5');
+    expect(document.querySelector('.profileDrawingWorkspace')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingWorkspace.longPart')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingWorkspace > .profileDrawingPreview3d')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingPreview3d .profileDrawingPreview3dCanvas, .profileDrawingPreview3d .samplePreviewUnavailable')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingPreview')).toBeNull();
+    expect(document.querySelector('.profileDrawingControls .profileDrawingActions')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingHistoryActions.setupSegmented')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingDialogActions.setupSegmented')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingUndoButton.setupSegmentButton')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingDialogActions .dialogCloseButton.setupSegmentButton')).not.toBeNull();
+    expect(document.querySelector<HTMLElement>('.profileDrawingSelectionControls')!.hidden).toBe(false);
+    expect(document.querySelector('.profileDrawingSelectionControls > .profileDrawingPointEditor')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingPointEditor > strong')).toBeNull();
+
+    clickDialogButton('Use lathecode');
+
+    expect(started).toHaveLength(1);
+    expect(document.title).toBe('lathecode editor');
+    expect(started[0]).toContain('STOCK D30');
+    expect(started[0]).toContain('L50 D30');
+    const latheCode = new LatheCode(started[0]);
+    expect(latheCode.getStock()).toEqual({diameter: 30, length: 50, innerDiameter: 0});
+    expect(latheCode.getProfiles().length).toBe(1);
+  });
+
+  it('keeps the drawing viewport proportional when dimensions change', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const frame = document.querySelector<HTMLElement>('.profileDrawingFrame')!;
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+    const preview = document.querySelector<HTMLElement>('.profileDrawingPreview3d')!;
+    const previewTextBeforeResize = preview.dataset.previewText;
+
+    expectStockAspectRatio(50 / 15);
+    expect(Number(frame.style.getPropertyValue('--profileDrawingFrameAspect'))).toBeGreaterThan(2);
+    expect(getSvgViewBox(svg).height).toBeLessThan(PROFILE_TEST_VIEW_HEIGHT);
+    expect(getRenderedSvgPixelValue(svg, '--profileDrawingSizeHintFontSize')).toBeCloseTo(16, 3);
+    expect(getRenderedSvgLength(svg, Number(document.querySelector<SVGCircleElement>('.profileDrawingPoint.selected')!.getAttribute('r'))))
+      .toBeCloseTo(6, 4);
+
+    setInputValue('input[name="drawingDiameter"]', '60');
+    expectStockAspectRatio(50 / 30);
+    expect(document.querySelector('.profileDrawingWorkspace.longPart')).toBeNull();
+    expect(preview.dataset.previewText).not.toBe(previewTextBeforeResize);
+    expect(getRenderedSvgPixelValue(svg, '--profileDrawingSizeHintFontSize')).toBeCloseTo(16, 3);
+    expect(getRenderedSvgLength(svg, Number(document.querySelector<SVGCircleElement>('.profileDrawingPoint.selected')!.getAttribute('r'))))
+      .toBeCloseTo(6, 4);
+
+    setInputValue('input[name="drawingLength"]', '30');
+    expectStockAspectRatio(30 / 30);
+    expect(document.querySelector('.profileDrawingWorkspace.longPart')).toBeNull();
+
+    setInputValue('input[name="drawingLength"]', '120');
+    expect(document.querySelector('.profileDrawingWorkspace.longPart')).not.toBeNull();
+    expect(Number(frame.style.getPropertyValue('--profileDrawingFrameAspect'))).toBeGreaterThan(3);
+  });
+
+  it('uses the editable grid spacing for profile designer grid lines', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingGrid"]')!.value).toBe('5');
+    expect(document.querySelectorAll('.profileDrawingGridLine')).toHaveLength(11);
+
+    setInputValue('input[name="drawingGrid"]', '10');
+
+    expect(document.querySelectorAll('.profileDrawingGridLine')).toHaveLength(5);
+  });
+
+  it('keeps selection controls mounted when nothing is selected', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+    const selectionControls = document.querySelector<HTMLElement>('.profileDrawingSelectionControls')!;
+
+    expect(selectionControls.hidden).toBe(false);
+    expect(selectionControls.classList.contains('empty')).toBe(false);
+
+    clickDialogButton('Select');
+    dispatchProfileMouse(svg, 'mousedown', 25, 15);
+
+    expect(selectionControls.hidden).toBe(false);
+    expect(selectionControls.classList.contains('empty')).toBe(true);
+    expect(selectionControls.getAttribute('aria-hidden')).toBe('true');
+    expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>('.profileDrawingSegmentEditor')!.hidden).toBe(true);
+  });
+
+  it('ignores drawing clicks in the profile gutter outside the plotted stock', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    setInputValue('input[name="drawingDiameter"]', '60');
+    setInputValue('input[name="drawingLength"]', '30');
+
+    const rightGutterPoint = profileSvgPoint(30, 30, {lengthMm: 30, stockDiameterMm: 60});
+    expect(document.querySelectorAll('.profileDrawingPoint.outside')).toHaveLength(2);
+
+    dispatchSvgMouse(svg, 'mousedown', rightGutterPoint.x + 80, rightGutterPoint.y);
+    dispatchSvgMouse(window, 'mouseup', rightGutterPoint.x + 80, rightGutterPoint.y);
+
+    expect(document.querySelectorAll('.profileDrawingPoint.outside')).toHaveLength(2);
+  });
+
+  it('shows local size hints in the profile designer', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    expect(getProfileSizeHintTexts('horizontal')).toContain('50');
+
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mouseup', 25, 20);
+
+    expect(document.querySelectorAll('.profileDrawingSizeGuide')).toHaveLength(4);
+    expect(getProfileSizeHintTexts('horizontal')).toContain('25');
+    expect(getProfileSizeHintTexts('vertical')).toContain('5');
+    expect(getProfileSizeHintTexts('diagonal')).toContain('25.495');
+    expectVerticalSizeHintsNearGuides(7);
+  });
+
+  it('shows vertical size hints beside vertical profile segments', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    dispatchProfileMouse(svg, 'mousedown', 25, 30);
+    dispatchProfileMouse(window, 'mouseup', 25, 30);
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mouseup', 25, 20);
+
+    expect(getProfileSizeHintTexts('vertical')).toContain('5');
+    expectVerticalSegmentHintOppositeIcon(25, 25);
+  });
+
+  it('omits diagonal length hints for curved and spline profile segments', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    clickDialogButton('Convex');
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mouseup', 25, 20);
+
+    expect(getProfileSizeHintTexts('horizontal')).toContain('25');
+    expect(getProfileSizeHintTexts('vertical')).toContain('5');
+    expect(getProfileSizeHintTexts('diagonal')).toEqual([]);
+
+    clickDialogButton('Reset');
+    setInputValue('input[name="drawingPointDiameter"]', '20');
+    clickDialogButton('Spline');
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mouseup', 25, 20);
+
+    expect(getProfileSizeHintTexts('horizontal')).toContain('50');
+    expect(getProfileSizeHintTexts('vertical')).toContain('5');
+    expect(getProfileSizeHintTexts('diagonal')).toEqual([]);
+  });
+
+  it('flips drawn profiles before sending them to the editor', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    dispatchProfileMouse(svg, 'mousedown', 10, 20);
+    dispatchProfileMouse(window, 'mouseup', 10, 20);
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('L40 DS30 DE20');
+    expect(started[0]).toContain('L10 DS20 DE30');
+    expect(started[0]).not.toContain('L10 DS30 DE20');
+  });
+
+  it('switches to select when clicking an existing point with a drawing tool active', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingToolButton.selected')!.textContent).toBe('Line');
+
+    dispatchProfileMouse(svg, 'mousedown', 50, 30);
+    dispatchProfileMouse(window, 'mouseup', 50, 30);
+
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingToolButton.selected')!.textContent).toBe('Select');
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('L50 D30');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('starts the dimensions drawing from current editor lathecode', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container, {
+      getCurrentLatheCodeText: () => 'STOCK D44\nL4 D20\nL8 D30\nINSIDE\nL5 D8\nL7 D10',
+    });
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingDiameter"]')!.value).toBe('44');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingLength"]')!.value).toBe('12');
+
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('STOCK D44');
+    expect(started[0]).toContain('L4 D20\nL8 D30');
+    expect(started[0]).toContain('INSIDE\nL5 D8\nL7 D10');
+    expect(started[0]).not.toMatch(/^L0(?:\s|$)/m);
+    const latheCode = new LatheCode(started[0]);
+    expect(latheCode.getStock()).toEqual({diameter: 44, length: 12, innerDiameter: 0});
+    expect(latheCode.getProfiles().map(profile => profile.side)).toEqual(['outside', 'inside']);
+  });
+
+  it('imports the goblet sample into profile designer without inside/outside crossings', () => {
+    const sample = START_SAMPLE_DEFINITIONS.find(entry => entry.id === 'goblet-profile');
+    expect(sample).toBeDefined();
+    if (!sample) return;
+
+    const container = createStartContainer();
+    const start = new StartPanel(container, {
+      getCurrentLatheCodeText: () => sample.text,
+    });
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    clickDialogButton('Use lathecode');
+
+    const insideText = started[0].split(/^INSIDE\b/m)[1] ?? '';
+    expect(insideText).not.toMatch(/\b(?:D|DS|DE)34\b/);
+    expectInsideProfileClearOfOutside('goblet-profile profile designer import', new LatheCode(started[0]));
+  });
+
+  it('preserves current lathecode edge features as editable segment attributes', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container, {
+      getCurrentLatheCodeText: () => 'STOCK D30\nL50 DS30 FI1 DE30 CH1',
+    });
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    expect(document.querySelectorAll('.profileDrawingPoint.outside')).toHaveLength(2);
+
+    clickDialogButton('Select');
+    dispatchProfileMouse(svg, 'mousedown', 25, 30);
+
+    expect(document.querySelector<HTMLElement>('.profileDrawingSegmentEditor')!.hidden).toBe(false);
+    expect(Array.from(document.querySelectorAll<HTMLButtonElement>('.profileDrawingSegmentFeatureButton.selected'))
+      .map(button => `${button.dataset.endpoint}:${button.dataset.feature}`))
+      .toEqual(['start:chamfer', 'end:fillet']);
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingSegmentStartFeatureSize"]')!.value).toBe('1');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingSegmentEndFeatureSize"]')!.value).toBe('1');
+
+    clickDialogButton('Use lathecode');
+
+    const profileLines = started[0].split('\n').filter(line => line.startsWith('L'));
+    expect(profileLines).toEqual(['L50 DS30 FI1 DE30 CH1']);
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('fits edge feature sizes when profile edits make a segment shorter', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container, {
+      getCurrentLatheCodeText: () => 'STOCK D30\nL50 DS30 FI1 DE30 CH1',
+    });
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    setInputValue('input[name="drawingLength"]', '1');
+    clickDialogButton('Use lathecode');
+
+    expect(started).toHaveLength(1);
+    expect(() => new LatheCode(started[0])).not.toThrow();
+    const definition = new LatheCode(started[0]).getOutsidePartProfileSegmentDefinitions()[0];
+    const startFeatureSize = definition.startFeature?.value ?? 0;
+    const endFeatureSize = definition.endFeature?.value ?? 0;
+    expect(startFeatureSize).toBeGreaterThan(0);
+    expect(endFeatureSize).toBeGreaterThan(0);
+    expect(startFeatureSize + endFeatureSize).toBeLessThanOrEqual(1);
+    expect(startFeatureSize).toBeLessThan(1);
+    expect(endFeatureSize).toBeLessThan(1);
+  });
+
+  it('edits drawn profile points with line, arc, escape, and delete controls', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const dialog = document.querySelector<HTMLElement>('.fullScreenDialog')!;
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mousemove', 25, 20);
+    dispatchProfileMouse(window, 'mouseup', 25, 20);
+
+    dialog.dispatchEvent(new KeyboardEvent('keydown', {key: 'Backspace', bubbles: true, cancelable: true}));
+
+    clickDialogButton('Convex');
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mouseup', 25, 20);
+
+    dialog.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
+    expect(document.querySelector('.profileDrawingDialog')).not.toBeNull();
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingToolButton.selected')!.textContent).toBe('Select');
+
+    clickDialogButton('Use lathecode');
+    expect(started[0]).toContain('CONV');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('supports keyboard undo and redo in the profile designer', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const dialog = document.querySelector<HTMLElement>('.fullScreenDialog')!;
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+    const undoButton = document.querySelector<HTMLButtonElement>('.profileDrawingUndoButton')!;
+    const redoButton = document.querySelector<HTMLButtonElement>('.profileDrawingRedoButton')!;
+
+    expect(undoButton.hidden).toBe(false);
+    expect(redoButton.hidden).toBe(false);
+    expect(undoButton.disabled).toBe(true);
+    expect(redoButton.disabled).toBe(true);
+
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mouseup', 25, 20);
+
+    expect(undoButton.disabled).toBe(false);
+    expect(redoButton.disabled).toBe(true);
+
+    dispatchKeyboard(dialog, 'keydown', 'z', {ctrlKey: true});
+    expect(undoButton.disabled).toBe(true);
+    expect(redoButton.disabled).toBe(false);
+
+    redoButton.click();
+    expect(undoButton.disabled).toBe(false);
+    expect(redoButton.disabled).toBe(true);
+
+    undoButton.click();
+    expect(undoButton.disabled).toBe(true);
+    expect(redoButton.disabled).toBe(false);
+
+    dispatchKeyboard(dialog, 'keydown', 'y', {ctrlKey: true});
+    expect(undoButton.disabled).toBe(false);
+    expect(redoButton.disabled).toBe(true);
+
+    clickDialogButton('Use lathecode');
+    expect(started[0]).toContain('L25 DS30 DE20');
+    expect(started[0]).toContain('L25 DS20 DE30');
+  });
+
+  it('supports profile designer tool keyboard shortcuts', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const dialog = document.querySelector<HTMLElement>('.fullScreenDialog')!;
+
+    expect(getSelectedProfileTool()).toBe('Line');
+
+    dispatchKeyboard(dialog, 'keydown', 'a');
+    expect(getSelectedProfileTool()).toBe('Select');
+
+    dispatchKeyboard(dialog, 'keydown', 'l');
+    expect(getSelectedProfileTool()).toBe('Line');
+
+    dispatchKeyboard(dialog, 'keydown', 'C');
+    expect(getSelectedProfileTool()).toBe('Convex');
+
+    dispatchKeyboard(dialog, 'keydown', 'c');
+    expect(getSelectedProfileTool()).toBe('Concave');
+
+    dispatchKeyboard(dialog, 'keydown', 's');
+    expect(getSelectedProfileTool()).toBe('Spline');
+
+    dispatchKeyboard(dialog, 'keydown', 'f');
+    expect(getSelectedProfileTool()).toBe('Free');
+
+    dispatchKeyboard(dialog, 'keydown', 'a');
+    dispatchKeyboard(document.querySelector<HTMLInputElement>('input[name="drawingDiameter"]')!, 'keydown', 'l');
+    expect(getSelectedProfileTool()).toBe('Select');
+  });
+
+  it('allows vertical profile steps without tiny filler lengths', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    dispatchProfileMouse(svg, 'mousedown', 24, 30);
+    dispatchProfileMouse(window, 'mouseup', 24, 30);
+    dispatchProfileMouse(svg, 'mousedown', 24, 18);
+    dispatchProfileMouse(window, 'mouseup', 24, 18);
+    dispatchProfileMouse(svg, 'mousedown', 50, 30);
+    dispatchProfileMouse(window, 'mouseup', 50, 30);
+    setInputValue('input[name="drawingPointDiameter"]', '18');
+
+    expect(document.querySelector('.profileDrawingSegmentIcon.horizontal')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingSegmentIcon.vertical')).not.toBeNull();
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('L26 D18');
+    expect(started[0]).toContain('L24 D30');
+    expect(started[0]).not.toMatch(/^L0(?:\s|$)/m);
+    expect(started[0]).not.toContain('L0.001');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('resizes an existing drawn profile proportionally', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    dispatchProfileMouse(svg, 'mousedown', 24, 30);
+    dispatchProfileMouse(window, 'mouseup', 24, 30);
+    dispatchProfileMouse(svg, 'mousedown', 24, 18);
+    dispatchProfileMouse(window, 'mouseup', 24, 18);
+    dispatchProfileMouse(svg, 'mousedown', 50, 30);
+    dispatchProfileMouse(window, 'mouseup', 50, 30);
+    setInputValue('input[name="drawingPointDiameter"]', '18');
+
+    setInputValue('input[name="drawingDiameter"]', '40');
+    setInputValue('input[name="drawingLength"]', '100');
+
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('STOCK D40');
+    expect(started[0]).toContain('L52 D24');
+    expect(started[0]).toContain('L48 D40');
+    expect(started[0]).not.toMatch(/^L0(?:\s|$)/m);
+    expect(started[0]).not.toContain('L0.001');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('creates valid lathecode with a spline drawing tool', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    clickDialogButton('Spline');
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+
+    const splinePath = document.querySelector<SVGPathElement>('.profileDrawingPath.outside')!.getAttribute('d')!;
+    expect((splinePath.match(/L /g) ?? []).length).toBeGreaterThan(3);
+    expect(splinePath).not.toContain('374 120.67');
+    clickDialogButton('Use lathecode');
+
+    expect(started).toHaveLength(1);
+    expect(started[0]).toContain('TOOL ROUND R1.5');
+    expect(started[0]).toContain('BSPLINE');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('keeps spline control Z positions consistent with exported lathecode', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    clickDialogButton('Spline');
+    dispatchProfileMouse(svg, 'mousedown', 10, 20);
+    dispatchProfileMouse(window, 'mouseup', 10, 20);
+
+    const zInput = document.querySelector<HTMLInputElement>('input[name="drawingPointZ"]')!;
+    const diameterInput = document.querySelector<HTMLInputElement>('input[name="drawingPointDiameter"]')!;
+    expect(Number(zInput.value)).toBeCloseTo(25, 6);
+    expect(zInput.disabled).toBe(true);
+
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mousemove', 40, 10);
+    dispatchProfileMouse(window, 'mouseup', 40, 10);
+
+    const selectedPoint = document.querySelector<SVGCircleElement>('.profileDrawingPoint.selected')!;
+    const expectedPoint = profileSvgPoint(25, 10);
+    expect(Number(selectedPoint.getAttribute('cx'))).toBeCloseTo(expectedPoint.x, 6);
+    expect(Number(selectedPoint.getAttribute('cy'))).toBeCloseTo(expectedPoint.y, 6);
+    expect(Number(zInput.value)).toBeCloseTo(25, 6);
+    expect(Number(diameterInput.value)).toBeCloseTo(10, 6);
+
+    clickDialogButton('Use lathecode');
+
+    expect(started).toHaveLength(1);
+    expect(started[0]).toContain('L50 DS30 DE30 BSPLINE D10');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('selects a drawn segment and changes its type', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    clickDialogButton('Spline');
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    dispatchProfileMouse(window, 'mouseup', 25, 20);
+
+    clickDialogButton('Select');
+    dispatchProfileMouse(svg, 'mousedown', 25, 25);
+
+    expect(document.querySelector('.profileDrawingSegmentSelection')).not.toBeNull();
+    expect(document.querySelector<HTMLElement>('.profileDrawingSegmentEditor')!.hidden).toBe(false);
+    expect(document.querySelector('.profileDrawingSelectionControls > .profileDrawingSegmentEditor')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingSegmentEditor > strong')).toBeNull();
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingSegmentTypeButton[data-tool="spline"]')!
+      .classList.contains('selected')).toBe(true);
+
+    document.querySelector<HTMLButtonElement>('.profileDrawingSegmentTypeButton[data-tool="line"]')!.click();
+
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingSegmentTypeButton[data-tool="line"]')!
+      .classList.contains('selected')).toBe(true);
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).not.toContain('BSPLINE');
+    expect(started[0]).toContain('L25 DS30 DE20');
+    expect(started[0]).toContain('L25 DS20 DE30');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('shows a hand cursor when hovering a selectable segment', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    dispatchProfileMouse(svg, 'mousemove', 25, 30);
+    expect(svg.classList.contains('profileDrawingSegmentHover')).toBe(false);
+
+    clickDialogButton('Select');
+    dispatchProfileMouse(svg, 'mousemove', 25, 30);
+    expect(svg.classList.contains('profileDrawingSegmentHover')).toBe(true);
+
+    clickDialogButton('Line');
+    expect(svg.classList.contains('profileDrawingSegmentHover')).toBe(false);
+  });
+
+  it('shows the selected tool icon near the profile cursor', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+    const cursor = document.querySelector<HTMLElement>('.profileDrawingToolCursor')!;
+
+    expect(cursor.hidden).toBe(true);
+
+    dispatchProfileMouse(svg, 'mousemove', 25, 30);
+
+    expect(cursor.hidden).toBe(false);
+    expect(cursor.dataset.tool).toBe('line');
+    expect(cursor.querySelector('.profileDrawingToolCursorIcon')).not.toBeNull();
+    expect(cursor.style.left).not.toBe('');
+    expect(cursor.style.top).not.toBe('');
+
+    clickDialogButton('Select');
+
+    expect(cursor.hidden).toBe(true);
+
+    dispatchProfileMouse(svg, 'mouseleave', 25, 30);
+
+    expect(cursor.hidden).toBe(true);
+  });
+
+  it('adds chamfers and fillets to a selected segment', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    dispatchProfileMouse(svg, 'mousedown', 24, 30);
+    dispatchProfileMouse(window, 'mouseup', 24, 30);
+    dispatchProfileMouse(svg, 'mousedown', 24, 18);
+    dispatchProfileMouse(window, 'mouseup', 24, 18);
+
+    clickDialogButton('Select');
+    dispatchProfileMouse(svg, 'mousedown', 37, 24);
+
+    expect(document.querySelector<HTMLElement>('.profileDrawingSegmentEditor')!.hidden).toBe(false);
+    const noneButton = document.querySelector<HTMLButtonElement>(
+      '.profileDrawingSegmentFeatureButton[data-endpoint="start"][data-feature="none"]',
+    )!;
+    expect(noneButton.textContent).toBe('');
+    expect(noneButton.title).toBe('None');
+    expect(noneButton.getAttribute('aria-label')).toBe('None');
+    expect(noneButton.querySelector('.profileDrawingSegmentFeatureIcon.none')).not.toBeNull();
+    document.querySelector<HTMLButtonElement>(
+      '.profileDrawingSegmentFeatureButton[data-endpoint="start"][data-feature="chamfer"]',
+    )!.click();
+    document.querySelector<HTMLButtonElement>(
+      '.profileDrawingSegmentFeatureButton[data-endpoint="end"][data-feature="fillet"]',
+    )!.click();
+    setInputValue('input[name="drawingSegmentEndFeatureSize"]', '2');
+
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('CH1');
+    expect(started[0]).toContain('FI2');
+    expect(started[0]).toContain('TOOL ROUND R1.5');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('opens point and segment context menus in the profile designer', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    expect(document.querySelectorAll('.profileDrawingPoint.outside')).toHaveLength(2);
+
+    dispatchProfileMouse(svg, 'contextmenu', 25, 30);
+    let menu = document.querySelector<HTMLElement>('.profileDrawingContextMenu')!;
+    expect(menu).not.toBeNull();
+    expect(menu.querySelector<HTMLElement>('.profileDrawingContextMenuTitle')!.textContent).toBe('Outside segment 1');
+    expect(menu.querySelector<HTMLButtonElement>('[data-action="add-point-here"]')!.disabled).toBe(false);
+    expect(menu.querySelector('[data-action="segment-tool-line"]')).not.toBeNull();
+    menu.querySelector<HTMLButtonElement>('[data-action="add-point-here"]')!.click();
+
+    expect(document.querySelector('.profileDrawingContextMenu')).toBeNull();
+    expect(document.querySelectorAll('.profileDrawingPoint.outside')).toHaveLength(3);
+
+    dispatchProfileMouse(svg, 'contextmenu', 25, 30);
+    menu = document.querySelector<HTMLElement>('.profileDrawingContextMenu')!;
+    expect(menu.querySelector<HTMLElement>('.profileDrawingContextMenuTitle')!.textContent).toBe('Outside point 2');
+    menu.querySelector<HTMLButtonElement>('[data-action="delete-point"]')!.click();
+
+    expect(document.querySelectorAll('.profileDrawingPoint.outside')).toHaveLength(2);
+
+    dispatchProfileMouse(svg, 'contextmenu', 25, 30);
+    menu = document.querySelector<HTMLElement>('.profileDrawingContextMenu')!;
+    menu.querySelector<HTMLButtonElement>('[data-action="segment-start-chamfer"]')!.click();
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('CH1');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('snaps drawn points while allowing precise point edits and delete button removal', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    setInputValue('input[name="drawingSnap"]', '0.5');
+    dispatchProfileMouse(svg, 'mousedown', 24.4, 20.4);
+    dispatchProfileMouse(window, 'mouseup', 24.4, 20.4);
+
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingPointZ"]')!.value).toBe('24.5');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingPointDiameter"]')!.value).toBe('20');
+
+    setInputValue('input[name="drawingPointZ"]', '12.25');
+    setInputValue('input[name="drawingPointDiameter"]', '18.75');
+
+    document.querySelector<HTMLButtonElement>('.profileDrawingDeletePointButton')!.click();
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('L50 D30');
+    expect(started[0]).not.toContain('DE18.75');
+  });
+
+  it('snaps dragged radial distances from neighboring points when stock diameter is fractional', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    setInputValue('input[name="drawingDiameter"]', '29.6');
+    dispatchProfileMouse(svg, 'mousedown', 50, 29.6, {stockDiameterMm: 29.6});
+    dispatchProfileMouse(window, 'mousemove', 50, 27.6, {stockDiameterMm: 29.6});
+    dispatchProfileMouse(window, 'mouseup', 50, 27.6, {stockDiameterMm: 29.6});
+
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingPointZ"]')!.value).toBe('50');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingPointDiameter"]')!.value).toBe('27.6');
+    expect(getProfileSizeHintTexts('vertical')).toContain('1');
+    expect(getProfileSizeHintTexts('vertical')).not.toContain('0.8');
+  });
+
+  it('adds an inside profile from the drawing dialog', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    clickDialogButton('Inside');
+    setInputValue('input[name="drawingPointDiameter"]', '10');
+    dispatchProfileMouse(svg, 'mousedown', 0, 0);
+    dispatchProfileMouse(window, 'mouseup', 0, 0);
+    setInputValue('input[name="drawingPointDiameter"]', '10');
+
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('INSIDE\nL50 D10');
+    const latheCode = new LatheCode(started[0]);
+    expect(latheCode.getProfiles().map(profile => profile.side)).toEqual(['outside', 'inside']);
+    expect(latheCode.getStock()).toEqual({diameter: 30, length: 50, innerDiameter: 0});
+  });
+
+  it('resets the dimensions drawing dialog to defaults', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+
+    setInputValue('input[name="drawingDiameter"]', '44');
+    setInputValue('input[name="drawingLength"]', '60');
+    setInputValue('input[name="drawingSnap"]', '0.5');
+    setInputValue('input[name="drawingGrid"]', '2.5');
+    clickDialogButton('Inside');
+    setInputValue('input[name="drawingPointDiameter"]', '10');
+    clickDialogButton('Convex');
+
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingToolButton.selected')!.textContent).toBe('Convex');
+
+    clickDialogButton('Reset');
+
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingDiameter"]')!.value).toBe('30');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingLength"]')!.value).toBe('50');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingSnap"]')!.value).toBe('1');
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingGrid"]')!.value).toBe('5');
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingProfileButton.selected')!.textContent).toBe('Outside');
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingToolButton.selected')!.textContent).toBe('Line');
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('STOCK D30');
+    expect(started[0]).toContain('L50 D30');
+    expect(started[0]).not.toContain('INSIDE');
+  });
+
+  it('offers previewed profile choices from a freehand stroke', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    clickDialogButton('Free');
+    dispatchProfileMouse(svg, 'mousedown', 0, 30);
+    dispatchProfileMouse(window, 'mousemove', 12.5, 24);
+    dispatchProfileMouse(window, 'mousemove', 25, 18);
+    dispatchProfileMouse(window, 'mousemove', 37.5, 24);
+    dispatchProfileMouse(window, 'mouseup', 50, 30);
+
+    let chooser = document.querySelector<HTMLElement>('.profileDrawingFreehandDialogContainer');
+    expect(chooser).not.toBeNull();
+    expect(Array.from(chooser!.querySelectorAll<HTMLElement>('.profileDrawingFreehandOption')).map(option => option.dataset.toolset))
+      .toEqual(['lines', 'arcs', 'arcs', 'arcs', 'spline', 'spline', 'spline', 'lines']);
+    expect(chooser!.querySelectorAll('.profileDrawingFreehandOption[data-candidate^="arc-blend-"]')).toHaveLength(3);
+    expect(chooser!.querySelectorAll('.profileDrawingFreehandOption[data-candidate^="smooth-spline-"]')).toHaveLength(3);
+    expect(chooser!.querySelectorAll('.profileDrawingFreehandProfilePreview')).toHaveLength(8);
+    expect(chooser!.querySelectorAll('.profileDrawingFreehandPartPreview .samplePreview')).toHaveLength(8);
+    expect(chooser!.querySelectorAll('button.profileDrawingFreehandOption')).toHaveLength(8);
+    expect(chooser!.querySelector('.profileDrawingFreehandSelectButton')).toBeNull();
+    expect(document.querySelector('.profileDrawingFreehandStroke')).toBeNull();
+
+    clickDialogButton('Cancel');
+    expect(document.querySelector('.profileDrawingFreehandDialogContainer')).toBeNull();
+
+    dispatchProfileMouse(svg, 'mousedown', 0, 30);
+    dispatchProfileMouse(window, 'mousemove', 12.5, 24);
+    dispatchProfileMouse(window, 'mousemove', 25, 18);
+    dispatchProfileMouse(window, 'mousemove', 37.5, 24);
+    dispatchProfileMouse(window, 'mouseup', 50, 30);
+
+    chooser = document.querySelector<HTMLElement>('.profileDrawingFreehandDialogContainer');
+    chooser!.querySelector<HTMLButtonElement>(
+      '.profileDrawingFreehandOption[data-candidate="arc-blend-balanced"]',
+    )!.click();
+
+    expect(document.querySelector('.profileDrawingFreehandDialogContainer')).toBeNull();
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('STOCK D30');
+    expect(started[0]).toMatch(/\bCONV\b|\bCONC\b/);
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
+  it('removes redundant same-diameter points from freehand profile choices', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    clickDialogButton('Free');
+    dispatchProfileMouse(svg, 'mousedown', 0, 30);
+    dispatchProfileMouse(window, 'mousemove', 10, 28);
+    dispatchProfileMouse(window, 'mousemove', 20, 30);
+    dispatchProfileMouse(window, 'mousemove', 30, 28);
+    dispatchProfileMouse(window, 'mousemove', 40, 30);
+    dispatchProfileMouse(window, 'mouseup', 50, 20);
+
+    const balancedLinesDetail = document.querySelector<HTMLElement>(
+      '.profileDrawingFreehandOption[data-candidate="balanced-lines"] > span',
+    );
+    expect(balancedLinesDetail?.textContent).toContain('3 points');
+  });
+
   it('creates lathecode from a text prompt through OpenRouter', async () => {
     const container = createStartContainer();
     const start = new StartPanel(container);
@@ -452,6 +1371,7 @@ function createStartContainer(): HTMLElement {
   container.innerHTML = `
     <section class="startSection">
       <button class="sampleCatalogButton"></button>
+      <button class="startDimensionsButton"></button>
       <button class="startStlButton"></button>
       <button class="startPromptButton"></button>
       <button class="startDrawingButton"></button>
@@ -489,6 +1409,155 @@ function setInputValue(selector: string, value: string) {
   input.value = value;
   input.dispatchEvent(new Event('input', {bubbles: true}));
   input.dispatchEvent(new Event('change', {bubbles: true}));
+}
+
+const PROFILE_TEST_VIEW_WIDTH = 720;
+const PROFILE_TEST_VIEW_HEIGHT = 360;
+const PROFILE_TEST_PADDING_LEFT = 46;
+const PROFILE_TEST_PADDING_RIGHT = 18;
+const PROFILE_TEST_PADDING_TOP = 22;
+const PROFILE_TEST_PADDING_BOTTOM = 42;
+
+function expectStockAspectRatio(expected: number) {
+  const stock = document.querySelector<SVGRectElement>('.profileDrawingStock');
+  if (!stock) throw new Error('Profile drawing stock rect not found');
+  const width = Number(stock.getAttribute('width'));
+  const height = Number(stock.getAttribute('height'));
+  expect(width / height).toBeCloseTo(expected, 4);
+}
+
+function getSvgViewBox(svg: SVGSVGElement): {x: number, y: number, width: number, height: number} {
+  const values = (svg.getAttribute('viewBox') ?? '').split(/\s+/).map(Number);
+  if (values.length !== 4 || values.some(value => !Number.isFinite(value))) {
+    throw new Error('SVG viewBox not found');
+  }
+  return {
+    x: values[0],
+    y: values[1],
+    width: values[2],
+    height: values[3],
+  };
+}
+
+function getStylePixelValue(element: HTMLElement | SVGElement, propertyName: string): number {
+  const value = element.style.getPropertyValue(propertyName).trim();
+  if (!value.endsWith('px')) throw new Error(`Style property ${propertyName} is not a px value`);
+  return Number(value.slice(0, -2));
+}
+
+function getRenderedSvgPixelValue(svg: SVGSVGElement, propertyName: string): number {
+  return getRenderedSvgLength(svg, getStylePixelValue(svg, propertyName));
+}
+
+function getRenderedSvgLength(svg: SVGSVGElement, svgLength: number): number {
+  const viewBox = getSvgViewBox(svg);
+  const rect = svg.getBoundingClientRect();
+  const renderedWidth = rect.width || PROFILE_TEST_VIEW_WIDTH;
+  return svgLength * renderedWidth / viewBox.width;
+}
+
+function getProfileSizeHintTexts(variant: string): string[] {
+  return Array.from(document.querySelectorAll<SVGTextElement>(`.profileDrawingSizeHint.${variant}`))
+    .map(label => label.textContent ?? '');
+}
+
+function expectVerticalSizeHintsNearGuides(maxDistancePx: number) {
+  const guides = Array.from(document.querySelectorAll<SVGLineElement>('.profileDrawingSizeGuide.vertical'));
+  const labels = Array.from(document.querySelectorAll<SVGTextElement>('.profileDrawingSizeHint.vertical'));
+  expect(labels).toHaveLength(guides.length);
+  guides.forEach((guide, index) => {
+    const guideX = (Number(guide.getAttribute('x1')) + Number(guide.getAttribute('x2'))) / 2;
+    const labelX = Number(labels[index].getAttribute('x'));
+    expect(Math.abs(labelX - guideX)).toBeLessThanOrEqual(maxDistancePx);
+  });
+}
+
+function expectVerticalSegmentHintOppositeIcon(zMm: number, diameterMm: number) {
+  const segmentCenterX = profileSvgPoint(zMm, diameterMm).x;
+  const icon = document.querySelector<SVGLineElement>('.profileDrawingSegmentIcon.vertical');
+  if (!icon) throw new Error('Vertical profile segment icon not found');
+  const iconX = (Number(icon.getAttribute('x1')) + Number(icon.getAttribute('x2'))) / 2;
+  const labels = Array.from(document.querySelectorAll<SVGTextElement>('.profileDrawingSizeHint.vertical'));
+  const label = labels.reduce((nearest, candidate) => {
+    const nearestDistance = Math.abs(Number(nearest.getAttribute('x')) - segmentCenterX);
+    const candidateDistance = Math.abs(Number(candidate.getAttribute('x')) - segmentCenterX);
+    return candidateDistance < nearestDistance ? candidate : nearest;
+  });
+  const labelX = Number(label.getAttribute('x'));
+  expect((labelX - segmentCenterX) * (iconX - segmentCenterX)).toBeLessThan(0);
+}
+
+function getSelectedProfileTool(): string {
+  const button = document.querySelector<HTMLButtonElement>('.profileDrawingToolButton.selected');
+  if (!button) throw new Error('Selected profile tool button not found');
+  return button.textContent ?? '';
+}
+
+function dispatchProfileMouse(
+  target: EventTarget,
+  type: string,
+  zMm: number,
+  diameterMm: number,
+  dimensions: {lengthMm?: number, stockDiameterMm?: number} = {},
+) {
+  const point = profileSvgPoint(zMm, diameterMm, dimensions);
+  dispatchSvgMouse(target, type, point.x, point.y);
+}
+
+function profileSvgPoint(
+  zMm: number,
+  diameterMm: number,
+  dimensions: {lengthMm?: number, stockDiameterMm?: number} = {},
+): { x: number, y: number } {
+  const lengthMm = dimensions.lengthMm ?? 50;
+  const stockDiameterMm = dimensions.stockDiameterMm ?? 30;
+  const plot = getProfileTestPlotBounds(lengthMm, stockDiameterMm);
+  return {
+    x: plot.left + zMm / lengthMm * plot.width,
+    y: plot.axisY - (diameterMm / 2) / (stockDiameterMm / 2) * plot.height,
+  };
+}
+
+function getProfileTestPlotBounds(lengthMm: number, diameterMm: number) {
+  const availableLeft = PROFILE_TEST_PADDING_LEFT;
+  const availableTop = PROFILE_TEST_PADDING_TOP;
+  const availableWidth = PROFILE_TEST_VIEW_WIDTH - PROFILE_TEST_PADDING_LEFT - PROFILE_TEST_PADDING_RIGHT;
+  const availableHeight = PROFILE_TEST_VIEW_HEIGHT - PROFILE_TEST_PADDING_TOP - PROFILE_TEST_PADDING_BOTTOM;
+  const radiusMm = diameterMm / 2;
+  const scale = Math.min(availableWidth / lengthMm, availableHeight / radiusMm);
+  const width = lengthMm * scale;
+  const height = radiusMm * scale;
+  const left = availableLeft + (availableWidth - width) / 2;
+  const top = availableTop + (availableHeight - height) / 2;
+  return {
+    left,
+    axisY: top + height,
+    width,
+    height,
+  };
+}
+
+function dispatchSvgMouse(target: EventTarget, type: string, clientX: number, clientY: number) {
+  target.dispatchEvent(new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX,
+    clientY,
+  }));
+}
+
+function dispatchKeyboard(
+  target: EventTarget,
+  type: string,
+  key: string,
+  options: Pick<KeyboardEventInit, 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'> = {},
+) {
+  target.dispatchEvent(new KeyboardEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    key,
+    ...options,
+  }));
 }
 
 type FetchMock = ReturnType<typeof vi.fn>;

@@ -23,9 +23,11 @@ export function createFullScreenDialog(element: HTMLElement, title: string, clos
   };
   dialogContainer.remove = removeDialog;
 
-  const dialogTitle = document.createElement('h2');
-  dialogTitle.textContent = title;
-  dialogContainer.appendChild(dialogTitle);
+  if (title) {
+    const dialogTitle = document.createElement('h2');
+    dialogTitle.textContent = title;
+    dialogContainer.appendChild(dialogTitle);
+  }
   dialogContainer.appendChild(element);
 
   const closeButton = document.createElement('button');

@@ -261,6 +261,10 @@ button.sampleDialogMoreCard {
   display: block;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  justify-self: stretch;
   object-fit: contain;
   pointer-events: none;
 }
@@ -650,7 +654,6 @@ button.sampleDialogMoreCard:hover {
 button {
   display: inline-block;
   padding: 6px 12px;
-  margin: 4px 4px 4px 0;
   font: inherit;
   text-align: center;
   text-decoration: none;
@@ -807,7 +810,6 @@ progress {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border: 1px solid #dddddd;
   padding: 12px;
   box-sizing: border-box;
   max-width: 420px;
@@ -906,6 +908,678 @@ progress {
   color: #333333;
   font-size: 13px;
   line-height: 1.35;
+}
+
+.profileDrawingDialog {
+  display: flex;
+  min-height: 0;
+  max-width: none;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.profileDrawingDialogContainer {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.profileDrawingDialogContainer > h2 {
+  flex: 0 0 auto;
+  margin: 0 0 6px;
+}
+
+.profileDrawingControls {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  margin: 0 0 8px;
+}
+
+.profileDrawingDimensionField {
+  width: auto;
+  max-width: none;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  white-space: nowrap;
+}
+
+.profileDrawingDimensionField .settingHeading {
+  flex: 0 0 auto;
+}
+
+.profileDrawingDimensionField .settingInput {
+  width: 100px;
+  padding: 6px 8px;
+}
+
+.profileDrawingProfileTools,
+.profileDrawingTools {
+  align-self: stretch;
+  align-items: stretch;
+}
+
+.profileDrawingProfileButton.selected,
+.profileDrawingProfileButton.selected:hover,
+.profileDrawingToolButton.selected,
+.profileDrawingToolButton.selected:hover {
+  border-color: #111111;
+  background-color: #fff7bf;
+}
+
+.profileDrawingSelectionControls {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 60px;
+  margin: 0 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.profileDrawingSelectionControls.empty {
+  visibility: hidden;
+}
+
+.profileDrawingWorkspace {
+  display: grid;
+  flex: 1 1 auto;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "editor";
+  gap: 0;
+  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.profileDrawingWorkspace.longPart {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "editor";
+}
+
+.profileDrawingCanvasPanel {
+  display: flex;
+  grid-area: editor;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.profileDrawingFrame {
+  display: flex;
+  width: 100%;
+  flex: 0 1 auto;
+  aspect-ratio: var(--profileDrawingFrameAspect, 2 / 1);
+  min-height: 0;
+  background-color: transparent;
+  overflow: hidden;
+}
+
+.profileDrawingSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: var(--profileDrawingFrameAspect, 2 / 1);
+  min-height: 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.profileDrawingSvg.profileDrawingSegmentHover {
+  cursor: pointer;
+}
+
+.profileDrawingToolCursor {
+  display: grid;
+  position: fixed;
+  z-index: 36;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  color: #111111;
+  filter: drop-shadow(0 1px 2px rgb(255 255 255 / 90%)) drop-shadow(0 2px 4px rgb(15 23 42 / 24%));
+  pointer-events: none;
+}
+
+.profileDrawingToolCursor[hidden] {
+  display: none;
+}
+
+.profileDrawingToolCursorIcon {
+  display: block;
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+}
+
+.profileDrawingToolCursorIcon path,
+.profileDrawingToolCursorIcon line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.profileDrawingToolCursorIcon .profileDrawingToolCursorFill {
+  fill: #ffffff;
+}
+
+.profileDrawingStock {
+  fill: #f4f6f7;
+  fill-opacity: 0.32;
+  stroke: #d6dde2;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.profileDrawingPart {
+  fill: #b8c0c8;
+  fill-opacity: 0.2;
+}
+
+.profileDrawingInsideCutout {
+  fill: #ffffff;
+  fill-opacity: 0.24;
+}
+
+.profileDrawingPath {
+  fill: none;
+  stroke: #111111;
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.profileDrawingPath.inside {
+  stroke: #276c9f;
+}
+
+.profileDrawingPath.inactive {
+  opacity: 0.45;
+}
+
+.profileDrawingSegmentSelection {
+  fill: none;
+  stroke: #f2b200;
+  stroke-width: 6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.profileDrawingFreehandStroke {
+  fill: none;
+  stroke: #8b4d00;
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.profileDrawingSegmentIcon {
+  fill: none;
+  stroke: #6f7880;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.profileDrawingSizeGuide {
+  fill: none;
+  stroke: #6f7880;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.profileDrawingSizeHint {
+  fill: #4f5962;
+  font-size: var(--profileDrawingSizeHintFontSize, 16px);
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: var(--profileDrawingSizeHintStrokeWidth, 3px);
+  stroke-linejoin: round;
+  pointer-events: none;
+  user-select: none;
+}
+
+.profileDrawingAxis {
+  stroke: #6f7880;
+  stroke-width: 1.2;
+  stroke-dasharray: 6 6;
+  vector-effect: non-scaling-stroke;
+}
+
+.profileDrawingGridLine {
+  stroke: #e3e7ea;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.profileDrawingPoint {
+  fill: #ffffff;
+  stroke: #111111;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  cursor: grab;
+}
+
+.profileDrawingPoint.inside {
+  stroke: #276c9f;
+}
+
+.profileDrawingPoint.inactive {
+  opacity: 0.55;
+}
+
+.profileDrawingPoint.selected {
+  fill: #fff7bf;
+}
+
+.profileDrawingPointEditor,
+.profileDrawingSegmentEditor {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  background-color: #ffffff;
+}
+
+.profileDrawingPointEditor {
+  white-space: nowrap;
+}
+
+.profileDrawingSegmentEditor {
+  max-width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.profileDrawingPointEditor[hidden],
+.profileDrawingSegmentEditor[hidden] {
+  display: none;
+}
+
+.profileDrawingPointFields {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.profileDrawingPointFields .profileDrawingDimensionField {
+  max-width: none;
+}
+
+.profileDrawingSelectionControls .profileDrawingDimensionField {
+  padding: 0;
+}
+
+.profileDrawingSelectionControls .settingInput {
+  width: 100px;
+  padding: 6px 8px;
+}
+
+.profileDrawingSelectionControls .setupSegmented {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+.profileDrawingDeletePointButton {
+  justify-self: start;
+  margin: 0;
+}
+
+.profileDrawingSegmentTypeTools {
+  align-items: stretch;
+}
+
+.profileDrawingSegmentTypeButton.selected,
+.profileDrawingSegmentTypeButton.selected:hover,
+.profileDrawingSegmentFeatureButton.selected,
+.profileDrawingSegmentFeatureButton.selected:hover {
+  border-color: #111111;
+  background-color: #fff7bf;
+}
+
+.profileDrawingSegmentFeatureGrid {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.profileDrawingSegmentFeatureRow {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.profileDrawingSegmentFeatureRow.disabled {
+  opacity: 0.55;
+}
+
+.profileDrawingSegmentFeatureRow > strong {
+  align-self: center;
+  font-size: 13px;
+}
+
+.profileDrawingSegmentFeatureTools {
+  align-self: stretch;
+  align-items: stretch;
+}
+
+.profileDrawingSegmentFeatureButton {
+  display: inline-grid;
+  width: 38px;
+  min-width: 0;
+  place-items: center;
+}
+
+.profileDrawingSegmentFeatureIcon {
+  display: block;
+  position: relative;
+  width: 18px;
+  height: 18px;
+  color: #222222;
+}
+
+.profileDrawingSegmentFeatureIcon.none::before,
+.profileDrawingSegmentFeatureIcon.none::after,
+.profileDrawingSegmentFeatureIcon.chamfer::before,
+.profileDrawingSegmentFeatureIcon.chamfer::after,
+.profileDrawingSegmentFeatureIcon.fillet::before,
+.profileDrawingSegmentFeatureIcon.fillet::after {
+  content: "";
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.profileDrawingSegmentFeatureIcon.none::before {
+  inset: 3px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.profileDrawingSegmentFeatureIcon.none::after {
+  top: 8px;
+  left: 2px;
+  width: 14px;
+  border-top: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transform-origin: center;
+}
+
+.profileDrawingSegmentFeatureIcon.chamfer::before {
+  inset: 0;
+  background:
+    linear-gradient(currentColor, currentColor) 4px 13px / 6px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) 13px 4px / 2px 6px no-repeat;
+}
+
+.profileDrawingSegmentFeatureIcon.chamfer::after {
+  top: 13px;
+  left: 8px;
+  width: 8px;
+  border-top: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transform-origin: left center;
+}
+
+.profileDrawingSegmentFeatureIcon.fillet::before {
+  display: none;
+}
+
+.profileDrawingSegmentFeatureIcon.fillet::after {
+  left: 3px;
+  bottom: 3px;
+  width: 12px;
+  height: 12px;
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  border-bottom-left-radius: 12px;
+}
+
+.profileDrawingSegmentFeatureRow .profileDrawingDimensionField {
+  max-width: none;
+}
+
+.profileDrawingContextMenu {
+  display: grid;
+  position: fixed;
+  z-index: 40;
+  min-width: 190px;
+  max-width: min(280px, calc(100vw - 16px));
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #c7cfd6;
+  border-radius: 6px;
+  background-color: rgb(255 255 255 / 94%);
+  box-shadow: 0 14px 32px rgb(15 23 42 / 18%);
+}
+
+.profileDrawingContextMenuSection {
+  display: grid;
+  gap: 2px;
+  padding-top: 5px;
+  border-top: 1px solid #e2e6ea;
+}
+
+.profileDrawingContextMenuSection:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.profileDrawingContextMenuTitle {
+  padding: 4px 8px 3px;
+  color: #5f6871;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+button.profileDrawingContextMenuButton {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 4px;
+  background-color: transparent;
+  color: #111111;
+  text-align: left;
+}
+
+button.profileDrawingContextMenuButton:hover,
+button.profileDrawingContextMenuButton:focus-visible {
+  background-color: #eef3f8;
+}
+
+button.profileDrawingContextMenuButton.selected {
+  background-color: #fff7bf;
+}
+
+button.profileDrawingContextMenuButton:disabled {
+  color: #8b949d;
+  cursor: default;
+}
+
+button.profileDrawingContextMenuButton:disabled:hover {
+  background-color: transparent;
+}
+
+.profileDrawingPreview3d {
+  grid-area: editor;
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background-color: transparent;
+  opacity: 0.36;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.profileDrawingPreview3d .samplePreview,
+.profileDrawingPreview3dCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.profileDrawingPreview3d .samplePreviewUnavailable {
+  background-color: transparent;
+}
+
+.profileDrawingFreehandDialog {
+  display: flex;
+  max-width: none;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.profileDrawingFreehandDialogContainer {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.profileDrawingFreehandOptionGrid {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 16px;
+  align-items: start;
+  overflow: auto;
+}
+
+button.profileDrawingFreehandOption {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  align-self: start;
+  align-content: start;
+  gap: 9px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #cfd7df;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #111111;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 8%);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+button.profileDrawingFreehandOption:hover,
+button.profileDrawingFreehandOption:focus-visible {
+  border-color: #7f8b96;
+  background-color: #ffffff;
+  box-shadow: 0 10px 24px rgb(15 23 42 / 16%);
+  transform: translateY(-2px);
+}
+
+button.profileDrawingFreehandOption:focus-visible {
+  outline: 2px solid #4c85ff;
+  outline-offset: 2px;
+}
+
+button.profileDrawingFreehandOption:active {
+  box-shadow: 0 4px 12px rgb(15 23 42 / 12%);
+  transform: translateY(0);
+}
+
+.profileDrawingFreehandOption > strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.profileDrawingFreehandOption > span {
+  color: #444444;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.profileDrawingFreehandOptionPreviews {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.profileDrawingFreehandProfilePreview,
+.profileDrawingFreehandPartPreview {
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1.35 / 1;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.profileDrawingFreehandProfilePreview {
+  display: block;
+}
+
+.profileDrawingFreehandPartPreview {
+  display: grid;
+  place-items: stretch;
+}
+
+.profileDrawingFreehandPartPreview .samplePreview {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.profileDrawingActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-self: stretch;
+  align-items: stretch;
+  margin: 0;
+}
+
+.profileDrawingActionGroup {
+  align-self: stretch;
+  align-items: stretch;
+}
+
+.profileDrawingDialogActions {
+  margin: 0;
 }
 
 .openRouterKeyDialog > a {
@@ -1149,7 +1823,8 @@ button.setupChoiceButton.selected:hover {
 
 button.setupSegmentButton {
   display: inline-block;
-  min-width: 84px;
+  min-width: 0;
+  padding: 9px;
   text-align: center;
   border-radius: 0;
 }
@@ -1166,9 +1841,50 @@ button.setupSegmentButton:last-child {
   border-radius: 0 3px 3px 0;
 }
 
+button.setupSegmentButton:only-child,
+button.profileDrawingDeletePointButton {
+  border-radius: 3px;
+}
+
 @media (max-width: 760px) {
   .setupLayout {
     grid-template-columns: 1fr;
+  }
+
+  .profileDrawingWorkspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    grid-template-areas: "editor";
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .profileDrawingDialogContainer {
+    overflow: auto;
+  }
+
+  .profileDrawingSelectionControls {
+    align-items: flex-start;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .profileDrawingFrame {
+    min-height: 180px;
+  }
+
+  .profileDrawingPreview3d {
+    min-height: 0;
+  }
+
+  .profileDrawingSvg {
+    height: auto;
+    aspect-ratio: var(--profileDrawingFrameAspect, 2 / 1);
+  }
+
+  .profileDrawingPreview3d .samplePreview {
+    height: 100%;
+    aspect-ratio: auto;
   }
 
   .feedScaleRuler,
@@ -1332,7 +2048,6 @@ button.setupSegmentButton:last-child {
   button.setupSegmentButton,
   button.setupSegmentButton:first-child,
   button.setupSegmentButton:last-child {
-    min-width: 0;
     margin-left: 0;
     border-radius: 3px;
   }
@@ -1353,7 +2068,6 @@ button.setupSegmentButton:last-child {
 .toolbar .button-like {
   display: inline-block;
   padding: 6px 12px;
-  margin: 4px 4px 4px 0;
   font: inherit;
   text-align: center;
   text-decoration: none;

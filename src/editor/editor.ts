@@ -132,6 +132,10 @@ export class Editor extends EventTarget {
     return this.defaultLatheCodeText;
   }
 
+  getText() {
+    return this.latheCodeInput.value;
+  }
+
   setText(text: string) {
     this.latheCodeInput.value = text;
     this.update();

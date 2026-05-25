@@ -123,6 +123,33 @@ L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsideProfileSegments();
     expect(segments.at(-1)!.end).toEqual(new Point(9.3, 26));
   });
 
+  it('keeps editable profile segment definitions before edge feature expansion', () => {
+    const definitions = new LatheCode(`L20 DS10 FI0.5 DE10 CH1
+L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsidePartProfileSegmentDefinitions();
+
+    expect(definitions).toHaveLength(2);
+    expect(definitions[0].segment).toEqual(new Segment('LINE', new Point(5, 0), new Point(5, 20)));
+    expect(definitions[0].startFeature).toEqual({name: 'FI', value: 0.5});
+    expect(definitions[0].endFeature).toEqual({name: 'CH', value: 1});
+  });
+
+  it('extends editable mixed-profile definitions to the common part length', () => {
+    const definitions = new LatheCode('STOCK D12\nL2 D10\nINSIDE\nL4 D6')
+      .getOutsidePartProfileSegmentDefinitions();
+
+    expect(definitions).toHaveLength(1);
+    expect(definitions[0].segment).toEqual(new Segment('LINE', new Point(5, 0), new Point(5, 4)));
+  });
+
+  it('extends editable shorter inside definitions to the stock ID', () => {
+    const definitions = new LatheCode('STOCK D60 ID10\nL10 D60\nINSIDE\nL8 D50')
+      .getInsidePartProfileSegmentDefinitions();
+
+    expect(pointsToString(definitions.map(definition => definition.segment))).toBe(
+      'LINE:25,0-25,8 LINE:25,8-5,8 LINE:5,8-5,10',
+    );
+  });
+
   it('treats zero chamfers and fillets as no feature', () => {
     expect(outsideProfilePoints('L6 D10 CH0')).toBe('LINE:5,0-5,6');
     expect(outsideProfilePoints('L6 DS10 FI0 DE10 CH0')).toBe('LINE:5,0-5,6');

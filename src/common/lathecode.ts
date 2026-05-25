@@ -85,6 +85,12 @@ export class Profile {
   constructor(readonly side: ProfileSide, readonly segments: Segment[]) {}
 }
 
+export type ProfileSegmentDefinition = {
+  readonly segment: Segment;
+  readonly startFeature: EdgeFeature | null;
+  readonly endFeature: EdgeFeature | null;
+};
+
 export class Stock {
   readonly innerDiameter: number;
 
@@ -147,11 +153,8 @@ const SCALE_DECIMAL_PLACES = 4;
 const EDGE_FEATURE_EPSILON = 1e-9;
 const FILLET_ARC_CHORD_MM = 0.1;
 
-type ProfileSegmentSpec = {
+type ProfileSegmentSpec = ProfileSegmentDefinition & {
   line: LatheLine;
-  segment: Segment;
-  startFeature: EdgeFeature | null;
-  endFeature: EdgeFeature | null;
 };
 
 type EndpointFeatureGeometry = {
@@ -300,6 +303,17 @@ export class LatheCode {
     return truncateProfileToZ(this.outside, this.commonMaterialEndZ);
   }
 
+  /** Open outside profile lines before chamfers and fillets are expanded into geometry. */
+  getOutsidePartProfileSegmentDefinitions(): ProfileSegmentDefinition[] {
+    const definitions = truncateProfileSegmentDefinitionsToZ(
+      this.getProfileSegmentDefinitionsForSide(this.data.outside, this.getStockInnerDiameter() / 2),
+      this.commonMaterialEndZ,
+    );
+    return this.data.outside.length && this.data.inside?.entries.length
+      ? extendProfileSegmentDefinitionsToZ(definitions, this.commonMaterialEndZ)
+      : definitions;
+  }
+
   /** Segments forming the part after inside cuts. */
   getInsideSegments(): Segment[] {
     return this.insideSegments.concat();
@@ -313,6 +327,17 @@ export class LatheCode {
   /** Open inside part boundary, excluding trailing cutoff/parting moves. */
   getInsidePartProfileSegments(): Segment[] {
     return truncateProfileToZ(this.inside, this.commonMaterialEndZ);
+  }
+
+  /** Open inside profile lines before chamfers and fillets are expanded into geometry. */
+  getInsidePartProfileSegmentDefinitions(): ProfileSegmentDefinition[] {
+    const definitions = truncateProfileSegmentDefinitionsToZ(
+      this.getProfileSegmentDefinitionsForSide(this.data.inside?.entries ?? [], this.getStockDiameter() / 2),
+      this.commonMaterialEndZ,
+    );
+    return this.data.outside.length && this.data.inside?.entries.length
+      ? extendInsideProfileSegmentDefinitionsToZ(definitions, this.commonMaterialEndZ, this.getStockInnerDiameter() / 2)
+      : definitions;
   }
 
   /** Explicitly named profiles present in this lathe code. */
@@ -470,7 +495,19 @@ export class LatheCode {
     return hasClosedProfileArea(result) ? result : [];
   }
 
+  private getProfileSegmentDefinitionsForSide(side: readonly LatheEntry[], zeroX: number): ProfileSegmentDefinition[] {
+    return this.getSegmentSpecsForSide(side, zeroX).map(spec => ({
+      segment: spec.segment,
+      startFeature: scaleEdgeFeatureToUnits(spec.startFeature, this.unitsMultiplier),
+      endFeature: scaleEdgeFeatureToUnits(spec.endFeature, this.unitsMultiplier),
+    }));
+  }
+
   private getSegmentsForSide(side: readonly LatheEntry[], zeroX: number): Segment[] {
+    return this.applyEdgeFeatures(this.getSegmentSpecsForSide(side, zeroX), zeroX);
+  }
+
+  private getSegmentSpecsForSide(side: readonly LatheEntry[], zeroX: number): ProfileSegmentSpec[] {
     const specs: ProfileSegmentSpec[] = [];
     let z = 0;
     for (let entry of side) {
@@ -503,7 +540,7 @@ export class LatheCode {
         endFeature: getLineEndFeature(line),
       });
     }
-    return this.applyEdgeFeatures(specs, zeroX);
+    return specs;
   }
 
   private applyEdgeFeatures(specs: ProfileSegmentSpec[], zeroX: number): Segment[] {
@@ -873,6 +910,97 @@ function truncateProfileToZ(profile: Segment[], targetZ: number): Segment[] {
   return result;
 }
 
+function truncateProfileSegmentDefinitionsToZ(
+  definitions: ProfileSegmentDefinition[],
+  targetZ: number,
+): ProfileSegmentDefinition[] {
+  const result: ProfileSegmentDefinition[] = [];
+  for (const definition of definitions) {
+    const segment = definition.segment;
+    if (segment.start.z > targetZ + EDGE_FEATURE_EPSILON) break;
+    if (segment.end.z > targetZ + EDGE_FEATURE_EPSILON) {
+      const trimmed = trimSegmentEndToZ(segment, targetZ);
+      if (trimmed) {
+        result.push({
+          segment: trimmed,
+          startFeature: definition.startFeature,
+          endFeature: null,
+        });
+      }
+      break;
+    }
+    if (Math.abs(segment.end.z - segment.start.z) <= EDGE_FEATURE_EPSILON
+      && segment.start.z >= targetZ - EDGE_FEATURE_EPSILON) break;
+    result.push(definition);
+  }
+  return result;
+}
+
+function extendProfileSegmentDefinitionsToZ(
+  definitions: ProfileSegmentDefinition[],
+  targetZ: number,
+): ProfileSegmentDefinition[] {
+  const last = definitions.at(-1);
+  if (!last || targetZ - last.segment.end.z <= EDGE_FEATURE_EPSILON) return definitions;
+  return mergeColinearSegmentDefinitions([
+    ...definitions,
+    createLineSegmentDefinition(last.segment.end, new Point(last.segment.end.x, targetZ)),
+  ]);
+}
+
+function extendInsideProfileSegmentDefinitionsToZ(
+  definitions: ProfileSegmentDefinition[],
+  targetZ: number,
+  extensionX: number,
+): ProfileSegmentDefinition[] {
+  const last = definitions.at(-1);
+  if (!last || targetZ - last.segment.end.z <= EDGE_FEATURE_EPSILON) return definitions;
+  const extension = Math.abs(last.segment.end.x - extensionX) <= EDGE_FEATURE_EPSILON
+    ? [createLineSegmentDefinition(last.segment.end, new Point(extensionX, targetZ))]
+    : [
+        createLineSegmentDefinition(last.segment.end, new Point(extensionX, last.segment.end.z)),
+        createLineSegmentDefinition(new Point(extensionX, last.segment.end.z), new Point(extensionX, targetZ)),
+      ];
+  return mergeColinearSegmentDefinitions([
+    ...definitions,
+    ...extension,
+  ]);
+}
+
+function createLineSegmentDefinition(start: Point, end: Point): ProfileSegmentDefinition {
+  return {
+    segment: new Segment('LINE', start, end),
+    startFeature: null,
+    endFeature: null,
+  };
+}
+
+function mergeColinearSegmentDefinitions(definitions: ProfileSegmentDefinition[]): ProfileSegmentDefinition[] {
+  const result: ProfileSegmentDefinition[] = [];
+  for (const definition of definitions) {
+    const previous = result.at(-1);
+    if (previous && canMergeSegmentDefinitions(previous, definition)) {
+      result[result.length - 1] = {
+        segment: new Segment('LINE', previous.segment.start, definition.segment.end),
+        startFeature: previous.startFeature,
+        endFeature: definition.endFeature,
+      };
+      continue;
+    }
+    result.push(definition);
+  }
+  return result;
+}
+
+function canMergeSegmentDefinitions(previous: ProfileSegmentDefinition, next: ProfileSegmentDefinition): boolean {
+  return previous.segment.type === 'LINE'
+    && next.segment.type === 'LINE'
+    && !previous.endFeature
+    && !next.startFeature
+    && previous.segment.end.isEqual(next.segment.start)
+    && previous.segment.isColinear(next.segment) === true;
+}
+
 function trimSegmentEndToZ(segment: Segment, targetZ: number): Segment | null {
   if (segment.type !== 'LINE') return null;
   const span = segment.end.z - segment.start.z;
@@ -945,6 +1073,10 @@ function scaleNumericParam<Name extends string>(param: NumericParam<Name> | null
 
 function scaleEdgeFeature(feature: EdgeFeature | null, scale: number): EdgeFeature | null {
   return feature ? {...feature, value: scaleNumber(feature.value, scale)} : null;
+}
+
+function scaleEdgeFeatureToUnits(feature: EdgeFeature | null, unitsMultiplier: number): EdgeFeature | null {
+  return feature ? {...feature, value: feature.value * unitsMultiplier} : null;
 }
 
 function scaleNumber(value: number, scale: number): number {

@@ -4,11 +4,16 @@ import { hasOpenRouterApiKey, openOpenRouterKeyDialog } from '../llm/openrouterk
 import { createPrivacyDisclosure, openRouterActionPrivacyText } from '../llm/privacy.ts';
 import { openSettingsDialog } from './settingsdialog.ts';
 import { beginLatheCodePreviewSession, createLatheCodePreview, prioritizeVisibleLatheCodePreviews } from './preview.ts';
+import { openProfileDrawingDialog } from '../profile/profiledrawing.ts';
 import { getStartSampleSections } from './samples.ts';
 
 const INITIAL_SAMPLE_CARD_COUNT = 7;
 const BACKUP_PRIVACY_DISCLOSURE =
   'Backup JSON is handled locally. Exports may include saved lathecodes, settings, and any OpenRouter API key stored in this browser.';
+
+type StartPanelOptions = {
+  getCurrentLatheCodeText?: () => string | null | undefined,
+};
 
 export class StartLatheCodeEvent extends Event {
   constructor(readonly text: string) {
@@ -25,6 +30,7 @@ export class StartStlEvent extends Event {
 export class StartPanel extends EventTarget {
   private savedPanel: HTMLElement;
   private sampleCatalogButton: HTMLButtonElement;
+  private startDimensionsButton: HTMLButtonElement;
   private startPromptButton: HTMLButtonElement;
   private startDrawingButton: HTMLButtonElement;
   private loadButton: HTMLButtonElement;
@@ -36,12 +42,15 @@ export class StartPanel extends EventTarget {
   private overflowMenu: HTMLElement;
   private settingsButtons: HTMLButtonElement[];
   private exportButtons: HTMLButtonElement[];
+  private getCurrentLatheCodeText: () => string | null | undefined;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, options: StartPanelOptions = {}) {
     super();
+    this.getCurrentLatheCodeText = options.getCurrentLatheCodeText ?? (() => '');
 
     this.savedPanel = container.querySelector<HTMLElement>('.startPanel')!;
     this.sampleCatalogButton = container.querySelector<HTMLButtonElement>('.sampleCatalogButton')!;
+    this.startDimensionsButton = container.querySelector<HTMLButtonElement>('.startDimensionsButton')!;
     this.startPromptButton = container.querySelector<HTMLButtonElement>('.startPromptButton')!;
     this.startDrawingButton = container.querySelector<HTMLButtonElement>('.startDrawingButton')!;
     this.loadButton = container.querySelector<HTMLButtonElement>('.loadButton')!;
@@ -57,6 +66,12 @@ export class StartPanel extends EventTarget {
     this.addBackupPrivacyDisclosure();
 
     this.sampleCatalogButton.addEventListener('click', () => this.openSampleDialog());
+    this.startDimensionsButton.addEventListener('click', () => {
+      openProfileDrawingDialog(
+        text => this.dispatchEvent(new StartLatheCodeEvent(text)),
+        this.getCurrentLatheCodeText(),
+      );
+    });
     this.startPromptButton.addEventListener('click', () => this.openLlmEntryDialog(() => this.openPromptDialog()));
     this.startDrawingButton.addEventListener('click', () => this.openLlmEntryDialog(() => this.openDrawingDialog()));
     this.loadButton.addEventListener('click', () => this.loadLatheCode());

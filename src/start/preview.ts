@@ -6,11 +6,18 @@ import {
   createLatheRenderObjects,
 } from '../scene.ts';
 
-const PREVIEW_WIDTH = 216;
-const PREVIEW_HEIGHT = 216;
+const DEFAULT_PREVIEW_WIDTH = 216;
+const DEFAULT_PREVIEW_HEIGHT = 216;
 const MAX_PREVIEW_DEVICE_PIXEL_RATIO = 2;
 const PREVIEW_RENDER_DELAY_MS = 80;
-const PREVIEW_FIT_PADDING = 1.08;
+const PREVIEW_FIT_PADDING = 1.28;
+const SAMPLE_PREVIEW_ROTATION_X = -0.72;
+const SAMPLE_PREVIEW_ROTATION_Y = Math.PI + 0.35;
+const SAMPLE_PREVIEW_ROTATION_Z = 2.2;
+const AUTO_PREVIEW_ROTATION_DURATION_MS = 3000;
+const AUTO_PREVIEW_ROTATION_RADIANS_PER_MS = 0.006 / (1000 / 60);
+const AUTO_PREVIEW_ROTATION_TOTAL_RADIANS =
+  AUTO_PREVIEW_ROTATION_DURATION_MS * AUTO_PREVIEW_ROTATION_RADIANS_PER_MS;
 
 let sharedRenderer: THREE.WebGLRenderer | null = null;
 let queueTimer: number | null = null;
@@ -24,7 +31,20 @@ type PreviewJob = {
   cacheKey: string,
   text: string,
   partRevolutionDegrees: number,
+  width: number,
+  height: number,
   sequence: number,
+};
+
+type LatheCodePreviewOptions = {
+  width?: number,
+  height?: number,
+};
+
+export type AutoRotatingLatheCodePreview = {
+  setText: (text: string) => void,
+  resize: (width: number, height: number) => void,
+  dispose: () => void,
 };
 
 export function beginLatheCodePreviewSession(): () => void {
@@ -38,10 +58,12 @@ export function beginLatheCodePreviewSession(): () => void {
   };
 }
 
-export function createLatheCodePreview(text: string): HTMLDivElement {
+export function createLatheCodePreview(text: string, options: LatheCodePreviewOptions = {}): HTMLDivElement {
   const preview = document.createElement('div');
   preview.className = 'samplePreview';
   preview.setAttribute('aria-hidden', 'true');
+  const width = sanitizePreviewDimension(options.width, DEFAULT_PREVIEW_WIDTH);
+  const height = sanitizePreviewDimension(options.height, DEFAULT_PREVIEW_HEIGHT);
 
   try {
     new LatheCode(text);
@@ -56,7 +78,7 @@ export function createLatheCodePreview(text: string): HTMLDivElement {
   }
 
   const partRevolutionDegrees = loadAppSettings().partRevolutionDegrees;
-  const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees);
+  const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees, width, height);
   const cachedPreview = previewCache.get(cacheKey);
   if (cachedPreview instanceof HTMLCanvasElement) {
     preview.appendChild(cloneCanvas(cachedPreview));
@@ -66,10 +88,138 @@ export function createLatheCodePreview(text: string): HTMLDivElement {
     preview.appendChild(createPreviewFallback('Preview loading'));
     if (isPreviewSessionActive()) {
       subscribePreview(cacheKey, preview);
-      enqueuePreview(text, partRevolutionDegrees);
+      enqueuePreview(text, partRevolutionDegrees, width, height);
     }
   }
 
+  return preview;
+}
+
+export function createAutoRotatingLatheCodePreview(container: HTMLElement): AutoRotatingLatheCodePreview {
+  if (!canRenderPreview()) {
+    container.replaceChildren(createPreviewUnavailable());
+    return createUnavailableAutoPreview();
+  }
+
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      alpha: true,
+      antialias: true,
+      preserveDrawingBuffer: true,
+    });
+  } catch {
+    container.replaceChildren(createPreviewUnavailable());
+    return createUnavailableAutoPreview();
+  }
+
+  const scene = new THREE.Scene();
+  addLatheLights(scene);
+
+  const camera = new THREE.OrthographicCamera(-7, 7, -7, 7, 0, 1000);
+  const canvas = renderer.domElement;
+  canvas.className = 'profileDrawingPreview3dCanvas';
+  canvas.setAttribute('aria-hidden', 'true');
+  container.replaceChildren(canvas);
+  renderer.setClearColor(0xffffff, 0);
+
+  let model: THREE.Group | null = null;
+  let lastText = '';
+  let width = DEFAULT_PREVIEW_WIDTH;
+  let height = DEFAULT_PREVIEW_HEIGHT;
+  let animationFrame: number | null = null;
+  let currentRotationY = SAMPLE_PREVIEW_ROTATION_Y;
+  let rotationStartY = currentRotationY;
+  let rotationStartedAtMs = 0;
+  let disposed = false;
+
+  const render = () => {
+    if (model) renderer.render(scene, camera);
+  };
+
+  const fit = () => {
+    if (!model) return;
+    fitPreviewCamera(camera, [model], width / height);
+  };
+
+  const animate = (timestampMs: number) => {
+    animationFrame = null;
+    if (disposed) return;
+    if (!model) return;
+
+    const elapsedMs = Math.max(0, timestampMs - rotationStartedAtMs);
+    const progress = Math.min(1, elapsedMs / AUTO_PREVIEW_ROTATION_DURATION_MS);
+    currentRotationY = rotationStartY + AUTO_PREVIEW_ROTATION_TOTAL_RADIANS * easeInOutCubic(progress);
+    model.rotation.y = currentRotationY;
+    renderer.render(scene, camera);
+
+    if (progress < 1) {
+      animationFrame = window.requestAnimationFrame(animate);
+    }
+  };
+
+  const startRotation = () => {
+    if (disposed || !model) return;
+    rotationStartY = currentRotationY;
+    rotationStartedAtMs = getAnimationNow();
+    if (animationFrame === null) animationFrame = window.requestAnimationFrame(animate);
+  };
+
+  const preview: AutoRotatingLatheCodePreview = {
+    setText(text: string) {
+      if (disposed || text === lastText) return;
+      lastText = text;
+      let nextModel: THREE.Group;
+      let unusedStockMesh: THREE.Object3D | null = null;
+      try {
+        const renderObjects = createLatheRenderObjects(new LatheCode(text), {
+          partRevolutionDegrees: loadAppSettings().partRevolutionDegrees,
+        });
+        unusedStockMesh = renderObjects.stockMesh;
+        nextModel = new THREE.Group();
+        nextModel.add(renderObjects.latheMesh);
+        applySamplePreviewRotation(nextModel);
+        nextModel.rotation.y = currentRotationY;
+      } catch {
+        return;
+      } finally {
+        if (unusedStockMesh) disposeObject(unusedStockMesh);
+      }
+
+      if (model) {
+        scene.remove(model);
+        disposeObject(model);
+      }
+      model = nextModel;
+      scene.add(model);
+      fit();
+      render();
+      startRotation();
+    },
+    resize(nextWidth: number, nextHeight: number) {
+      if (disposed) return;
+      width = sanitizePreviewDimension(nextWidth, DEFAULT_PREVIEW_WIDTH);
+      height = sanitizePreviewDimension(nextHeight, DEFAULT_PREVIEW_HEIGHT);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PREVIEW_DEVICE_PIXEL_RATIO));
+      renderer.setSize(width, height, false);
+      fit();
+      render();
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+      if (model) {
+        scene.remove(model);
+        disposeObject(model);
+        model = null;
+      }
+      renderer.dispose();
+      canvas.remove();
+    },
+  };
+
+  preview.resize(width, height);
   return preview;
 }
 
@@ -86,11 +236,19 @@ export function prioritizeVisibleLatheCodePreviews() {
   if ((priorities.get(previewQueue[0].cacheKey) ?? 0) > 0) acceleratePreviewQueue();
 }
 
-function enqueuePreview(text: string, partRevolutionDegrees: number) {
+function createUnavailableAutoPreview(): AutoRotatingLatheCodePreview {
+  return {
+    setText() {},
+    resize() {},
+    dispose() {},
+  };
+}
+
+function enqueuePreview(text: string, partRevolutionDegrees: number, width: number, height: number) {
   if (!isPreviewSessionActive()) return;
-  const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees);
+  const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees, width, height);
   if (previewCache.has(cacheKey) || previewQueue.some(job => job.cacheKey === cacheKey)) return;
-  previewQueue.push({cacheKey, text, partRevolutionDegrees, sequence: nextPreviewJobSequence++});
+  previewQueue.push({cacheKey, text, partRevolutionDegrees, width, height, sequence: nextPreviewJobSequence++});
   schedulePreviewQueue();
 }
 
@@ -138,17 +296,22 @@ function getPreviewQueueDelayMs() {
 
 function renderPreviewJob(job: PreviewJob): HTMLCanvasElement | 'unavailable' {
   try {
-    return renderLatheCodePreview(new LatheCode(job.text), job.partRevolutionDegrees);
+    return renderLatheCodePreview(new LatheCode(job.text), job.partRevolutionDegrees, job.width, job.height);
   } catch {
     return 'unavailable';
   }
 }
 
-function renderLatheCodePreview(latheCode: LatheCode, partRevolutionDegrees: number): HTMLCanvasElement {
+function renderLatheCodePreview(
+  latheCode: LatheCode,
+  partRevolutionDegrees: number,
+  width: number,
+  height: number,
+): HTMLCanvasElement {
   const renderer = getSharedRenderer();
   const pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_PREVIEW_DEVICE_PIXEL_RATIO);
   renderer.setPixelRatio(pixelRatio);
-  renderer.setSize(PREVIEW_WIDTH, PREVIEW_HEIGHT, false);
+  renderer.setSize(width, height, false);
   renderer.setClearColor(0xffffff, 0);
 
   const scene = new THREE.Scene();
@@ -163,7 +326,7 @@ function renderLatheCodePreview(latheCode: LatheCode, partRevolutionDegrees: num
   scene.add(group);
 
   const camera = new THREE.OrthographicCamera(-7, 7, -7, 7, 0, 1000);
-  fitPreviewCamera(camera, [group], PREVIEW_WIDTH / PREVIEW_HEIGHT);
+  fitPreviewCamera(camera, [group], width / height);
   renderer.render(scene, camera);
 
   const canvas = document.createElement('canvas');
@@ -179,8 +342,13 @@ function renderLatheCodePreview(latheCode: LatheCode, partRevolutionDegrees: num
   return canvas;
 }
 
-function getPreviewCacheKey(text: string, partRevolutionDegrees: number): string {
-  return `${partRevolutionDegrees}\n${text}`;
+function getPreviewCacheKey(text: string, partRevolutionDegrees: number, width: number, height: number): string {
+  return `${partRevolutionDegrees}:${width}x${height}\n${text}`;
+}
+
+function sanitizePreviewDimension(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallback;
+  return Math.round(value);
 }
 
 function subscribePreview(cacheKey: string, preview: HTMLDivElement) {
@@ -246,7 +414,17 @@ function cloneCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
 }
 
 function applySamplePreviewRotation(object: THREE.Object3D) {
-  object.rotation.set(-0.72, Math.PI + 0.35, 2.2);
+  object.rotation.set(SAMPLE_PREVIEW_ROTATION_X, SAMPLE_PREVIEW_ROTATION_Y, SAMPLE_PREVIEW_ROTATION_Z);
+}
+
+function getAnimationNow(): number {
+  return window.performance?.now?.() ?? Date.now();
+}
+
+function easeInOutCubic(progress: number): number {
+  return progress < 0.5
+    ? 4 * progress * progress * progress
+    : 1 - ((-2 * progress + 2) ** 3) / 2;
 }
 
 function fitPreviewCamera(camera: THREE.OrthographicCamera, objects: THREE.Object3D[], aspect: number) {

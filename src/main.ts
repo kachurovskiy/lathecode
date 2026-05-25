@@ -15,7 +15,9 @@ const sceneContainer = document.getElementById('sceneContainer')!;
 const scene = new Scene(sceneContainer, 500, loadAppSettings());
 const editorContainer = document.getElementById('editorContainer')!;
 const editor = new Editor(editorContainer, {deferInitialUpdate: true});
-const start = new StartPanel(document.getElementById('startContainer')!);
+const start = new StartPanel(document.getElementById('startContainer')!, {
+  getCurrentLatheCodeText: () => editorContainer.hidden ? '' : editor.getText(),
+});
 const planner = new Planner(document.getElementById('plannerContainer')!);
 const gcode = new GCode(document.getElementById('gcodeContainer')!);
 let plannedLatheCode: LatheCode | null = null;

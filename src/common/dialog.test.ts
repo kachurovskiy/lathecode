@@ -35,4 +35,10 @@ describe('createFullScreenDialog', () => {
     expect(closeCallback).not.toHaveBeenCalled();
     expect(document.querySelector('.fullScreenDialog')).toBeNull();
   });
+
+  it('omits the visible title when title text is empty', () => {
+    createFullScreenDialog(document.createElement('div'), '');
+
+    expect(document.querySelector('.fullScreenDialog h2')).toBeNull();
+  });
 });
