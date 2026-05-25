@@ -5,13 +5,29 @@ import { Rasterizer } from '../planner/rasterizer.ts';
 
 type ToolType = 'RECT' | 'ROUND' | 'ANG';
 type ToolParamName = 'R' | 'L' | 'H' | 'A' | 'NA';
+type UnitOption = 'MM' | 'CM' | 'M' | 'FT' | 'IN';
 
 const TOOL_PARAM_NAMES: readonly ToolParamName[] = ['R', 'L', 'H', 'A', 'NA'];
 const PRESET_PARAM_NAMES: readonly ToolParamName[] = ['A'];
+const LINEAR_TOOL_PARAM_NAMES: readonly ToolParamName[] = ['R', 'L', 'H'];
 const TOOL_PARAMS_BY_TYPE: Record<ToolType, readonly ToolParamName[]> = {
   RECT: ['R', 'L', 'H'],
   ROUND: ['R'],
   ANG: ['R', 'L', 'A', 'NA'],
+};
+const UNIT_MULTIPLIERS: Record<UnitOption, number> = {
+  MM: 1,
+  CM: 10,
+  M: 1000,
+  FT: 304.8,
+  IN: 25.4,
+};
+const UNIT_LABELS: Record<UnitOption, string> = {
+  MM: 'mm',
+  CM: 'cm',
+  M: 'm',
+  FT: 'ft',
+  IN: 'in',
 };
 const PARAM_LABELS: Record<ToolParamName, string> = {
   R: 'Corner radius',
@@ -25,14 +41,16 @@ const MANUAL_TOOL_TYPES: readonly {type: ToolType, label: string}[] = [
   {type: 'ROUND', label: 'Round insert'},
   {type: 'ANG', label: 'Angled insert'},
 ];
-const MANUAL_DEFAULTS: Record<ToolType, Partial<Record<ToolParamName, string>>> = {
-  RECT: {R: '0.2', L: '2'},
-  ROUND: {R: '5'},
-  ANG: {R: '0.2', L: '7.75', A: '30', NA: '55'},
+const MANUAL_DEFAULTS_MM: Record<ToolType, Partial<Record<ToolParamName, number>>> = {
+  RECT: {R: 0.2, L: 2},
+  ROUND: {R: 5},
+  ANG: {R: 0.2, L: 7.75, A: 30, NA: 55},
 };
 
 export function openToolDialog(getText: () => string, applyText: (text: string) => void) {
-  const currentTool = parseCurrentToolLine(getText());
+  const currentUnits = parseCurrentUnits(getText());
+  const currentUnitMultiplier = UNIT_MULTIPLIERS[currentUnits];
+  const currentTool = parseCurrentToolLine(getText(), currentUnitMultiplier);
   const container = document.createElement('div');
   container.className = 'toolDialog';
 
@@ -51,11 +69,11 @@ export function openToolDialog(getText: () => string, applyText: (text: string) 
       card.setAttribute('aria-pressed', String(selected));
     }
     updateParamInputs(presetParams, insert.type === 'ANG' ? ['A'] : []);
-    updatePresetPlaceholders(presetParams, insert);
+    updatePresetPlaceholders(presetParams, insert, currentUnitMultiplier, currentUnits);
   };
 
   for (const option of KNOWN_INSERT_OPTIONS) {
-    const card = createInsertCard(option);
+    const card = createInsertCard(option, currentUnits);
     card.addEventListener('click', () => selectInsert(option.name));
     presetGallery.appendChild(card);
   }
@@ -81,7 +99,7 @@ export function openToolDialog(getText: () => string, applyText: (text: string) 
   };
   applyPresetButton.addEventListener('click', () => {
     const insert = KNOWN_INSERT_OPTIONS.find(option => option.name === selectedInsertName)!;
-    applyLine(buildPresetToolLine(insert, presetParams));
+    applyLine(buildPresetToolLine(insert, presetParams, currentUnitMultiplier));
   });
 
   const manualDetails = document.createElement('details');
@@ -114,13 +132,13 @@ export function openToolDialog(getText: () => string, applyText: (text: string) 
   container.appendChild(manualDetails);
 
   const updateManualInputs = () => {
-    applyManualDefaults(manualParams, selectedManualType);
+    applyManualDefaults(manualParams, selectedManualType, currentUnitMultiplier, currentUnits);
     updateParamInputs(manualParams, TOOL_PARAMS_BY_TYPE[selectedManualType], {hideDisabled: true});
   };
   updateManualInputs();
 
   applyManualButton.addEventListener('click', () => {
-    applyLine(buildManualToolLine(selectedManualType, manualParams));
+    applyLine(buildManualToolLine(selectedManualType, manualParams, currentUnitMultiplier));
   });
 
   dialog = createFullScreenDialog(container, 'Tool');
@@ -212,26 +230,34 @@ function updateParamInputs(
   }
 }
 
-function applyManualDefaults(params: Map<ToolParamName, HTMLInputElement>, type: ToolType) {
-  const defaults = MANUAL_DEFAULTS[type];
+function applyManualDefaults(
+    params: Map<ToolParamName, HTMLInputElement>,
+    type: ToolType,
+    unitMultiplier: number,
+    units: UnitOption) {
+  const defaults = MANUAL_DEFAULTS_MM[type];
   for (const [name, input] of params) {
     const value = defaults[name];
-    input.placeholder = value ? `Default ${formatParamValue(name, value)}` : 'Optional';
+    input.placeholder = value !== undefined ? `Default ${formatParamValue(name, value, unitMultiplier, units)}` : 'Optional';
   }
 }
 
-function updatePresetPlaceholders(params: Map<ToolParamName, HTMLInputElement>, insert: KnownInsertOption) {
+function updatePresetPlaceholders(
+    params: Map<ToolParamName, HTMLInputElement>,
+    insert: KnownInsertOption,
+    unitMultiplier: number,
+    units: UnitOption) {
   for (const [name, input] of params) {
     if (name === 'A' && insert.type !== 'ANG') {
       input.placeholder = 'Not used for this insert';
       continue;
     }
     const value = insert.params[name];
-    input.placeholder = value === undefined ? 'Optional rotation' : `Preset ${formatParamValue(name, value)}`;
+    input.placeholder = value === undefined ? 'Optional rotation' : `Preset ${formatParamValue(name, value, unitMultiplier, units)}`;
   }
 }
 
-function createInsertCard(option: KnownInsertOption): HTMLButtonElement {
+function createInsertCard(option: KnownInsertOption, units: UnitOption): HTMLButtonElement {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = 'toolPresetCard';
@@ -244,27 +270,29 @@ function createInsertCard(option: KnownInsertOption): HTMLButtonElement {
   card.appendChild(name);
 
   const summary = document.createElement('span');
-  summary.textContent = formatInsertSummary(option);
+  summary.textContent = formatInsertSummary(option, units);
   card.appendChild(summary);
   return card;
 }
 
 function buildPresetToolLine(
     insert: KnownInsertOption,
-    params: Map<ToolParamName, HTMLInputElement>): string {
+    params: Map<ToolParamName, HTMLInputElement>,
+    unitMultiplier: number): string {
   const angle = params.get('A')?.disabled ? '' : params.get('A')?.value;
-  return insertOptionToToolLine(insert, angle);
+  return insertOptionToToolLine(convertKnownInsertToUnits(insert, unitMultiplier), angle);
 }
 
 function buildManualToolLine(
     type: ToolType,
-    params: Map<ToolParamName, HTMLInputElement>): string {
+    params: Map<ToolParamName, HTMLInputElement>,
+    unitMultiplier: number): string {
   const parts = ['TOOL'];
   parts.push(type);
-  const defaults = MANUAL_DEFAULTS[type];
+  const defaults = MANUAL_DEFAULTS_MM[type];
   for (const name of TOOL_PARAMS_BY_TYPE[type]) {
     const input = params.get(name)!;
-    const value = input.value.trim() || defaults[name];
+    const value = input.value.trim() || formatToolParamForUnits(name, defaults[name], unitMultiplier);
     if (value) parts.push(`${name}${value}`);
   }
   return parts.join(' ');
@@ -285,7 +313,7 @@ function upsertToolLine(text: string, toolLine: string): string {
   return lines.join('\n');
 }
 
-function parseCurrentToolLine(text: string): {
+function parseCurrentToolLine(text: string, unitMultiplier: number): {
   toolType?: ToolType,
   insertName?: string,
   params: Map<ToolParamName, string>,
@@ -302,7 +330,7 @@ function parseCurrentToolLine(text: string): {
   const toolType = tokens.map(token => token.toUpperCase()).find(isToolType);
   return {
     toolType,
-    insertName: findCurrentInsertName(toolType, params),
+    insertName: findCurrentInsertName(toolType, params, unitMultiplier),
     params,
   };
 }
@@ -311,29 +339,39 @@ function isToolType(token: string): token is ToolType {
   return token === 'RECT' || token === 'ROUND' || token === 'ANG';
 }
 
-function findCurrentInsertName(toolType: ToolType | undefined, params: Map<ToolParamName, string>): string | undefined {
+function findCurrentInsertName(
+    toolType: ToolType | undefined,
+    params: Map<ToolParamName, string>,
+    unitMultiplier: number): string | undefined {
   if (!toolType) return undefined;
-  return KNOWN_INSERT_OPTIONS.find(option => option.type === toolType && geometryParamsMatch(option, params))?.name;
+  return KNOWN_INSERT_OPTIONS.find(option => option.type === toolType && geometryParamsMatch(option, params, unitMultiplier))?.name;
 }
 
-function geometryParamsMatch(option: KnownInsertOption, params: Map<ToolParamName, string>): boolean {
+function geometryParamsMatch(
+    option: KnownInsertOption,
+    params: Map<ToolParamName, string>,
+    unitMultiplier: number): boolean {
   for (const name of ['R', 'L', 'H', 'NA'] as const) {
     const presetValue = option.params[name];
     const currentValue = params.get(name);
     if (presetValue === undefined && currentValue !== undefined) return false;
-    if (presetValue !== undefined && !numbersMatch(presetValue, currentValue)) return false;
+    if (presetValue !== undefined && !numbersMatch(presetValue, currentValue, isLinearToolParam(name) ? unitMultiplier : 1)) return false;
   }
   return true;
 }
 
-function numbersMatch(expected: number, actual: string | undefined): boolean {
-  return actual !== undefined && Math.abs(expected - Number(actual)) < 0.0000001;
+function numbersMatch(expected: number, actual: string | undefined, unitMultiplier: number): boolean {
+  return actual !== undefined && Math.abs(expected - Number(actual) * unitMultiplier) < 0.0001;
 }
 
-function formatInsertSummary(option: KnownInsertOption): string {
-  if (option.type === 'ROUND') return `Round, radius ${option.params.R} mm`;
-  if (option.type === 'RECT') return `Cut width ${option.params.L} mm, corner radius ${option.params.R} mm`;
-  return `Nose ${option.params.NA} deg, edge ${option.params.L} mm, corner radius ${option.params.R} mm`;
+function formatInsertSummary(option: KnownInsertOption, units: UnitOption = 'MM'): string {
+  const unitMultiplier = UNIT_MULTIPLIERS[units];
+  const unitLabel = UNIT_LABELS[units];
+  if (option.type === 'ROUND') return `Round, radius ${formatNumber(option.params.R! / unitMultiplier)} ${unitLabel}`;
+  if (option.type === 'RECT') {
+    return `Cut width ${formatNumber(option.params.L! / unitMultiplier)} ${unitLabel}, corner radius ${formatNumber(option.params.R! / unitMultiplier)} ${unitLabel}`;
+  }
+  return `Nose ${option.params.NA} deg, edge ${formatNumber(option.params.L! / unitMultiplier)} ${unitLabel}, corner radius ${formatNumber(option.params.R! / unitMultiplier)} ${unitLabel}`;
 }
 
 function createInsertPreview(option: KnownInsertOption): HTMLElement {
@@ -361,7 +399,51 @@ function createInsertPreview(option: KnownInsertOption): HTMLElement {
   return preview;
 }
 
-function formatParamValue(name: ToolParamName, value: number | string): string {
-  const suffix = name === 'A' || name === 'NA' ? 'deg' : 'mm';
-  return `${value} ${suffix}`;
+function convertKnownInsertToUnits(insert: KnownInsertOption, unitMultiplier: number): KnownInsertOption {
+  const params = {...insert.params};
+  for (const name of LINEAR_TOOL_PARAM_NAMES) {
+    const value = params[name];
+    if (value !== undefined) params[name] = Number(formatNumber(value / unitMultiplier));
+  }
+  return {...insert, params};
+}
+
+function formatToolParamForUnits(
+    name: ToolParamName,
+    value: number | undefined,
+    unitMultiplier: number): string {
+  if (value === undefined) return '';
+  return formatNumber(isLinearToolParam(name) ? value / unitMultiplier : value);
+}
+
+function formatParamValue(
+    name: ToolParamName,
+    value: number,
+    unitMultiplier: number,
+    units: UnitOption): string {
+  const suffix = isLinearToolParam(name) ? UNIT_LABELS[units] : 'deg';
+  return `${formatToolParamForUnits(name, value, unitMultiplier)} ${suffix}`;
+}
+
+function parseCurrentUnits(text: string): UnitOption {
+  const line = text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .find(line => line.trimStart().startsWith('UNITS '));
+  const unit = line?.trim().split(/\s+/)[1]?.toUpperCase();
+  return isUnit(unit) ? unit : 'MM';
+}
+
+function isUnit(value: string | undefined): value is UnitOption {
+  return value === 'MM' || value === 'CM' || value === 'M' || value === 'FT' || value === 'IN';
+}
+
+function isLinearToolParam(name: ToolParamName): boolean {
+  return LINEAR_TOOL_PARAM_NAMES.includes(name);
+}
+
+function formatNumber(value: number): string {
+  const rounded = Math.round(value * 1e6) / 1e6;
+  if (Number.isInteger(rounded)) return rounded.toFixed(0);
+  return rounded.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 }

@@ -427,6 +427,24 @@ describe('Editor', () => {
       .toBe('STOCK D10\nTOOL ANG R0.4 L7.8 A32.5 NA55\nL2 R3');
   });
 
+  it('inserts known tool dimensions in the current units', () => {
+    const container = createEditorContainer('UNITS IN\nSTOCK D1\nL0.5 R0.4');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.toolButton')!.click();
+    const insertCard = document.querySelector<HTMLButtonElement>('.toolPresetCard[data-insert="DCGT070204-AK"]')!;
+    expect(insertCard.textContent).toContain('0.307087 in');
+    insertCard.click();
+    clickDialogButton('Use selected insert');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('UNITS IN\nSTOCK D1\nTOOL ANG R0.015748 L0.307087 A32.5 NA55\nL0.5 R0.4');
+
+    container.querySelector<HTMLButtonElement>('.toolButton')!.click();
+    expect(document.querySelector<HTMLButtonElement>('.toolPresetCard[data-insert="DCGT070204-AK"]')!.classList.contains('selected'))
+      .toBe(true);
+  });
+
   it('keeps manual tool definition available as a secondary option', () => {
     const container = createEditorContainer('STOCK D10\nL2 R3');
 
@@ -440,6 +458,21 @@ describe('Editor', () => {
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
       .toBe('STOCK D10\nTOOL ROUND R4\nL2 R3');
+  });
+
+  it('uses current units for manual tool defaults', () => {
+    const container = createEditorContainer('UNITS IN\nSTOCK D1\nL0.5 R0.4');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.toolButton')!.click();
+    document.querySelector<HTMLDetailsElement>('.manualToolDetails')!.open = true;
+
+    expect(document.querySelector<HTMLInputElement>('.manualParamInput[data-param="R"]')!.placeholder)
+      .toBe('Default 0.007874 in');
+    clickDialogButton('Use manual definition');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe('UNITS IN\nSTOCK D1\nTOOL RECT R0.007874 L0.07874\nL0.5 R0.4');
   });
 
   it('hides manual tool inputs that do not apply to the selected shape', () => {
