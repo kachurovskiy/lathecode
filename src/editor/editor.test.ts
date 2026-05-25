@@ -431,6 +431,7 @@ describe('Editor', () => {
 
     new Editor(container);
     container.querySelector<HTMLButtonElement>('.toolButton')!.click();
+    expect(document.querySelector<HTMLDetailsElement>('.manualToolDetails')!.open).toBe(false);
     document.querySelector<HTMLButtonElement>('.toolPresetCard[data-insert="DCGT070204-AK"]')!.click();
     expect(document.querySelector('.presetParamInput[data-param="R"]')).toBeNull();
     setInputValue('.presetParamInput[data-param="A"]', '15');

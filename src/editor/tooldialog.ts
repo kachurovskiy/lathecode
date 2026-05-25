@@ -104,7 +104,6 @@ export function openToolDialog(getText: () => string, applyText: (text: string) 
 
   const manualDetails = document.createElement('details');
   manualDetails.className = 'manualToolDetails';
-  manualDetails.open = !currentTool.insertName && !!currentTool.toolType;
   const manualSummary = document.createElement('summary');
   manualSummary.textContent = 'Define tool manually';
   manualDetails.appendChild(manualSummary);
