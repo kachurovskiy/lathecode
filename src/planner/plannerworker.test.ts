@@ -3,7 +3,8 @@ import { LatheCode } from '../common/lathecode';
 import { Move } from '../common/move';
 import { PixelMove } from '../common/pixel';
 import { AppSettings } from '../common/settings';
-import { PlannerWorker } from './plannerworker';
+import { PlannerBitmap, PlannerCell } from './bitmap';
+import { PLANNER_PREVIEW_MAX_PIXELS, PlannerWorker } from './plannerworker';
 
 describe('PlannerWorker', () => {
   it('uses the pixel planner by default', () => {
@@ -101,6 +102,55 @@ L1 D0.5`, 10);
     expect(planMoves(text, {pxPerMm: 10, plannerEngine: 'vector'}))
       .toEqual(planMoves(text, {pxPerMm: 1000, plannerEngine: 'vector'}));
   });
+
+  it('sends bounded previews for large pixel planner bitmaps', () => {
+    const messages: PlannerMessage[] = [];
+    const canvas = new PlannerBitmap(2001, 1000);
+    const tool = new PlannerBitmap(1, 1, PlannerCell.Tool);
+
+    new PlannerWorker(new LatheCode('STOCK D2\nTOOL RECT R0 L1 H1\nDEPTH CUT5000 FINISH0\nL1 R1'), 1, {
+      rasterizer: {
+        createPartBitmap: () => canvas,
+        createToolBitmap: () => tool,
+      },
+      postMessage: message => messages.push(message),
+      optimizeMoves: moves => moves,
+    });
+
+    const preview = messages.find(message => message.canvas)?.canvas as PlannerMessageImage | undefined;
+    const toolPreview = messages.find(message => message.tool)?.tool as PlannerMessageImage | undefined;
+    const previewMessages = messages.filter(message => message.canvas || message.tool);
+
+    expect(preview).toBeTruthy();
+    expect(toolPreview).toBeTruthy();
+    expect(previewMessages).toHaveLength(2);
+    expect(preview!.scale).toBeGreaterThan(1);
+    expect(toolPreview!.scale).toBe(preview!.scale);
+    expect(preview!.width * preview!.height).toBeLessThanOrEqual(PLANNER_PREVIEW_MAX_PIXELS);
+    expect(preview!.data.length).toBe(preview!.width * preview!.height * 4);
+  });
+
+  it('skips preview generation when the source bitmap exceeds the configured preview limit', () => {
+    const messages: PlannerMessage[] = [];
+    const canvas = new PlannerBitmap(2001, 1000);
+    const tool = new PlannerBitmap(1, 1, PlannerCell.Tool);
+
+    new PlannerWorker(
+      new LatheCode('STOCK D2\nTOOL RECT R0 L1 H1\nDEPTH CUT5000 FINISH0\nL1 R1'),
+      {pxPerMm: 1, plannerPreviewSourcePixelLimit: 2000000},
+      {
+        rasterizer: {
+          createPartBitmap: () => canvas,
+          createToolBitmap: () => tool,
+        },
+        postMessage: message => messages.push(message),
+        optimizeMoves: moves => moves,
+      },
+    );
+
+    expect(messages.some(message => message.canvas || message.tool)).toBe(false);
+    expect(messages.some(message => message.moves)).toBe(true);
+  });
 });
 
 type PlannerMessage = {
@@ -108,6 +158,13 @@ type PlannerMessage = {
   moves?: (Move | PixelMove)[],
   canvas?: unknown,
   tool?: unknown,
+};
+
+type PlannerMessageImage = {
+  width: number,
+  height: number,
+  data: Uint8ClampedArray,
+  scale: number,
 };
 
 function planMoves(text: string, settings: number | Partial<AppSettings>): (Move | PixelMove)[] {

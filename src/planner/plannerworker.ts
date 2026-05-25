@@ -3,9 +3,20 @@ import { getCuttingEdges, optimizeMoves as optimizePlannerMoves } from './optimi
 import { Pixel, PixelMove } from "../common/pixel";
 import { Move } from '../common/move';
 import { AppSettings, normalizeAppSettings } from '../common/settings';
-import { PlannerBitmap, PlannerCell } from './bitmap';
+import { PlannerBitmap, type PlannerBitmapImageData, PlannerCell } from './bitmap';
 import { Rasterizer } from './rasterizer';
 import { VectorPlannerWorker } from './vectorplanner';
+
+export const PLANNER_PREVIEW_MAX_PIXELS = 2000000;
+export const PLANNER_PREVIEW_MAX_DIMENSION_PX = 16384;
+export const LARGE_PLANNER_PREVIEW_INTERVAL_MS = 10000;
+const FULL_SIZE_PLANNER_PREVIEW_MAX_PIXELS = 2000000;
+
+type PlannerCanvasPreview = PlannerBitmapImageData;
+type PlannerToolPreview = PlannerBitmapImageData & {
+  x: number,
+  y: number,
+};
 
 export class ToWorkerMessage {
   constructor(readonly latheCode?: LatheCode, readonly pxPerMm?: number, readonly settings?: Partial<AppSettings>) {}
@@ -16,8 +27,8 @@ export class FromWorkerMessage {
     readonly progressMessage?: string,
     readonly error?: string,
     readonly moves?: Move[],
-    readonly canvas?: {width: number, height: number, data: Uint8ClampedArray},
-    readonly tool?: {width: number, height: number, data: Uint8ClampedArray, x: number, y: number}) {}
+    readonly canvas?: PlannerCanvasPreview,
+    readonly tool?: PlannerToolPreview) {}
 }
 
 class Pass {
@@ -75,6 +86,9 @@ class PixelPlannerWorker {
   private optimizeMoves: typeof optimizePlannerMoves;
   private settings: AppSettings;
   private pxPerMm: number;
+  private isLargePreview: boolean;
+  private canPostPreview: boolean;
+  private lastLargePreviewPostMs = -Infinity;
 
   constructor(private latheCode: LatheCode, settings: number | Partial<AppSettings>, options: PlannerWorkerOptions = {}) {
     this.settings = typeof settings === 'number'
@@ -94,6 +108,9 @@ class PixelPlannerWorker {
     this.rasterizer = options.rasterizer || new Rasterizer(latheCode, this.pxPerMm);
     this.canvas = this.rasterizer.createPartBitmap();
     this.tool = this.rasterizer.createToolBitmap();
+    const sourcePixelCount = this.canvas.width * this.canvas.height;
+    this.isLargePreview = sourcePixelCount >= FULL_SIZE_PLANNER_PREVIEW_MAX_PIXELS;
+    this.canPostPreview = sourcePixelCount <= this.settings.plannerPreviewSourcePixelLimit;
     this.toolCuttingEdges = getCuttingEdges(this.tool, this.profileSide === 'inside' ? 'bottom' : 'top', this.settings.cuttingEdgeThicknessPx);
     this.toolOvershootX = this.getToolOvershootX();
     this.toolOvershootY = this.getToolOvershootY();
@@ -136,7 +153,7 @@ class PixelPlannerWorker {
 
     this.pullBackRadially();
     this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
-    this.postProgress();
+    this.postProgress(true);
     this.postMessage({progressMessage: `Optimizing ${this.moves.length} moves...`});
     const moves = this.normalizeMovesForOutput(this.optimizeMoves(
       this.moves,
@@ -214,21 +231,22 @@ class PixelPlannerWorker {
     }
   }
 
-  private postProgress() {
-    const includeCanvas = this.canvas.width * this.canvas.height < 2000000;
+  private postProgress(force = false) {
+    if (!this.canPostPreview) return;
+    if (this.isLargePreview && !force) {
+      const now = Date.now();
+      if (now < this.lastLargePreviewPostMs + LARGE_PLANNER_PREVIEW_INTERVAL_MS) return;
+      this.lastLargePreviewPostMs = now;
+    }
+    const canvas = this.canvas.toPreviewImageData(PLANNER_PREVIEW_MAX_PIXELS, PLANNER_PREVIEW_MAX_DIMENSION_PX);
+    const tool = this.tool.toImageData(true, canvas.scale);
     this.postMessage({
-      canvas: includeCanvas ? {
-        width: this.canvas.width,
-        height: this.canvas.height,
-        data: this.canvas.toImageDataArray(),
-      } : undefined,
-      tool: includeCanvas ? {
-        width: this.tool!.width,
-        height: this.tool!.height,
-        data: this.tool!.toImageDataArray(true),
-        x: this.toolX,
-        y: this.toolY,
-      } : undefined,
+      canvas,
+      tool: {
+        ...tool,
+        x: this.toolX / canvas.scale,
+        y: this.toolY / canvas.scale,
+      },
     });
   }
 
