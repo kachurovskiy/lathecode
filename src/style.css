@@ -727,6 +727,7 @@ progress {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  margin-top: 10px;
 }
 
 .gcodeActions button,
