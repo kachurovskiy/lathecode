@@ -49,6 +49,35 @@ L3 D20`, 10);
     expect(finishMessages.length).toBe(3);
   });
 
+  it('merges duplicate cutoff passes in turn mode', () => {
+    const messages = planMessages(`STOCK D4
+TOOL RECT R0 L1 H1
+DEPTH CUT0.5 FINISH0.1
+MODE TURN
+L2 D2
+L1
+L1 D2`, 10);
+
+    const completedPasses = messages.filter(message => message.progressMessage?.startsWith('Completed pass '));
+
+    expect(completedPasses.map(message => message.progressMessage)).toEqual([
+      'Completed pass 0',
+      'Completed pass 1',
+    ]);
+  });
+
+  it('preserves finishing when merging duplicate face passes', () => {
+    const messages = planMessages(`STOCK D4
+TOOL RECT R0 L1 H1
+DEPTH CUT0.5 FINISH0.1
+L1 D2
+L1`, 10);
+
+    const finishMessages = messages.filter(message => message.progressMessage === 'Finishing previously cut area');
+
+    expect(finishMessages.length).toBe(2);
+  });
+
   it('keeps inch depth-of-cut passes on the integer pixel grid', () => {
     const moves = planMoves(`UNITS IN
 STOCK D1

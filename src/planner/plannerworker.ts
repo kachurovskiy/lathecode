@@ -112,7 +112,7 @@ class PixelPlannerWorker {
 
     // Plan passes in advance so that we can finish the part fully before cutting off.
     const cutXCoords = this.latheCode.getCutoffStarts().map(z => this.canvas.width - z * this.pxPerMm - this.tool.width + 1);
-    this.passes = cutXCoords.map(x => new Pass(x, true));
+    this.passes = cutXCoords.map(x => new Pass(x, true)).concat(cutXCoords.map(x => new Pass(x - 1, false)));
     if (this.mode === 'FACE') {
       let x = this.canvas.width;
       while (true) {
@@ -124,7 +124,7 @@ class PixelPlannerWorker {
       this.passes.push(... this.latheCode.getCutoffStarts().map(z => new Pass(this.canvas.width - z * this.pxPerMm - this.tool.width, false)));
       if (!this.passes.length) this.passes.push(new Pass(0, true));
     }
-    this.passes.sort((a, b) => b.x - a.x); // descending
+    this.passes = this.mergeDuplicatePasses(this.passes);
 
     try {
       if (this.mode === 'FACE') this.modeFace();
@@ -169,6 +169,20 @@ class PixelPlannerWorker {
       }
       this.postMessage({progressMessage: `Completed pass ${passIndex}`});
     }
+  }
+
+  private mergeDuplicatePasses(passes: Pass[]): Pass[] {
+    const sorted = [...passes].sort((a, b) => b.x - a.x); // descending
+    const result: Pass[] = [];
+    for (const pass of sorted) {
+      const previous = result[result.length - 1];
+      if (previous?.x === pass.x) {
+        result[result.length - 1] = new Pass(previous.x, previous.finishAfter || pass.finishAfter);
+      } else {
+        result.push(pass);
+      }
+    }
+    return result;
   }
 
   private modeTurn() {
