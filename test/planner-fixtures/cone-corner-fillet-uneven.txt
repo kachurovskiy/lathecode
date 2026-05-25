@@ -1,0 +1,11 @@
+UNITS MM
+STOCK D8
+TOOL RECT R0 L1
+DEPTH CUT0.25 FINISH0.05
+MODE TURN
+
+; Unequal cone slopes exercise neighbor trim budgeting for fillets.
+L0.5 D4
+L1.2 DS4 DE7 FI0.15
+L0.8 DS7 DE5
+L0.5 D5

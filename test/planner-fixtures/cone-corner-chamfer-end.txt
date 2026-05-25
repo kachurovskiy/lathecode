@@ -1,0 +1,11 @@
+UNITS MM
+STOCK D8
+TOOL RECT R0 L1
+DEPTH CUT0.25 FINISH0.05
+MODE TURN
+
+; Chamfer owned by the first cone's endpoint at a continuous cone peak.
+L0.5 D4
+L1 DS4 DE6 CH0.15
+L1 DS6 DE4
+L0.5 D4

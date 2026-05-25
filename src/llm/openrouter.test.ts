@@ -89,7 +89,7 @@ L2 D10 CH 0.5`,
     expect(request.messages[0].content).toContain('FI<size>');
     expect(request.messages[0].content).toContain('L20 DS10 FI0.5 DE10 CH1');
     expect(request.messages[0].content).toContain("measured along the segment's horizontal L distance");
-    expect(request.messages[0].content).toContain('actual radial shoulder');
+    expect(request.messages[0].content).toContain('radial shoulder or an angled corner');
     expect(request.messages[0].content).toContain('Do not use CH or FI on CONV/CONC lines');
   });
 
@@ -161,7 +161,7 @@ L80 DS0 DE0 BSPLINE D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 
     expect(repairPrompt).toContain('Use CH0.5 and FI0.5');
     expect(repairPrompt).toContain('not CH 0.5 or FI 0.5');
     expect(repairPrompt).toContain('not on CONV, CONC, or BSPLINE lines');
-    expect(repairPrompt).toContain('real radial shoulders');
+    expect(repairPrompt).toContain('real radial shoulders or angled corners');
   });
 
   it('formats invalid generated lathecode errors as multiline fields', async () => {
@@ -396,6 +396,19 @@ L7.000 R19.990`;
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(latheCodeText).toContain('L2 RS5 FI0.5 RE5');
     expect(latheCodeText).not.toContain('RE5 FI0.5');
+    expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
+  });
+
+  it('keeps generated fillets on continuous cone corners', async () => {
+    const fetchMock = mockOpenRouterResponses([
+      'STOCK D10\nL2 RS2 RE3 FI0.5\nL2 RS3 RE2',
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const latheCodeText = await createLatheCodeFromPrompt('continuous cone fillet');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(latheCodeText).toContain('L2 RS2 RE3 FI0.5');
     expect(new LatheCode(latheCodeText).getProfiles().length).toBe(1);
   });
 

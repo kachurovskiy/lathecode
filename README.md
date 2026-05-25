@@ -105,7 +105,7 @@ L20 DS10 FI0.5 DE10 CH1 ; fillet on bolt end, chamfer up between bolt and head
 L6 DS19.6 CH0 DE19.6 CH0.5 ; no head chamfer where head touches shank, small chamfer on head top
 ```
 
-`CH0` and `FI0` mean no feature. Chamfer and fillet sizes are measured along the segment's horizontal `L` distance. Combined start and end features must fit within the segment length and each feature must fit the adjacent radial transition.
+`CH0` and `FI0` mean no feature. Chamfer and fillet sizes are measured along the segment's horizontal `L` distance. Combined start and end features must fit within the segment length. Each feature must also fit the adjacent radial shoulder or the neighboring straight/tapered segment at a continuous angled corner.
 
 Chamfers and fillets are not currently supported for `CONV` or `CONC` segments.
 

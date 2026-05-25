@@ -66,6 +66,8 @@ export function fitProfileSegmentFeaturesForOutput(profile: ProfileDraft, state:
   const closureRadius = side === 'inside' ? state.diameterMm / 2 : 0;
   const fitted = Array.from({ length: segmentCount }, (_, index) => fitSegmentFeaturesForOutput(profile, index, profile.segmentFeatures[index] ?? createEmptySegmentFeatures(), closureRadius));
   fitAdjacentRadialEdgeFeatures(profile, fitted);
+  fitContinuousCornerFeatureOwnership(profile, fitted);
+  fitLineSegmentFeatureTrimBudgets(profile, fitted);
   return fitted;
 }
 export function fitSegmentFeaturesForOutput(profile: ProfileDraft, index: number, features: SegmentEdgeFeatures, closureRadius: number): SegmentEdgeFeatures {
@@ -83,13 +85,11 @@ export function fitSegmentFeatureForOutput(profile: ProfileDraft, index: number,
   if (!feature || feature.size <= GEOMETRY_EPSILON || !Number.isFinite(feature.size))
     return null;
   const segmentLength = Math.abs(profile.points[index + 1].z - profile.points[index].z);
-  const radialTrimPerSize = getFeatureRadialTrimPerSize(profile, index, feature);
-  const radialGap = getSegmentEndpointRadialGapForOutput(profile, index, endpoint, closureRadius);
-  if (segmentLength <= GEOMETRY_EPSILON || radialTrimPerSize <= GEOMETRY_EPSILON || radialGap <= GEOMETRY_EPSILON) {
+  const endpointLimit = getSegmentEndpointFeatureSizeLimitForOutput(profile, index, endpoint, feature, closureRadius);
+  if (segmentLength <= GEOMETRY_EPSILON || endpointLimit <= GEOMETRY_EPSILON) {
     return null;
   }
-  const radialLimit = radialGap / radialTrimPerSize;
-  const size = Math.min(feature.size, segmentLength, radialLimit);
+  const size = Math.min(feature.size, segmentLength, endpointLimit);
   return size > GEOMETRY_EPSILON ? { ...feature, size } : null;
 }
 export function fitAdjacentRadialEdgeFeatures(profile: ProfileDraft, fittedFeatures: SegmentEdgeFeatures[]): void {
@@ -126,6 +126,42 @@ export function fitRadialEdgeFeaturePair(profile: ProfileDraft, fittedFeatures: 
   fittedFeatures[previousIndex].end = features.start;
   fittedFeatures[currentIndex].start = features.end;
 }
+export function fitContinuousCornerFeatureOwnership(profile: ProfileDraft, fittedFeatures: SegmentEdgeFeatures[]): void {
+  for (let index = 0; index < profile.segmentTools.length - 1; index++) {
+    if (!isContinuousLineCorner(profile, index, 'end')) continue;
+    if (fittedFeatures[index]?.end && fittedFeatures[index + 1]?.start) {
+      fittedFeatures[index + 1].start = null;
+    }
+  }
+}
+export function fitLineSegmentFeatureTrimBudgets(profile: ProfileDraft, fittedFeatures: SegmentEdgeFeatures[]): void {
+  for (let index = 0; index < profile.segmentTools.length; index++) {
+    const start = profile.points[index];
+    const end = profile.points[index + 1];
+    if (profile.segmentTools[index] !== 'line' || !start || !end || !hasSegmentLength(start, end))
+      continue;
+    const trims: {index: number, endpoint: SegmentFeatureEndpoint, amount: number}[] = [];
+    const ownFeatures = fittedFeatures[index] ?? createEmptySegmentFeatures();
+    if (ownFeatures.start) trims.push({index, endpoint: 'start', amount: ownFeatures.start.size});
+    if (ownFeatures.end) trims.push({index, endpoint: 'end', amount: ownFeatures.end.size});
+    const previousFeature = fittedFeatures[index - 1]?.end ?? null;
+    if (previousFeature && getContinuousLineNeighborIndex(profile, index - 1, 'end') === index) {
+      trims.push({index: index - 1, endpoint: 'end', amount: getFeatureNeighborTrimDistanceForOutput(profile, index - 1, 'end', previousFeature)});
+    }
+    const nextFeature = fittedFeatures[index + 1]?.start ?? null;
+    if (nextFeature && getContinuousLineNeighborIndex(profile, index + 1, 'start') === index) {
+      trims.push({index: index + 1, endpoint: 'start', amount: getFeatureNeighborTrimDistanceForOutput(profile, index + 1, 'start', nextFeature)});
+    }
+    const total = trims.reduce((sum, trim) => sum + trim.amount, 0);
+    const segmentLength = Math.abs(end.z - start.z);
+    if (total <= segmentLength + GEOMETRY_EPSILON || total <= GEOMETRY_EPSILON)
+      continue;
+    const scale = segmentLength / total;
+    for (const trim of trims) {
+      fittedFeatures[trim.index][trim.endpoint] = scaleFeatureForOutput(fittedFeatures[trim.index][trim.endpoint], scale);
+    }
+  }
+}
 export function fitFeaturePairToLimit(features: SegmentEdgeFeatures, limit: number, measure: (feature: SegmentEdgeFeature, endpoint: SegmentFeatureEndpoint) => number): boolean {
   const startAmount = features.start ? measure(features.start, 'start') : 0;
   const endAmount = features.end ? measure(features.end, 'end') : 0;
@@ -149,7 +185,26 @@ export function getSegmentEndpointRadialGapForOutput(profile: ProfileDraft, inde
   if (!point)
     return 0;
   const neighbor = endpoint === 'start' ? profile.points[pointIndex - 1] : profile.points[pointIndex + 1];
+  if (neighbor && Math.abs(neighbor.z - point.z) > GEOMETRY_EPSILON)
+    return 0;
   return Math.abs((neighbor?.radius ?? closureRadius) - point.radius);
+}
+export function getSegmentEndpointFeatureSizeLimitForOutput(profile: ProfileDraft, index: number, endpoint: SegmentFeatureEndpoint, feature: SegmentEdgeFeature, closureRadius: number): number {
+  const radialTrimPerSize = getFeatureRadialTrimPerSize(profile, index, feature);
+  const radialGap = getSegmentEndpointRadialGapForOutput(profile, index, endpoint, closureRadius);
+  if (radialTrimPerSize > GEOMETRY_EPSILON && radialGap > GEOMETRY_EPSILON)
+    return radialGap / radialTrimPerSize;
+  const neighborIndex = getContinuousLineNeighborIndex(profile, index, endpoint);
+  if (neighborIndex === null)
+    return 0;
+  const neighborLength = Math.abs(profile.points[neighborIndex + 1].z - profile.points[neighborIndex].z);
+  if (feature.kind === 'chamfer')
+    return neighborLength;
+  const ownHorizontalComponent = getSegmentHorizontalComponent(profile, index);
+  const neighborHorizontalComponent = getSegmentHorizontalComponent(profile, neighborIndex);
+  if (ownHorizontalComponent <= GEOMETRY_EPSILON || neighborHorizontalComponent <= GEOMETRY_EPSILON)
+    return 0;
+  return neighborLength * ownHorizontalComponent / neighborHorizontalComponent;
 }
 export function getFeatureRadialTrimPerSize(profile: ProfileDraft, index: number, feature: SegmentEdgeFeature): number {
   if (feature.kind === 'chamfer')
@@ -159,6 +214,62 @@ export function getFeatureRadialTrimPerSize(profile: ProfileDraft, index: number
   const segmentLength = Math.abs(end.z - start.z);
   const vectorLength = Math.hypot(end.radius - start.radius, end.z - start.z);
   return vectorLength > GEOMETRY_EPSILON ? vectorLength / segmentLength : Number.POSITIVE_INFINITY;
+}
+export function getFeatureNeighborTrimDistanceForOutput(profile: ProfileDraft, index: number, endpoint: SegmentFeatureEndpoint, feature: SegmentEdgeFeature): number {
+  const neighborIndex = getContinuousLineNeighborIndex(profile, index, endpoint);
+  if (neighborIndex === null)
+    return 0;
+  if (feature.kind === 'chamfer')
+    return feature.size;
+  const ownHorizontalComponent = getSegmentHorizontalComponent(profile, index);
+  const neighborHorizontalComponent = getSegmentHorizontalComponent(profile, neighborIndex);
+  if (ownHorizontalComponent <= GEOMETRY_EPSILON)
+    return 0;
+  return feature.size / ownHorizontalComponent * neighborHorizontalComponent;
+}
+export function getContinuousLineNeighborIndex(profile: ProfileDraft, index: number, endpoint: SegmentFeatureEndpoint): number | null {
+  const neighborIndex = endpoint === 'start' ? index - 1 : index + 1;
+  if (profile.segmentTools[index] !== 'line' || profile.segmentTools[neighborIndex] !== 'line')
+    return null;
+  if (!isContinuousLineCorner(profile, index, endpoint))
+    return null;
+  return neighborIndex;
+}
+export function isContinuousLineCorner(profile: ProfileDraft, index: number, endpoint: SegmentFeatureEndpoint): boolean {
+  const start = profile.points[index];
+  const end = profile.points[index + 1];
+  const neighborIndex = endpoint === 'start' ? index - 1 : index + 1;
+  const neighborStart = profile.points[neighborIndex];
+  const neighborEnd = profile.points[neighborIndex + 1];
+  if (!start || !end || !neighborStart || !neighborEnd)
+    return false;
+  if (!hasSegmentLength(start, end) || !hasSegmentLength(neighborStart, neighborEnd))
+    return false;
+  const corner = endpoint === 'start' ? start : end;
+  const neighborCorner = endpoint === 'start' ? neighborEnd : neighborStart;
+  if (Math.abs(corner.z - neighborCorner.z) > GEOMETRY_EPSILON || Math.abs(corner.radius - neighborCorner.radius) > GEOMETRY_EPSILON)
+    return false;
+  const own = endpoint === 'start'
+    ? {z: end.z - start.z, radius: end.radius - start.radius}
+    : {z: start.z - end.z, radius: start.radius - end.radius};
+  const neighbor = endpoint === 'start'
+    ? {z: neighborStart.z - start.z, radius: neighborStart.radius - start.radius}
+    : {z: neighborEnd.z - end.z, radius: neighborEnd.radius - end.radius};
+  const ownLength = Math.hypot(own.z, own.radius);
+  const neighborLength = Math.hypot(neighbor.z, neighbor.radius);
+  if (ownLength <= GEOMETRY_EPSILON || neighborLength <= GEOMETRY_EPSILON)
+    return false;
+  const dot = (own.z * neighbor.z + own.radius * neighbor.radius) / (ownLength * neighborLength);
+  const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+  return angle > GEOMETRY_EPSILON && Math.PI - angle > GEOMETRY_EPSILON;
+}
+export function getSegmentHorizontalComponent(profile: ProfileDraft, index: number): number {
+  const start = profile.points[index];
+  const end = profile.points[index + 1];
+  if (!start || !end)
+    return 0;
+  const segmentLength = Math.hypot(end.radius - start.radius, end.z - start.z);
+  return segmentLength > GEOMETRY_EPSILON ? Math.abs(end.z - start.z) / segmentLength : 0;
 }
 export function isEdgeFeatureValidationError(caught: unknown): boolean {
   return caught instanceof Error && /\bchamfer|fillet\b/i.test(caught.message);

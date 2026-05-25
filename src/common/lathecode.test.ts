@@ -165,6 +165,27 @@ L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsideProfileSegments();
     expect(segments.at(-1)!.end).toEqual(new Point(9.3, 26));
   });
 
+  it('adds chamfers to continuous cone corners without radial steps', () => {
+    const endFeature = new LatheCode(`L2 RS2 RE3 CH0.5
+L2 RS3 RE2`).getOutsideProfileSegments();
+    const startFeature = new LatheCode(`L2 RS2 RE3
+L2 RS3 CH0.5 RE2`).getOutsideProfileSegments();
+
+    expect(pointsToString(endFeature)).toBe(
+      'LINE:2,0-2.75,1.5 LINE:2.75,1.5-2.75,2.5 LINE:2.75,2.5-2,4',
+    );
+    expect(pointsToString(startFeature)).toBe(pointsToString(endFeature));
+  });
+
+  it('adds fillets to continuous cone corners without radial steps', () => {
+    const segments = new LatheCode(`L2 RS2 RE3 FI0.5
+L2 RS3 RE2`).getOutsideProfileSegments();
+
+    expectSegmentClose(segments[0], new Segment('LINE', new Point(2, 0), new Point(2.75, 1.5)));
+    expect(segments.length).toBeGreaterThan(3);
+    expectSegmentClose(segments.at(-1)!, new Segment('LINE', new Point(2.75, 2.5), new Point(2, 4)));
+  });
+
   it('keeps editable profile segment definitions before edge feature expansion', () => {
     const definitions = new LatheCode(`L20 DS10 FI0.5 DE10 CH1
 L6 DS19.6 CH0 DE19.6 CH0.5`).getOutsidePartProfileSegmentDefinitions();

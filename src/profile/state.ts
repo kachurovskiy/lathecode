@@ -501,7 +501,13 @@ export function canSelectedSegmentEndpointHaveFeature(state: DrawingState, endpo
   const end = profile.points[selection.index + 1];
   if (!start || !end || !hasSegmentLength(start, end))
     return false;
-  return getSelectedSegmentEndpointRadialGap(state, selection, endpoint) > GEOMETRY_EPSILON;
+  return getSelectedSegmentEndpointFeatureLimit(state, selection, endpoint) > GEOMETRY_EPSILON;
+}
+export function getSelectedSegmentEndpointFeatureLimit(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint): number {
+  const radialGap = getSelectedSegmentEndpointRadialGap(state, selection, endpoint);
+  if (radialGap > GEOMETRY_EPSILON)
+    return radialGap;
+  return getSelectedSegmentEndpointContinuousCornerLimit(state, selection, endpoint);
 }
 export function getSelectedSegmentEndpointRadialGap(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint): number {
   const profile = state.profiles[selection.side];
@@ -512,8 +518,43 @@ export function getSelectedSegmentEndpointRadialGap(state: DrawingState, selecti
   const neighbor = endpoint === 'start'
     ? profile.points[segmentPointIndex - 1]
     : profile.points[segmentPointIndex + 1];
+  if (neighbor && Math.abs(neighbor.z - segmentPoint.z) > GEOMETRY_EPSILON)
+    return 0;
   const neighborRadius = neighbor?.radius ?? 0;
   return Math.abs(neighborRadius - segmentPoint.radius);
+}
+export function getSelectedSegmentEndpointContinuousCornerLimit(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint): number {
+  const profile = state.profiles[selection.side];
+  const neighborIndex = endpoint === 'start' ? selection.index - 1 : selection.index + 1;
+  if (profile.segmentTools[neighborIndex] !== 'line')
+    return 0;
+  const start = profile.points[selection.index];
+  const end = profile.points[selection.index + 1];
+  const neighborStart = profile.points[neighborIndex];
+  const neighborEnd = profile.points[neighborIndex + 1];
+  if (!start || !end || !neighborStart || !neighborEnd)
+    return 0;
+  if (!hasSegmentLength(neighborStart, neighborEnd))
+    return 0;
+  const corner = endpoint === 'start' ? start : end;
+  const neighborCorner = endpoint === 'start' ? neighborEnd : neighborStart;
+  if (!sameProfilePoint(corner, neighborCorner))
+    return 0;
+  const own = endpoint === 'start'
+    ? {z: end.z - start.z, radius: end.radius - start.radius}
+    : {z: start.z - end.z, radius: start.radius - end.radius};
+  const neighbor = endpoint === 'start'
+    ? {z: neighborStart.z - start.z, radius: neighborStart.radius - start.radius}
+    : {z: neighborEnd.z - end.z, radius: neighborEnd.radius - end.radius};
+  const ownLength = Math.hypot(own.z, own.radius);
+  const neighborLength = Math.hypot(neighbor.z, neighbor.radius);
+  if (ownLength <= GEOMETRY_EPSILON || neighborLength <= GEOMETRY_EPSILON)
+    return 0;
+  const dot = (own.z * neighbor.z + own.radius * neighbor.radius) / (ownLength * neighborLength);
+  const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+  if (angle <= GEOMETRY_EPSILON || Math.PI - angle <= GEOMETRY_EPSILON)
+    return 0;
+  return Math.abs(neighborEnd.z - neighborStart.z);
 }
 export function getDefaultSegmentFeatureSize(state: DrawingState, endpoint: SegmentFeatureEndpoint): number {
   const selection = state.segmentSelection;
@@ -525,9 +566,9 @@ export function getDefaultSegmentFeatureSize(state: DrawingState, endpoint: Segm
   if (!start || !end)
     return 1;
   const segmentLength = Math.abs(end.z - start.z);
-  const radialGap = getSelectedSegmentEndpointRadialGap(state, selection, endpoint);
+  const edgeLimit = getSelectedSegmentEndpointFeatureLimit(state, selection, endpoint);
   const preferred = state.snapMm > 0 ? state.snapMm : 1;
-  const limit = Math.min(segmentLength / 4, radialGap / 2);
+  const limit = Math.min(segmentLength / 4, edgeLimit / 2);
   if (!Number.isFinite(limit) || limit <= GEOMETRY_EPSILON)
     return preferred;
   return Math.max(0.001, Math.min(preferred, limit));

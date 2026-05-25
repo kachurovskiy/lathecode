@@ -256,10 +256,8 @@ function repairGeneratedProfileEdgeFeatures(lines: string[], entries: readonly R
       return;
     }
 
-    const previousRadius = index === 0 ? line.entry.zeroRadius : mutable[index - 1].entry.endRadius;
-    const nextRadius = index === mutable.length - 1 ? line.entry.zeroRadius : mutable[index + 1].entry.startRadius;
-    const startFeature = repairFeatureForRadialGap(line.startFeature, line.entry.startRadius, previousRadius);
-    const endFeature = repairFeatureForRadialGap(line.endFeature, line.entry.endRadius, nextRadius);
+    const startFeature = repairFeatureForEndpoint(mutable, index, 'start');
+    const endFeature = repairFeatureForEndpoint(mutable, index, 'end');
     if (!edgeFeaturesEqual(line.startFeature, startFeature) || !edgeFeaturesEqual(line.endFeature, endFeature)) changed = true;
     line.startFeature = startFeature;
     line.endFeature = endFeature;
@@ -281,14 +279,56 @@ function repairGeneratedProfileEdgeFeatures(lines: string[], entries: readonly R
   return changed;
 }
 
-function repairFeatureForRadialGap(feature: EdgeFeature | null, radius: number, neighborRadius: number): EdgeFeature | null {
+function repairFeatureForEndpoint(lines: readonly MutableFeatureLine[], index: number, endpoint: 'start' | 'end'): EdgeFeature | null {
+  const line = lines[index];
+  const feature = endpoint === 'start' ? line.startFeature : line.endFeature;
   if (!feature || feature.value <= 0) return null;
+  const radius = endpoint === 'start' ? line.entry.startRadius : line.entry.endRadius;
+  const neighborRadius = getEndpointNeighborRadius(lines, index, endpoint);
   const radialGap = Math.abs(neighborRadius - radius);
-  if (radialGap <= 1e-9) return null;
+  if (radialGap > 1e-9) {
+    return {
+      type: feature.type,
+      value: Math.min(feature.value, radialGap),
+    };
+  }
+  const cornerLimit = getContinuousCornerFeatureLimit(lines, index, endpoint, feature);
+  if (cornerLimit <= 1e-9) return null;
   return {
     type: feature.type,
-    value: Math.min(feature.value, radialGap),
+    value: Math.min(feature.value, cornerLimit),
   };
+}
+
+function getEndpointNeighborRadius(lines: readonly MutableFeatureLine[], index: number, endpoint: 'start' | 'end'): number {
+  const line = lines[index].entry;
+  if (endpoint === 'start') return index === 0 ? line.zeroRadius : lines[index - 1].entry.endRadius;
+  return index === lines.length - 1 ? line.zeroRadius : lines[index + 1].entry.startRadius;
+}
+
+function getContinuousCornerFeatureLimit(
+  lines: readonly MutableFeatureLine[],
+  index: number,
+  endpoint: 'start' | 'end',
+  feature: EdgeFeature,
+): number {
+  const neighborIndex = endpoint === 'start' ? index - 1 : index + 1;
+  const line = lines[index]?.entry;
+  const neighbor = lines[neighborIndex]?.entry;
+  if (!line || !neighbor || line.kind === 'parting' || neighbor.kind === 'parting' || line.curveType || neighbor.curveType) return 0;
+
+  const lineDirection = getEndpointDirection(line, endpoint);
+  const neighborDirection = endpoint === 'start'
+    ? getEndpointDirection(neighbor, 'end')
+    : getEndpointDirection(neighbor, 'start');
+  const angle = angleBetweenVectors(lineDirection, neighborDirection);
+  if (angle <= 1e-9 || Math.PI - angle <= 1e-9) return 0;
+  if (feature.type === 'CH') return neighbor.length;
+
+  const lineHorizontalComponent = horizontalComponent(line);
+  const neighborHorizontalComponent = horizontalComponent(neighbor);
+  if (lineHorizontalComponent <= 1e-9 || neighborHorizontalComponent <= 1e-9) return 0;
+  return neighbor.length * lineHorizontalComponent / neighborHorizontalComponent;
 }
 
 function fitFeaturesToSegment(line: MutableFeatureLine): boolean {
@@ -303,8 +343,13 @@ function fitFeaturesToConnector(left: MutableFeatureLine, right: MutableFeatureL
   const total = (left.endFeature?.value ?? 0) + (right.startFeature?.value ?? 0);
   if (total <= radialGap || total <= 0) return false;
   if (radialGap <= 1e-9) {
-    left.endFeature = null;
-    right.startFeature = null;
+    if (isContinuousCornerBetween(left.entry, right.entry)) {
+      if (!left.endFeature || !right.startFeature) return false;
+      right.startFeature = null;
+    } else {
+      left.endFeature = null;
+      right.startFeature = null;
+    }
   } else {
     const scale = radialGap / total;
     if (left.endFeature) left.endFeature.value *= scale;
@@ -316,6 +361,31 @@ function fitFeaturesToConnector(left: MutableFeatureLine, right: MutableFeatureL
 function scaleMutableFeatures(line: MutableFeatureLine, scale: number): void {
   if (line.startFeature) line.startFeature.value *= scale;
   if (line.endFeature) line.endFeature.value *= scale;
+}
+
+function isContinuousCornerBetween(left: RepairableLatheProfileLine, right: RepairableLatheProfileLine): boolean {
+  if (left.kind === 'parting' || right.kind === 'parting' || left.curveType || right.curveType) return false;
+  if (Math.abs(left.endRadius - right.startRadius) > 1e-9) return false;
+  const angle = angleBetweenVectors(getEndpointDirection(left, 'end'), getEndpointDirection(right, 'start'));
+  return angle > 1e-9 && Math.PI - angle > 1e-9;
+}
+
+function getEndpointDirection(line: RepairableLatheProfileLine, endpoint: 'start' | 'end'): {radius: number, z: number} {
+  const vector = {radius: line.endRadius - line.startRadius, z: line.length};
+  return endpoint === 'start' ? vector : {radius: -vector.radius, z: -vector.z};
+}
+
+function horizontalComponent(line: RepairableLatheProfileLine): number {
+  const length = Math.hypot(line.endRadius - line.startRadius, line.length);
+  return length > 1e-9 ? line.length / length : 0;
+}
+
+function angleBetweenVectors(a: {radius: number, z: number}, b: {radius: number, z: number}): number {
+  const aLength = Math.hypot(a.radius, a.z);
+  const bLength = Math.hypot(b.radius, b.z);
+  if (aLength <= 1e-9 || bLength <= 1e-9) return 0;
+  const dot = (a.radius * b.radius + a.z * b.z) / (aLength * bLength);
+  return Math.acos(Math.max(-1, Math.min(1, dot)));
 }
 
 function repairableLatheLineToCode(line: MutableFeatureLine): string {
@@ -539,7 +609,7 @@ Line ${error.line}: ${line || '(empty)'}${hint ? `\nHint: ${hint}` : ''}`;
 
 function getValidationHint(message: string): string {
   if (message.includes('chamfer or fillet requires a radial edge')) {
-    return 'CH/FI can only be used at a real radial shoulder where the neighboring profile radius changes. Remove endpoint CH/FI from smooth or same-radius segment joins.';
+    return 'CH/FI can only be used at a real radial shoulder or an angled corner between straight/tapered lines. Remove endpoint CH/FI from smooth or collinear segment joins.';
   }
   return '';
 }

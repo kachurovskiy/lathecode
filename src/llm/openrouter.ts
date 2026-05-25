@@ -49,7 +49,7 @@ Lathecode syntax:
 - Straight profile line: L<length> R<radius> or L<length> D<diameter>. Add CH<size> for chamfers or FI<size> for fillets on both ends, for example L6 D19.6 CH0.5 or L20 D10 FI0.5.
 - Tapered or endpoint-specific profile line: L<length> RS<startRadius> RE<endRadius>, or use DS/DE for diameters. A straight cone can also use one endpoint plus a centerline angle in degrees, for example L80 DE17.78 A1.43 or L24 DS15.733 A-1.47. Positive A increases radius from start to end; negative A decreases it. Angle-defined cones may end at the centerline but must not cross it. Endpoint features can follow start/end values, for example L20 DS10 FI0.5 DE10 CH1.
 - CH and FI sizes are measured along the segment's horizontal L distance, so their combined endpoint sizes must not exceed that line's L length.
-- Use CH and FI only at endpoints with an actual radial shoulder where the neighboring profile radius changes. Do not add FI or CH to every segment in a polyline curve approximation.
+- Use CH and FI only at endpoints with an actual radial shoulder or an angled corner between straight/tapered lines. Do not add FI or CH to every segment in a polyline curve approximation.
 - Curved profile lines add CONV or CONC after DS/DE or RS/RE. Do not use CH or FI on CONV/CONC lines.
 - Smooth freeform profile line: L<length> DS<startDiameter> DE<endDiameter> BSPLINE D<controlDiameter> D<controlDiameter>..., or use RS/RE with R controls. Example: L24 DS10 DE22 BSPLINE D14 D26 D18 D28. BSPLINE controls are interior guide values; the curve starts at DS/RS and ends at DE/RE. Do not use CH or FI on BSPLINE lines.
 - Prefer BSPLINE for smooth organic silhouettes when exact circular arcs are not required. Complex silhouettes may also be approximated with many short L lines when the shape has sharp details or the spline would overshoot stock or adjacent features.
@@ -207,7 +207,7 @@ Common syntax fixes:
 - Use L24 DS10 DE22 BSPLINE D14 D26 D18 D28 for a smooth freeform spline segment.
 - Use CH0.5 and FI0.5 for chamfers and fillets, not CH 0.5 or FI 0.5. Use them only on straight or tapered lines, not on CONV, CONC, or BSPLINE lines.
 - Keep each CH/FI value within the segment's horizontal L length.
-- Use CH/FI only at real radial shoulders. Remove endpoint CH/FI when the neighboring line starts or ends at the same radius or diameter.
+- Use CH/FI only at real radial shoulders or angled corners between straight/tapered lines. Remove endpoint CH/FI from smooth or collinear joins.
 - Do not introduce AXES directives.
 - Do not prefix real setup or profile lines with ";". Comments are fine, but ;STOCK D64 is only a comment and does not define stock.
 

@@ -1,0 +1,11 @@
+UNITS MM
+STOCK D10
+TOOL RECT R0 L1
+DEPTH CUT0.25 FINISH0.05
+MODE TURN
+
+; Fillet at a continuous cone valley without a radial shoulder.
+L0.5 D8
+L1 DS8 DE4 FI0.15
+L1 DS4 DE8
+L0.5 D8

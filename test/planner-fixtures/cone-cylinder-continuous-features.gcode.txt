@@ -1,0 +1,130 @@
+; UNITS MM
+; STOCK D8
+; TOOL RECT R0 L1
+; DEPTH CUT0.25 FINISH0.05
+; MODE TURN
+;
+; Cone-to-cylinder fillet and cylinder-to-cone chamfer with no radial step.
+; L0.5 D4
+; L1 DS4 DE6 FI0.15
+; L1 DS6 CH0 DE6 CH0.15
+; L1 DS6 DE4
+; L0.5 D4
+
+; Run time 0.9 min, cutting 69% of time
+; Working area 4.00 by 2.01 mm
+; Axes expected: Z+ points left, X+ points up
+
+G21 ; metric
+G18 ; ZX plane
+G90 ; absolute positioning
+F200
+X-4 ; zero your tool X on centerline
+Z0 ; zero your tool Z at the right edge of the stock
+G91 ; relative positioning
+X0.25
+
+F50
+Z4 ; cut 1 mm2
+
+F200
+X-0.25
+Z-4
+X0.5
+
+F50
+Z4 ; cut 1 mm2
+
+F200
+X-0.5
+Z-4
+X0.75
+
+F50
+Z4 ; cut 1 mm2
+
+F200
+X-0.75
+Z-4
+X1
+
+F50
+Z1.51 ; cut 0.3775 mm2
+Z0.15 X-0.05 ; cut 0.0329 mm2 at -71.57°
+Z1.69 ; cut 0.338 mm2
+Z0.1 X0.05 ; cut 0.0725 mm2 at 63.43°
+Z0.55 ; cut 0.1375 mm2
+
+F200
+X-1
+Z-4
+X1.25
+
+F50
+Z1.2 ; cut 0.3 mm2
+Z0.28 X-0.24 ; cut 0.0319 mm2 at -49.40°
+
+F200
+X-0.06
+Z1.97
+X0.05
+
+F50
+Z0.2 X0.1 ; cut 0.11 mm2 at 63.43°
+Z0.15 X0.15 ; cut 0.1755 mm2 at 45.00°
+Z0.2 ; cut 0.05 mm2
+
+F200
+X-1.25
+Z-4
+X1.5
+
+F50
+Z0.95 ; cut 0.2375 mm2
+Z0.4 X-0.4 ; cut 0.03 mm2 at -45.00°
+
+F200
+X-0.15
+Z2.45
+X0.3
+
+F50
+Z0.2 X0.21 ; cut 0.2298 mm2 at 43.60°
+
+F200
+X-1.46
+Z-4
+X1.75
+
+F50
+Z0.7 ; cut 0.175 mm2
+Z0.65 X-0.65 ; cut 0.03 mm2 at -45.00°
+
+F200
+X-1.1
+Z-1.35
+X1.96
+
+F50
+Z0.01 X-0.01 ; cut 0.002 mm2
+Z0.49 ; cut 0.098 mm2
+Z0.85 X-0.85 ; cut 0.019 mm2 at -45.00°
+
+F200
+X-1.1
+Z-1.35
+X2.01
+Z0.01 X-0.01 ; cut 0.0005 mm2
+
+F50
+Z0.49 ; cut 0.0245 mm2
+Z0.92 X-0.9 ; cut 0.046 mm2 at -45.63°
+Z0.15 X-0.08 ; cut 0.0075 mm2 at -61.93°
+Z0.09 X-0.02 ; cut 0.0045 mm2 at -77.47°
+Z1.69 ; cut 0.0461 mm2
+Z0.3 X0.15 ; cut 0.0155 mm2 at 63.43°
+Z0.35 X0.35 ; cut 0.0552 mm2 at 45.00°
+X-1.5 ; cut 0.015 mm2
+
+F200
+Z-4

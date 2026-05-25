@@ -1,0 +1,11 @@
+UNITS MM
+STOCK D8
+TOOL RECT R0 L1
+DEPTH CUT0.25 FINISH0.05
+MODE TURN
+
+; Chamfer owned by the following cone's start at the same continuous peak.
+L0.5 D4
+L1 DS4 DE6
+L1 DS6 CH0.15 DE4
+L0.5 D4

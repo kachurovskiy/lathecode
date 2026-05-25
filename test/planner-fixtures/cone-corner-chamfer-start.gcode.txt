@@ -1,0 +1,114 @@
+; UNITS MM
+; STOCK D8
+; TOOL RECT R0 L1
+; DEPTH CUT0.25 FINISH0.05
+; MODE TURN
+;
+; Chamfer owned by the following cone's start at the same continuous peak.
+; L0.5 D4
+; L1 DS4 DE6
+; L1 DS6 CH0.15 DE4
+; L0.5 D4
+
+; Run time 0.7 min, cutting 69% of time
+; Working area 3.00 by 2.01 mm
+; Axes expected: Z+ points left, X+ points up
+
+G21 ; metric
+G18 ; ZX plane
+G90 ; absolute positioning
+F200
+X-4 ; zero your tool X on centerline
+Z0 ; zero your tool Z at the right edge of the stock
+G91 ; relative positioning
+X0.25
+
+F50
+Z3 ; cut 0.75 mm2
+
+F200
+X-0.25
+Z-3
+X0.5
+
+F50
+Z3 ; cut 0.75 mm2
+
+F200
+X-0.5
+Z-3
+X0.75
+
+F50
+Z3 ; cut 0.75 mm2
+
+F200
+X-0.75
+Z-3
+X1
+
+F50
+Z3 ; cut 0.75 mm2
+
+F200
+X-1
+Z-3
+X1.25
+
+F50
+Z1.2 ; cut 0.3 mm2
+Z0.15 X-0.15 ; cut 0.0255 mm2 at -45.00°
+Z1.3 ; cut 0.13 mm2
+Z0.15 X0.15 ; cut 0.1755 mm2 at 45.00°
+Z0.2 ; cut 0.05 mm2
+
+F200
+X-1.25
+Z-3
+X1.5
+
+F50
+Z0.95 ; cut 0.2375 mm2
+Z0.4 X-0.4 ; cut 0.03 mm2 at -45.00°
+
+F200
+Z1.45
+X0.15
+
+F50
+Z0.2 X0.21 ; cut 0.2298 mm2 at 43.60°
+
+F200
+X-1.46
+Z-3
+X1.75
+
+F50
+Z0.71 ; cut 0.1775 mm2
+Z0.64 X-0.65 ; cut 0.0287 mm2 at -44.56°
+
+F200
+X-1.1
+Z-1.35
+X1.96
+
+F50
+Z0.01 X-0.01 ; cut 0.002 mm2
+Z0.5 ; cut 0.1 mm2
+Z0.31 X-0.31 ; cut 0.019 mm2 at -45.00°
+
+F200
+X-1.64
+Z-0.82
+X2.01
+Z0.01 X-0.01 ; cut 0.0005 mm2
+
+F50
+Z0.49 ; cut 0.0245 mm2
+Z0.85 X-0.85 ; cut 0.0393 mm2 at -45.00°
+Z1.3 ; cut 0.026 mm2
+Z0.35 X0.35 ; cut 0.0552 mm2 at 45.00°
+X-1.5 ; cut 0.015 mm2
+
+F200
+Z-3
