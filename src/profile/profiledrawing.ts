@@ -4,10 +4,21 @@ import { beginLatheCodePreviewSession, createAutoRotatingLatheCodePreview, prior
 import { POINT_HIT_RADIUS_PX, PLOT_CLICK_TOLERANCE_PX, PREVIEW_UPDATE_DELAY_MS, PROFILE_SIDES, SEGMENT_FEATURE_ENDPOINTS, SEGMENT_HIT_RADIUS_PX, SIZE_HINT_FONT_PX, SIZE_HINT_TEXT_STROKE_PX, VIEW_HEIGHT, VIEW_WIDTH, type ContextMenuSection, GEOMETRY_EPSILON, type DrawingHistory, type DrawingState, type DrawingTool, type FieldControl, type FreehandCandidate, type PointSelection, type ProfilePoint, type ProfileSide, type SegmentEdgeFeatureTool, type SegmentFeatureEndpoint, type SegmentSelection, type SegmentTool, } from './types.ts';
 import { capitalize, clampNumber, createButton, createNumberField, createSegmentedGroup, createSegmentFeatureIcon, createToolCursorIcon, formatNumber, svgElement, getToolShortcut, isEditableEventTarget, isRedoShortcut, isUndoShortcut, readFiniteNumber, readNonNegativeNumber, readPositiveNumber, } from './dom.ts';
 import { findNearestPointSelection, findNearestSegmentSelection, getDrawingViewBox, getPreviewRenderSize, getPreviewRenderSizeKey, getSvgPoint, getSvgScreenMetrics, hasSegmentLength, isSvgPointInsidePlot, screenToProfilePoint, shouldPlacePreviewBelowEditor, svgViewBoxToString, } from './geometry.ts';
-import { canAddPointNextToPoint, canRemoveSelectedPoint, canSelectedSegmentEndpointHaveFeature, canSplitSegmentAtProfilePoint, cloneDrawingState, cloneProfileDraft, createInitialState, ensureProfileEnabled, getDefaultSegmentFeatureSize, getProfileSideLabel, getSelectedPoint, getSelectedSegmentFeature, getSelectedSegmentFeatureSize, getSelectedSegmentTool, insertPoint, isInternalSplineControlPoint, midpointProfilePoint, recordUndoState, recordUndoStateIfChanged, redoDrawingState, removeSelectedPoint, resetDrawingState, resizeDrawing, selectDefaultPoint, setSelectedSegmentFeature, setSelectedSegmentTool, undoDrawingState, updatePointPosition, } from './state.ts';
+import { canAddPointNextToPoint, canRemoveSelectedPoint, canSelectedSegmentEndpointHaveFeature, canSplitSegmentAtProfilePoint, cloneDrawingState, cloneProfileDraft, createInitialState, ensureProfileEnabled, getDefaultSegmentFeatureSize, getProfileSideLabel, getSelectedPoint, getSelectedSegmentFeature, getSelectedSegmentFeatureSize, getSelectedSegmentTool, insertPoint, isInternalSplineControlPoint, midpointProfilePoint, recordUndoState, recordUndoStateIfChanged, redoDrawingState, removeSelectedPoint, resetDrawingState, resizeDrawing, restoreDrawingState, selectDefaultPoint, setSelectedSegmentFeature, setSelectedSegmentTool, tryCreateStateFromLatheCodeForDrawing, undoDrawingState, updatePointPosition, } from './state.ts';
 import { appendFreehandStrokePoint, createFreehandCandidates, createFreehandPartPreview, createFreehandProfilePreview, } from './freehand.ts';
 import { renderDrawing } from './render.ts';
 import { buildLatheCodeFromDrawing, buildOutgoingLatheCodeFromDrawing } from './serialization.ts';
+
+type ProfileDrawingSnapshot = {
+  id: string;
+  createdAt: number;
+  text: string;
+};
+
+const PROFILE_DRAWING_SNAPSHOT_LIMIT = 100;
+const profileDrawingSnapshots: ProfileDrawingSnapshot[] = [];
+let profileDrawingSnapshotSequence = 0;
+
 export function openProfileDrawingDialog(onAccept: (text: string) => void, initialText?: string | null): void {
   const state = createInitialState(initialText);
   const history: DrawingHistory = { undoStack: [], redoStack: [], };
@@ -22,6 +33,8 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   let previewRenderSizeKey = '';
   let forceImmediatePreviewUpdate = false;
   let updatingPointFields = false;
+  let suppressNextSnapshot = false;
+  let profileDesignerDocumentKeyDown: ((event: KeyboardEvent) => void) | null = null;
   const previousDocumentTitle = document.title;
   document.title = 'Profile Designer';
   const disposePreviewSession = beginLatheCodePreviewSession();
@@ -67,11 +80,21 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   const undoButton = createButton('Undo', 'setupSegmentButton profileDrawingUndoButton', { title: 'Undo drawing change (Ctrl+Z)', });
   const redoButton = createButton('Redo', 'setupSegmentButton profileDrawingRedoButton', { title: 'Redo drawing change (Ctrl+Y)', });
   historyActions.append(undoButton, redoButton);
+  const snapshotField = document.createElement('label');
+  snapshotField.className = 'profileDrawingSnapshotField';
+  const snapshotHeading = document.createElement('span');
+  snapshotHeading.className = 'settingHeading';
+  snapshotHeading.textContent = 'Snapshots';
+  const snapshotSelect = document.createElement('select');
+  snapshotSelect.className = 'profileDrawingSnapshotSelect';
+  snapshotSelect.setAttribute('aria-label', 'Profile snapshots');
+  snapshotSelect.title = 'Return to a valid profile from this browser window';
+  snapshotField.append(snapshotHeading, snapshotSelect);
   const dialogActions = createSegmentedGroup('settingsActions profileDrawingActionGroup profileDrawingDialogActions', 'Dialog actions');
   const resetButton = createButton('Reset', 'setupSegmentButton profileDrawingResetButton');
   const acceptButton = createButton('Use lathecode', 'setupSegmentButton profileDrawingAcceptButton', { type: 'submit', });
   dialogActions.append(resetButton, acceptButton);
-  actions.append(historyActions, dialogActions);
+  actions.append(historyActions, snapshotField, dialogActions);
   controls.appendChild(actions);
   const selectionControls = document.createElement('div');
   selectionControls.className = 'profileDrawingSelectionControls';
@@ -257,6 +280,9 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   redoButton.addEventListener('click', () => {
     performRedo();
   });
+  snapshotSelect.addEventListener('change', () => {
+    restoreSnapshot(snapshotSelect.value);
+  });
   resetButton.addEventListener('click', () => {
     const before = cloneDrawingState(state);
     closeContextMenu();
@@ -312,11 +338,12 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       render();
       return;
     }
-    recordUndoState(history, cloneDrawingState(state));
+    const beforeInsert = cloneDrawingState(state);
+    recordUndoState(history, beforeInsert);
     ensureProfileEnabled(state, state.activeSide);
     insertPoint(state, state.activeSide, screenToProfilePoint(state, svgPoint), state.activeTool);
     dragState = state.selection;
-    dragStartState = null;
+    dragStartState = beforeInsert;
     dragHistoryRecorded = true;
     render();
   });
@@ -394,6 +421,10 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       window.cancelAnimationFrame(drawingResizeRenderFrame);
       drawingResizeRenderFrame = null;
     }
+    if (profileDesignerDocumentKeyDown) {
+      document.removeEventListener('keydown', profileDesignerDocumentKeyDown, true);
+      profileDesignerDocumentKeyDown = null;
+    }
     drawingResizeObserver?.disconnect();
     previewResizeObserver?.disconnect();
     autoPreview3d.dispose();
@@ -402,14 +433,19 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   };
   const dialog = createFullScreenDialog(form, '', closeDialog);
   dialog.classList.add('profileDrawingDialogContainer');
-  dialog.querySelector<HTMLButtonElement>('.dialogCloseButton')!.classList.add('setupSegmentButton');
-  dialog.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && contextMenu) {
-      event.preventDefault();
-      event.stopPropagation();
-      closeContextMenu();
+  const closeButton = dialog.querySelector<HTMLButtonElement>('.dialogCloseButton')!;
+  closeButton.classList.add('setupSegmentButton');
+  profileDesignerDocumentKeyDown = event => {
+    if (event.key !== 'Escape')
       return;
-    }
+    const dialogs = Array.from(document.querySelectorAll<HTMLElement>('.fullScreenDialog'));
+    const topDialog = dialogs.at(-1);
+    if (topDialog !== dialog && topDialog !== freehandChooserDialog)
+      return;
+    handleEscapeKey(event);
+  };
+  document.addEventListener('keydown', profileDesignerDocumentKeyDown, true);
+  dialog.addEventListener('keydown', event => {
     if (isUndoShortcut(event)) {
       if (performUndo()) {
         event.preventDefault();
@@ -424,12 +460,8 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       }
       return;
     }
-    if (event.key === 'Escape' && state.activeTool !== 'select') {
-      event.preventDefault();
-      event.stopPropagation();
-      clearFreehandWork();
-      state.activeTool = 'select';
-      render();
+    if (event.key === 'Escape') {
+      handleEscapeKey(event);
       return;
     }
     const shortcutTool = getToolShortcut(event, state.activeTool);
@@ -471,6 +503,7 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     updateToolCursor();
     undoButton.disabled = !history.undoStack.length;
     redoButton.disabled = !history.redoStack.length;
+    updateSnapshotSelect(recordCurrentSnapshot());
     if (state.activeTool !== 'select' || dragState || freehandStroke) {
       updateSegmentHoverCursor(null);
     }
@@ -519,6 +552,30 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     render();
     return true;
   }
+  function restoreSnapshot(snapshotId: string) {
+    const snapshot = profileDrawingSnapshots.find(candidate => candidate.id === snapshotId);
+    if (!snapshot)
+      return;
+    const snapshotState = tryCreateStateFromLatheCodeForDrawing(snapshot.text);
+    if (!snapshotState) {
+      error.textContent = 'Snapshot is no longer valid';
+      updateSnapshotSelect('');
+      return;
+    }
+    const before = cloneDrawingState(state);
+    closeContextMenu();
+    closeFreehandChooser();
+    dragState = null;
+    dragStartState = null;
+    dragHistoryRecorded = false;
+    freehandStroke = null;
+    restoreDrawingState(state, snapshotState);
+    recordUndoStateIfChanged(history, before, state);
+    suppressNextSnapshot = true;
+    syncDimensionInputs();
+    render();
+    snapshotSelect.value = snapshot.id;
+  }
   function setActiveTool(tool: DrawingTool) {
     closeContextMenu();
     if (tool !== 'free')
@@ -531,6 +588,43 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   function clearFreehandWork() {
     freehandStroke = null;
     closeFreehandChooser();
+  }
+  function handleEscapeKey(event: KeyboardEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    if (contextMenu) {
+      closeContextMenu();
+      return;
+    }
+    if (freehandChooserDialog) {
+      closeFreehandChooser();
+      return;
+    }
+    if (freehandStroke) {
+      freehandStroke = null;
+      state.activeTool = 'select';
+      render();
+      return;
+    }
+    if (dragState) {
+      if (dragStartState)
+        restoreDrawingState(state, dragStartState);
+      dragState = null;
+      dragStartState = null;
+      dragHistoryRecorded = false;
+      state.activeTool = 'select';
+      syncDimensionInputs();
+      render();
+      return;
+    }
+    const changed = state.activeTool !== 'select' || !!state.selection || !!state.segmentSelection;
+    state.activeTool = 'select';
+    state.selection = null;
+    state.segmentSelection = null;
+    clearFreehandWork();
+    if (changed)
+      render();
   }
   function updatePointEditor() {
     const point = getSelectedPoint(state);
@@ -844,6 +938,41 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     snapField.input.value = formatNumber(state.snapMm);
     gridField.input.value = formatNumber(state.gridMm);
   }
+  function recordCurrentSnapshot(): string {
+    const text = getValidSnapshotText();
+    if (!text)
+      return '';
+    if (suppressNextSnapshot) {
+      suppressNextSnapshot = false;
+      return profileDrawingSnapshots.find(snapshot => snapshot.text === text)?.id ?? '';
+    }
+    return addProfileDrawingSnapshot(text).id;
+  }
+  function getValidSnapshotText(): string | null {
+    try {
+      const text = buildOutgoingLatheCodeFromDrawing(state);
+      new LatheCode(text);
+      return text;
+    }
+    catch {
+      return null;
+    }
+  }
+  function updateSnapshotSelect(selectedSnapshotId: string) {
+    snapshotSelect.replaceChildren(...profileDrawingSnapshots.map(snapshot => {
+      const option = document.createElement('option');
+      option.value = snapshot.id;
+      option.textContent = formatProfileDrawingSnapshotLabel(snapshot);
+      return option;
+    }));
+    snapshotSelect.disabled = !profileDrawingSnapshots.length;
+    if (profileDrawingSnapshots.some(snapshot => snapshot.id === selectedSnapshotId)) {
+      snapshotSelect.value = selectedSnapshotId;
+    }
+    else if (profileDrawingSnapshots.length) {
+      snapshotSelect.value = profileDrawingSnapshots.at(-1)!.id;
+    }
+  }
   function schedulePreviewUpdate(text: string, force = false) {
     if (force) {
       if (previewUpdateTimer !== null) {
@@ -877,4 +1006,45 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     autoPreview3d.setText(text);
   }
   render();
+}
+
+function addProfileDrawingSnapshot(text: string): ProfileDrawingSnapshot {
+  const latest = profileDrawingSnapshots.at(-1);
+  if (latest?.text === text)
+    return latest;
+  const snapshot = {
+    id: String(++profileDrawingSnapshotSequence),
+    createdAt: Date.now(),
+    text,
+  };
+  profileDrawingSnapshots.push(snapshot);
+  while (profileDrawingSnapshots.length > PROFILE_DRAWING_SNAPSHOT_LIMIT) {
+    profileDrawingSnapshots.shift();
+  }
+  return snapshot;
+}
+
+function formatProfileDrawingSnapshotLabel(snapshot: ProfileDrawingSnapshot): string {
+  const timestamp = new Date(snapshot.createdAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  return `${timestamp} ${getProfileDrawingSnapshotSummary(snapshot.text)}`;
+}
+
+function getProfileDrawingSnapshotSummary(text: string): string {
+  try {
+    const latheCode = new LatheCode(text);
+    const stock = latheCode.getStock();
+    const dimensions = latheCode.getPartDimensions();
+    const diameter = stock?.diameter ?? dimensions?.diameter;
+    const length = dimensions?.length ?? stock?.length;
+    return diameter && length
+      ? `D${formatNumber(diameter)} L${formatNumber(length)}`
+      : 'Profile';
+  }
+  catch {
+    return 'Profile';
+  }
 }

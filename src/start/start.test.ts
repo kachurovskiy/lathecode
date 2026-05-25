@@ -695,6 +695,89 @@ describe('StartPanel', () => {
     expect(() => new LatheCode(started[0])).not.toThrow();
   });
 
+  it('keeps Escape local to the profile designer', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const dialog = document.querySelector<HTMLElement>('.fullScreenDialog')!;
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+
+    expect(getSelectedProfileTool()).toBe('Line');
+    expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(false);
+
+    dispatchKeyboard(dialog, 'keydown', 'Escape');
+
+    expect(document.querySelector('.profileDrawingDialog')).not.toBeNull();
+    expect(getSelectedProfileTool()).toBe('Select');
+    expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(true);
+
+    dispatchKeyboard(document, 'keydown', 'Escape');
+
+    expect(document.querySelector('.profileDrawingDialog')).not.toBeNull();
+    expect(getSelectedProfileTool()).toBe('Select');
+
+    clickDialogButton('Line');
+    dispatchProfileMouse(svg, 'mousedown', 25, 20);
+    expect(document.querySelectorAll('.profileDrawingPoint.outside')).toHaveLength(3);
+
+    dispatchKeyboard(document, 'keydown', 'Escape');
+
+    expect(document.querySelector('.profileDrawingDialog')).not.toBeNull();
+    expect(document.querySelectorAll('.profileDrawingPoint.outside')).toHaveLength(2);
+    expect(getSelectedProfileTool()).toBe('Select');
+
+    clickDialogButton('Use lathecode');
+  });
+
+  it('closes the profile designer without a dirty-work confirmation', () => {
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    setInputValue('input[name="drawingLength"]', '60');
+
+    clickDialogButton('Close');
+
+    expect(confirmMock).not.toHaveBeenCalled();
+    expect(document.querySelector('.profileDrawingDialog')).toBeNull();
+  });
+
+  it('keeps valid profile snapshots for the browser window and restores them', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const snapshotSelect = document.querySelector<HTMLSelectElement>('.profileDrawingSnapshotSelect')!;
+    const initialSnapshotId = snapshotSelect.value;
+
+    expect(snapshotSelect.disabled).toBe(false);
+    expect(snapshotSelect.selectedOptions[0].textContent).toContain('D30 L50');
+
+    setInputValue('input[name="drawingLength"]', '60');
+
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingLength"]')!.value).toBe('60');
+    expect(Array.from(snapshotSelect.options).some(option => option.value === initialSnapshotId)).toBe(true);
+    expect(snapshotSelect.selectedOptions[0].textContent).toContain('D30 L60');
+
+    snapshotSelect.value = initialSnapshotId;
+    snapshotSelect.dispatchEvent(new Event('change', {bubbles: true}));
+
+    expect(document.querySelector<HTMLInputElement>('input[name="drawingLength"]')!.value).toBe('50');
+
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('L50 D30');
+    expect(started[0]).not.toContain('L60 D30');
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
   it('supports keyboard undo and redo in the profile designer', () => {
     const container = createStartContainer();
     const start = new StartPanel(container);
@@ -1199,8 +1282,9 @@ describe('StartPanel', () => {
     expect(chooser!.querySelector('.profileDrawingFreehandSelectButton')).toBeNull();
     expect(document.querySelector('.profileDrawingFreehandStroke')).toBeNull();
 
-    clickDialogButton('Cancel');
+    dispatchKeyboard(document, 'keydown', 'Escape');
     expect(document.querySelector('.profileDrawingFreehandDialogContainer')).toBeNull();
+    expect(document.querySelector('.profileDrawingDialog')).not.toBeNull();
 
     dispatchProfileMouse(svg, 'mousedown', 0, 30);
     dispatchProfileMouse(window, 'mousemove', 12.5, 24);

@@ -1577,6 +1577,26 @@ button.profileDrawingFreehandOption:active {
   align-items: stretch;
 }
 
+.profileDrawingSnapshotField {
+  display: flex;
+  min-width: min(100%, 260px);
+  align-self: stretch;
+  align-items: center;
+  gap: 8px;
+}
+
+.profileDrawingSnapshotField .settingHeading {
+  flex: 0 0 auto;
+}
+
+.profileDrawingSnapshotSelect {
+  min-width: 0;
+  flex: 1 1 190px;
+  border: 1px solid #cccccc;
+  padding: 6px 8px;
+  font: inherit;
+}
+
 .profileDrawingDialogActions {
   margin: 0;
 }
