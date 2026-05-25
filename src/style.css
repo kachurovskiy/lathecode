@@ -1579,10 +1579,12 @@ button.profileDrawingFreehandOption:active {
 
 .profileDrawingSnapshotField {
   display: flex;
+  box-sizing: border-box;
   min-width: min(100%, 260px);
   align-self: stretch;
   align-items: center;
   gap: 8px;
+  padding-left: 8px;
 }
 
 .profileDrawingSnapshotField .settingHeading {

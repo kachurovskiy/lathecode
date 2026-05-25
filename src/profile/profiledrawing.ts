@@ -21,6 +21,8 @@ let profileDrawingSnapshotSequence = 0;
 
 export function openProfileDrawingDialog(onAccept: (text: string) => void, initialText?: string | null): void {
   const state = createInitialState(initialText);
+  state.selection = null;
+  state.segmentSelection = null;
   const history: DrawingHistory = { undoStack: [], redoStack: [], };
   let dragState: PointSelection = null;
   let dragStartState: DrawingState | null = null;
@@ -94,13 +96,14 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   const resetButton = createButton('Reset', 'setupSegmentButton profileDrawingResetButton');
   const acceptButton = createButton('Use lathecode', 'setupSegmentButton profileDrawingAcceptButton', { type: 'submit', });
   dialogActions.append(resetButton, acceptButton);
-  actions.append(historyActions, snapshotField, dialogActions);
+  actions.append(historyActions, dialogActions);
   controls.appendChild(actions);
   const selectionControls = document.createElement('div');
   selectionControls.className = 'profileDrawingSelectionControls';
   selectionControls.classList.add('empty');
   selectionControls.setAttribute('aria-hidden', 'true');
   form.appendChild(selectionControls);
+  selectionControls.appendChild(snapshotField);
   const workspace = document.createElement('div');
   workspace.className = 'profileDrawingWorkspace';
   form.appendChild(workspace);
@@ -489,8 +492,10 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     updatePointEditor();
     updateSegmentEditor();
     const hasSelectionControls = !pointEditor.hidden || !segmentEditor.hidden;
-    selectionControls.classList.toggle('empty', !hasSelectionControls);
-    selectionControls.setAttribute('aria-hidden', String(!hasSelectionControls));
+    snapshotField.hidden = hasSelectionControls;
+    const hasSelectionRowContent = hasSelectionControls || !snapshotField.hidden;
+    selectionControls.classList.toggle('empty', !hasSelectionRowContent);
+    selectionControls.setAttribute('aria-hidden', String(!hasSelectionRowContent));
     error.textContent = '';
     for (const [side, button] of profileButtons) {
       button.classList.toggle('selected', state.activeSide === side);
@@ -570,6 +575,8 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     dragHistoryRecorded = false;
     freehandStroke = null;
     restoreDrawingState(state, snapshotState);
+    state.selection = null;
+    state.segmentSelection = null;
     recordUndoStateIfChanged(history, before, state);
     suppressNextSnapshot = true;
     syncDimensionInputs();
@@ -959,7 +966,8 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     }
   }
   function updateSnapshotSelect(selectedSnapshotId: string) {
-    snapshotSelect.replaceChildren(...profileDrawingSnapshots.map(snapshot => {
+    const snapshotsNewestFirst = profileDrawingSnapshots.slice().reverse();
+    snapshotSelect.replaceChildren(...snapshotsNewestFirst.map(snapshot => {
       const option = document.createElement('option');
       option.value = snapshot.id;
       option.textContent = formatProfileDrawingSnapshotLabel(snapshot);
@@ -1036,15 +1044,16 @@ function formatProfileDrawingSnapshotLabel(snapshot: ProfileDrawingSnapshot): st
 function getProfileDrawingSnapshotSummary(text: string): string {
   try {
     const latheCode = new LatheCode(text);
-    const stock = latheCode.getStock();
-    const dimensions = latheCode.getPartDimensions();
-    const diameter = stock?.diameter ?? dimensions?.diameter;
-    const length = dimensions?.length ?? stock?.length;
-    return diameter && length
-      ? `D${formatNumber(diameter)} L${formatNumber(length)}`
-      : 'Profile';
+    const outsideSegments = latheCode.getOutsidePartProfileSegmentDefinitions().length;
+    const insideSegments = latheCode.getInsidePartProfileSegmentDefinitions().length;
+    const summary = `Out ${formatSegmentCount(outsideSegments)}`;
+    return insideSegments ? `${summary}, in ${formatSegmentCount(insideSegments)}` : summary;
   }
   catch {
     return 'Profile';
   }
+}
+
+function formatSegmentCount(count: number): string {
+  return `${count} segment${count === 1 ? '' : 's'}`;
 }

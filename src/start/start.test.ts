@@ -351,8 +351,12 @@ describe('StartPanel', () => {
     expect(document.querySelector('.profileDrawingDialogActions.setupSegmented')).not.toBeNull();
     expect(document.querySelector('.profileDrawingUndoButton.setupSegmentButton')).not.toBeNull();
     expect(document.querySelector('.profileDrawingDialogActions .dialogCloseButton.setupSegmentButton')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingControls .profileDrawingSnapshotField')).toBeNull();
+    expect(document.querySelector<HTMLElement>('.profileDrawingSelectionControls > .profileDrawingSnapshotField')!.hidden).toBe(false);
     expect(document.querySelector<HTMLElement>('.profileDrawingSelectionControls')!.hidden).toBe(false);
+    expect(document.querySelector('.profileDrawingPoint.selected')).toBeNull();
     expect(document.querySelector('.profileDrawingSelectionControls > .profileDrawingPointEditor')).not.toBeNull();
+    expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(true);
     expect(document.querySelector('.profileDrawingPointEditor > strong')).toBeNull();
 
     clickDialogButton('Use lathecode');
@@ -380,16 +384,16 @@ describe('StartPanel', () => {
     expect(Number(frame.style.getPropertyValue('--profileDrawingFrameAspect'))).toBeGreaterThan(2);
     expect(getSvgViewBox(svg).height).toBeLessThan(PROFILE_TEST_VIEW_HEIGHT);
     expect(getRenderedSvgPixelValue(svg, '--profileDrawingSizeHintFontSize')).toBeCloseTo(16, 3);
-    expect(getRenderedSvgLength(svg, Number(document.querySelector<SVGCircleElement>('.profileDrawingPoint.selected')!.getAttribute('r'))))
-      .toBeCloseTo(6, 4);
+    expect(getRenderedSvgLength(svg, Number(document.querySelector<SVGCircleElement>('.profileDrawingPoint')!.getAttribute('r'))))
+      .toBeCloseTo(5, 4);
 
     setInputValue('input[name="drawingDiameter"]', '60');
     expectStockAspectRatio(50 / 30);
     expect(document.querySelector('.profileDrawingWorkspace.longPart')).toBeNull();
     expect(preview.dataset.previewText).not.toBe(previewTextBeforeResize);
     expect(getRenderedSvgPixelValue(svg, '--profileDrawingSizeHintFontSize')).toBeCloseTo(16, 3);
-    expect(getRenderedSvgLength(svg, Number(document.querySelector<SVGCircleElement>('.profileDrawingPoint.selected')!.getAttribute('r'))))
-      .toBeCloseTo(6, 4);
+    expect(getRenderedSvgLength(svg, Number(document.querySelector<SVGCircleElement>('.profileDrawingPoint')!.getAttribute('r'))))
+      .toBeCloseTo(5, 4);
 
     setInputValue('input[name="drawingLength"]', '30');
     expectStockAspectRatio(30 / 30);
@@ -414,7 +418,7 @@ describe('StartPanel', () => {
     expect(document.querySelectorAll('.profileDrawingGridLine')).toHaveLength(5);
   });
 
-  it('keeps selection controls mounted when nothing is selected', () => {
+  it('shows snapshots in the selection row when nothing is selected', () => {
     const container = createStartContainer();
     new StartPanel(container);
 
@@ -424,13 +428,21 @@ describe('StartPanel', () => {
 
     expect(selectionControls.hidden).toBe(false);
     expect(selectionControls.classList.contains('empty')).toBe(false);
+    expect(selectionControls.getAttribute('aria-hidden')).toBe('false');
+    expect(document.querySelector<HTMLElement>('.profileDrawingSnapshotField')!.hidden).toBe(false);
 
     clickDialogButton('Select');
+    dispatchProfileMouse(svg, 'mousedown', 50, 30);
+
+    expect(document.querySelector<HTMLElement>('.profileDrawingSnapshotField')!.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(false);
+
     dispatchProfileMouse(svg, 'mousedown', 25, 15);
 
     expect(selectionControls.hidden).toBe(false);
-    expect(selectionControls.classList.contains('empty')).toBe(true);
-    expect(selectionControls.getAttribute('aria-hidden')).toBe('true');
+    expect(selectionControls.classList.contains('empty')).toBe(false);
+    expect(selectionControls.getAttribute('aria-hidden')).toBe('false');
+    expect(document.querySelector<HTMLElement>('.profileDrawingSnapshotField')!.hidden).toBe(false);
     expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(true);
     expect(document.querySelector<HTMLElement>('.profileDrawingSegmentEditor')!.hidden).toBe(true);
   });
@@ -704,13 +716,16 @@ describe('StartPanel', () => {
     const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
 
     expect(getSelectedProfileTool()).toBe('Line');
-    expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(false);
+    expect(document.querySelector('.profileDrawingPoint.selected')).toBeNull();
+    expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>('.profileDrawingSnapshotField')!.hidden).toBe(false);
 
     dispatchKeyboard(dialog, 'keydown', 'Escape');
 
     expect(document.querySelector('.profileDrawingDialog')).not.toBeNull();
     expect(getSelectedProfileTool()).toBe('Select');
     expect(document.querySelector<HTMLElement>('.profileDrawingPointEditor')!.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>('.profileDrawingSnapshotField')!.hidden).toBe(false);
 
     dispatchKeyboard(document, 'keydown', 'Escape');
 
@@ -754,22 +769,38 @@ describe('StartPanel', () => {
     });
 
     container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
     const snapshotSelect = document.querySelector<HTMLSelectElement>('.profileDrawingSnapshotSelect')!;
     const initialSnapshotId = snapshotSelect.value;
 
     expect(snapshotSelect.disabled).toBe(false);
-    expect(snapshotSelect.selectedOptions[0].textContent).toContain('D30 L50');
+    expect(snapshotSelect.selectedOptions[0].textContent).toContain('Out 1 segment');
+    expect(snapshotSelect.selectedOptions[0].textContent).not.toContain('in 0 segments');
+    expect(snapshotSelect.selectedOptions[0].textContent).not.toContain('D30 L50');
 
     setInputValue('input[name="drawingLength"]', '60');
 
     expect(document.querySelector<HTMLInputElement>('input[name="drawingLength"]')!.value).toBe('60');
     expect(Array.from(snapshotSelect.options).some(option => option.value === initialSnapshotId)).toBe(true);
-    expect(snapshotSelect.selectedOptions[0].textContent).toContain('D30 L60');
+    expect(snapshotSelect.options[0].value).toBe(snapshotSelect.value);
+    expect(snapshotSelect.selectedOptions[0].textContent).toContain('Out 1 segment');
+    expect(snapshotSelect.selectedOptions[0].textContent).not.toContain('in 0 segments');
+    expect(snapshotSelect.selectedOptions[0].textContent).not.toContain('D30 L60');
+
+    dispatchProfileMouse(svg, 'mousedown', 30, 20, {lengthMm: 60});
+    dispatchProfileMouse(window, 'mouseup', 30, 20, {lengthMm: 60});
+
+    expect(snapshotSelect.options[0].value).toBe(snapshotSelect.value);
+    expect(snapshotSelect.selectedOptions[0].textContent).toContain('Out 2 segments');
+    expect(snapshotSelect.selectedOptions[0].textContent).not.toContain('in 0 segments');
 
     snapshotSelect.value = initialSnapshotId;
     snapshotSelect.dispatchEvent(new Event('change', {bubbles: true}));
 
     expect(document.querySelector<HTMLInputElement>('input[name="drawingLength"]')!.value).toBe('50');
+    expect(document.querySelector('.profileDrawingPoint.selected')).toBeNull();
+    expect(document.querySelector('.profileDrawingSegmentSelection')).toBeNull();
+    expect(document.querySelector<HTMLElement>('.profileDrawingSnapshotField')!.hidden).toBe(false);
 
     clickDialogButton('Use lathecode');
 
