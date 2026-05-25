@@ -1468,17 +1468,16 @@ button.profileDrawingContextMenuButton:disabled:hover {
 .profileDrawingFreehandDialogContainer {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .profileDrawingFreehandOptionGrid {
   display: grid;
-  min-height: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
   gap: 16px;
   align-items: start;
-  overflow: auto;
+  overflow: visible;
 }
 
 button.profileDrawingFreehandOption {
@@ -1580,6 +1579,10 @@ button.profileDrawingFreehandOption:active {
 
 .profileDrawingDialogActions {
   margin: 0;
+}
+
+.profileDrawingFreehandDialogContainer > .settingsActions {
+  margin-top: 16px;
 }
 
 .openRouterKeyDialog > a {
