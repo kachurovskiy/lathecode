@@ -1,4 +1,5 @@
 import { LatheCode, Segment, type ProfileSegmentDefinition } from '../common/lathecode.ts';
+import { getProfileEndpointFeatureContext, getProfileEndpointFeatureSizeLimit } from './edgefeatures.ts';
 import { DEFAULT_DIAMETER_MM, DEFAULT_GRID_MM, DEFAULT_LENGTH_MM, DEFAULT_SNAP_MM, GEOMETRY_EPSILON, HISTORY_LIMIT, IMPORT_EPSILON, MIN_SEGMENT_LENGTH_MM, PROFILE_SIDES, type DrawingHistory, type DrawingState, type ProfileDraft, type ProfilePoint, type ProfileSide, type SegmentEdgeFeature, type SegmentEdgeFeatures, type SegmentFeatureEndpoint, type SegmentSelection, type SegmentTool, type PointSelection, } from './types.ts';
 import { getDefaultGridMm, hasSegmentLength } from './geometry.ts';
 export function createInitialState(initialText?: string | null): DrawingState {
@@ -504,57 +505,36 @@ export function canSelectedSegmentEndpointHaveFeature(state: DrawingState, endpo
   return getSelectedSegmentEndpointFeatureLimit(state, selection, endpoint) > GEOMETRY_EPSILON;
 }
 export function getSelectedSegmentEndpointFeatureLimit(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint): number {
-  const radialGap = getSelectedSegmentEndpointRadialGap(state, selection, endpoint);
-  if (radialGap > GEOMETRY_EPSILON)
-    return radialGap;
-  return getSelectedSegmentEndpointContinuousCornerLimit(state, selection, endpoint);
+  const context = getSelectedSegmentEndpointFeatureContext(state, selection, endpoint);
+  if (context.kind === 'invalid')
+    return 0;
+  if (context.kind === 'connector' && Math.abs(context.direction.z) > GEOMETRY_EPSILON)
+    return 0;
+  return getProfileEndpointFeatureSizeLimit(
+    state.profiles[selection.side],
+    selection.index,
+    endpoint,
+    'chamfer',
+    getProfileClosureRadius(state, selection.side),
+  );
 }
 export function getSelectedSegmentEndpointRadialGap(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint): number {
-  const profile = state.profiles[selection.side];
-  const segmentPointIndex = endpoint === 'start' ? selection.index : selection.index + 1;
-  const segmentPoint = profile.points[segmentPointIndex];
-  if (!segmentPoint)
-    return 0;
-  const neighbor = endpoint === 'start'
-    ? profile.points[segmentPointIndex - 1]
-    : profile.points[segmentPointIndex + 1];
-  if (neighbor && Math.abs(neighbor.z - segmentPoint.z) > GEOMETRY_EPSILON)
-    return 0;
-  const neighborRadius = neighbor?.radius ?? 0;
-  return Math.abs(neighborRadius - segmentPoint.radius);
+  const context = getSelectedSegmentEndpointFeatureContext(state, selection, endpoint);
+  return context.kind === 'connector' && Math.abs(context.direction.z) <= GEOMETRY_EPSILON
+    ? context.trimLimit
+    : 0;
 }
 export function getSelectedSegmentEndpointContinuousCornerLimit(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint): number {
-  const profile = state.profiles[selection.side];
-  const neighborIndex = endpoint === 'start' ? selection.index - 1 : selection.index + 1;
-  if (profile.segmentTools[neighborIndex] !== 'line')
-    return 0;
-  const start = profile.points[selection.index];
-  const end = profile.points[selection.index + 1];
-  const neighborStart = profile.points[neighborIndex];
-  const neighborEnd = profile.points[neighborIndex + 1];
-  if (!start || !end || !neighborStart || !neighborEnd)
-    return 0;
-  if (!hasSegmentLength(neighborStart, neighborEnd))
-    return 0;
-  const corner = endpoint === 'start' ? start : end;
-  const neighborCorner = endpoint === 'start' ? neighborEnd : neighborStart;
-  if (!sameProfilePoint(corner, neighborCorner))
-    return 0;
-  const own = endpoint === 'start'
-    ? {z: end.z - start.z, radius: end.radius - start.radius}
-    : {z: start.z - end.z, radius: start.radius - end.radius};
-  const neighbor = endpoint === 'start'
-    ? {z: neighborStart.z - start.z, radius: neighborStart.radius - start.radius}
-    : {z: neighborEnd.z - end.z, radius: neighborEnd.radius - end.radius};
-  const ownLength = Math.hypot(own.z, own.radius);
-  const neighborLength = Math.hypot(neighbor.z, neighbor.radius);
-  if (ownLength <= GEOMETRY_EPSILON || neighborLength <= GEOMETRY_EPSILON)
-    return 0;
-  const dot = (own.z * neighbor.z + own.radius * neighbor.radius) / (ownLength * neighborLength);
-  const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
-  if (angle <= GEOMETRY_EPSILON || Math.PI - angle <= GEOMETRY_EPSILON)
-    return 0;
-  return Math.abs(neighborEnd.z - neighborStart.z);
+  const context = getSelectedSegmentEndpointFeatureContext(state, selection, endpoint);
+  return context.kind === 'continuous'
+    ? getProfileEndpointFeatureSizeLimit(
+      state.profiles[selection.side],
+      selection.index,
+      endpoint,
+      'chamfer',
+      getProfileClosureRadius(state, selection.side),
+    )
+    : 0;
 }
 export function getDefaultSegmentFeatureSize(state: DrawingState, endpoint: SegmentFeatureEndpoint): number {
   const selection = state.segmentSelection;
@@ -587,6 +567,20 @@ export function getSelectedSegmentToolRange(profile: ProfileDraft, index: number
     endIndex++;
   return { startIndex, endIndex };
 }
+
+function getSelectedSegmentEndpointFeatureContext(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint) {
+  return getProfileEndpointFeatureContext(
+    state.profiles[selection.side],
+    selection.index,
+    endpoint,
+    getProfileClosureRadius(state, selection.side),
+  );
+}
+
+function getProfileClosureRadius(state: DrawingState, side: ProfileSide): number {
+  return side === 'inside' ? state.diameterMm / 2 : 0;
+}
+
 export function selectDefaultPoint(state: DrawingState, side: ProfileSide): void {
   const profile = state.profiles[side];
   if (state.selection?.side === side && profile.points[state.selection.index])

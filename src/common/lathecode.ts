@@ -24,6 +24,21 @@ import {
   type XDirection,
   type ZDirection,
 } from './latheparser.ts';
+import {
+  EDGE_FEATURE_EPSILON,
+  getEndpointFeatureContext,
+  getEndpointFeatureConnectorTrimDistance,
+  getEndpointFeatureNeighborPoint,
+  getEndpointFeatureNeighborTrimDistance,
+  getEndpointFeatureSegmentPoint,
+  getEndpointFeatureTangentDistance,
+  getEndpointFilletGeometry,
+  horizontalSpan as edgeFeatureHorizontalSpan,
+  type EdgeFeatureKind,
+  type EdgeFeaturePoint,
+  type EdgeFeatureSegment,
+  type EndpointFeatureContext,
+} from './edgefeatures.ts';
 
 export class Point {
   constructor(readonly x: number, readonly z: number) {}
@@ -152,7 +167,6 @@ const UNITS: {
 };
 const SCALE_DECIMAL_PLACES = 4;
 const UNIT_CONVERSION_DECIMAL_PLACES = 6;
-const EDGE_FEATURE_EPSILON = 1e-9;
 const FILLET_ARC_CHORD_MM = 0.1;
 
 type ProfileSegmentSpec = ProfileSegmentDefinition & {
@@ -166,19 +180,6 @@ type EndpointFeatureGeometry = {
   neighborSegmentIndex: number | null;
   neighborTrimDistance: number;
   segments: Segment[];
-};
-
-type Vector = {
-  x: number;
-  z: number;
-};
-
-type EndpointFeatureNeighbor = {
-  direction: Vector;
-  segment: Segment | null;
-  segmentIndex: number | null;
-  segmentEndpoint: 'start' | 'end' | null;
-  trimLimit: number;
 };
 
 type ProfileSizeType = 'D' | 'R';
@@ -556,9 +557,10 @@ export class LatheCode {
   }
 
   private applyEdgeFeatures(specs: ProfileSegmentSpec[], zeroX: number): Segment[] {
+    const edgeFeatureSegments = specs.map(spec => segmentToEdgeFeatureSegment(spec.segment));
     const features = specs.map((_, index) => {
-      const start = this.createEndpointFeature(specs, index, 'start', zeroX);
-      const end = this.createEndpointFeature(specs, index, 'end', zeroX);
+      const start = this.createEndpointFeature(specs, edgeFeatureSegments, index, 'start', zeroX);
+      const end = this.createEndpointFeature(specs, edgeFeatureSegments, index, 'end', zeroX);
       return {start, end};
     });
     this.validateSegmentFeatureFits(specs, features);
@@ -605,6 +607,7 @@ export class LatheCode {
 
   private createEndpointFeature(
     specs: ProfileSegmentSpec[],
+    edgeFeatureSegments: EdgeFeatureSegment[],
     index: number,
     endpoint: 'start' | 'end',
     zeroX: number,
@@ -617,40 +620,35 @@ export class LatheCode {
     }
 
     const size = feature.value * this.unitsMultiplier;
-    const edgePoint = endpoint === 'start' ? spec.segment.start : spec.segment.end;
-    const neighbor = this.getEndpointFeatureNeighbor(specs, index, endpoint, zeroX);
+    const edgeFeature = {kind: latheFeatureKind(feature), size};
+    const edgeFeatureSegment = edgeFeatureSegments[index];
+    const context = getEndpointFeatureContext(edgeFeatureSegments, index, endpoint, zeroX);
+    if (context.kind === 'invalid') {
+      throwEndpointFeatureContextError(context);
+    }
 
-    const lineVector = pointDelta(spec.segment.start, spec.segment.end);
-    const span = horizontalSpan(spec.segment);
-    if (span <= EDGE_FEATURE_EPSILON) {
+    if (edgeFeatureHorizontalSpan(edgeFeatureSegment) <= EDGE_FEATURE_EPSILON) {
       throw new Error('Error: chamfer or fillet is too large for the segment to contain');
     }
 
-    const segmentDirection = endpoint === 'start'
-      ? normalizeVector(lineVector)
-      : scaleVector(normalizeVector(lineVector), -1);
-    const angle = angleBetween(neighbor.direction, segmentDirection);
-    if (angle <= EDGE_FEATURE_EPSILON || Math.PI - angle <= EDGE_FEATURE_EPSILON) {
-      throw new Error('Error: chamfer or fillet requires a corner angle');
-    }
-
     if (feature.name === 'CH') {
-      const segmentPoint = pointAtHorizontalTrim(spec.segment, endpoint, size);
-      const neighborPoint = this.getChamferNeighborPoint(neighbor, edgePoint, size);
+      validateEndpointConnectorFeatureFit(edgeFeatureSegment, context, edgeFeature);
+      const segmentPoint = edgeFeaturePointToPoint(getEndpointFeatureSegmentPoint(edgeFeatureSegment, endpoint, edgeFeature));
+      const neighborPoint = getRequiredEndpointFeatureNeighborPoint(edgeFeatureSegment, context, edgeFeature);
       return {
         radialPoint: neighborPoint,
         segmentPoint,
         trimDistance: size,
-        neighborSegmentIndex: neighbor.segmentIndex,
-        neighborTrimDistance: neighbor.segment ? size : 0,
+        neighborSegmentIndex: context.kind === 'continuous' ? context.neighborIndex : null,
+        neighborTrimDistance: getEndpointFeatureNeighborTrimDistance(edgeFeatureSegment, context, edgeFeature),
         segments: endpoint === 'start'
           ? [new Segment('LINE', neighborPoint, segmentPoint)]
           : [new Segment('LINE', segmentPoint, neighborPoint)],
       };
     }
 
-    const radialDirection = !neighbor.segment && Math.abs(neighbor.direction.z) <= EDGE_FEATURE_EPSILON
-      ? Math.sign(neighbor.direction.x)
+    const radialDirection = context.kind === 'connector' && Math.abs(context.direction.z) <= EDGE_FEATURE_EPSILON
+      ? Math.sign(context.direction.radius)
       : 0;
     const fullSegmentCurveType = getFullSegmentFilletCurveType(spec.segment, endpoint, radialDirection, size);
     if (fullSegmentCurveType) {
@@ -673,114 +671,27 @@ export class LatheCode {
         };
     }
 
-    const horizontalComponent = Math.abs(segmentDirection.z);
-    if (horizontalComponent <= EDGE_FEATURE_EPSILON) {
+    const tangentDistance = getEndpointFeatureTangentDistance(edgeFeatureSegment, edgeFeature);
+    if (tangentDistance === Number.POSITIVE_INFINITY) {
       throw new Error('Error: chamfer or fillet requires horizontal segment length');
     }
+    validateEndpointConnectorFeatureFit(edgeFeatureSegment, context, edgeFeature);
 
-    const tangentDistance = size / horizontalComponent;
-    const radius = tangentDistance * Math.tan(angle / 2);
-    const neighborPoint = this.getFilletNeighborPoint(neighbor, edgePoint, tangentDistance);
-    const neighborTrimDistance = neighbor.segment ? tangentDistance * Math.abs(neighbor.direction.z) : 0;
-    const segmentPoint = pointAtHorizontalTrim(spec.segment, endpoint, size);
-    const bisector = normalizeVector(addVectors(neighbor.direction, segmentDirection));
-    const center = addVector(edgePoint, scaleVector(bisector, radius / Math.sin(angle / 2)));
+    const fillet = getEndpointFilletGeometry(edgeFeatureSegment, context, endpoint, edgeFeature);
+    if (!fillet) throw new Error('Error: chamfer or fillet requires a corner angle');
+    const neighborPoint = edgeFeaturePointToPoint(fillet.neighborPoint);
+    const segmentPoint = edgeFeaturePointToPoint(fillet.segmentPoint);
+    const center = edgeFeaturePointToPoint(fillet.center);
     return {
       radialPoint: neighborPoint,
       segmentPoint,
       trimDistance: size,
-      neighborSegmentIndex: neighbor.segmentIndex,
-      neighborTrimDistance,
+      neighborSegmentIndex: context.kind === 'continuous' ? context.neighborIndex : null,
+      neighborTrimDistance: getEndpointFeatureNeighborTrimDistance(edgeFeatureSegment, context, edgeFeature),
       segments: endpoint === 'start'
-        ? filletArcSegments(center, radius, neighborPoint, segmentPoint)
-        : filletArcSegments(center, radius, segmentPoint, neighborPoint),
+        ? filletArcSegments(center, fillet.radius, neighborPoint, segmentPoint)
+        : filletArcSegments(center, fillet.radius, segmentPoint, neighborPoint),
     };
-  }
-
-  private getEndpointFeatureNeighbor(
-    specs: ProfileSegmentSpec[],
-    index: number,
-    endpoint: 'start' | 'end',
-    zeroX: number,
-  ): EndpointFeatureNeighbor {
-    const spec = specs[index];
-    const edgePoint = endpoint === 'start' ? spec.segment.start : spec.segment.end;
-    const neighborIndex = endpoint === 'start' ? index - 1 : index + 1;
-    const neighbor = specs[neighborIndex]?.segment ?? null;
-
-    if (!neighbor) {
-      return this.getRadialEndpointFeatureNeighbor(edgePoint, zeroX);
-    }
-
-    const neighborEndpoint = endpoint === 'start' ? neighbor.end : neighbor.start;
-    const connectorLength = distance(edgePoint, neighborEndpoint);
-    if (connectorLength > EDGE_FEATURE_EPSILON) {
-      return {
-        direction: normalizeVector(pointDelta(edgePoint, neighborEndpoint)),
-        segment: null,
-        segmentIndex: null,
-        segmentEndpoint: null,
-        trimLimit: connectorLength,
-      };
-    }
-
-    if (neighbor.type !== 'LINE') {
-      throw new Error('Error: chamfers and fillets are not supported next to CONV, CONC, or BSPLINE segments');
-    }
-
-    const neighborInteriorPoint = endpoint === 'start' ? neighbor.start : neighbor.end;
-    const neighborLength = distance(edgePoint, neighborInteriorPoint);
-    if (neighborLength <= EDGE_FEATURE_EPSILON) {
-      throw new Error('Error: chamfer or fillet requires a corner angle');
-    }
-
-    return {
-      direction: normalizeVector(pointDelta(edgePoint, neighborInteriorPoint)),
-      segment: neighbor,
-      segmentIndex: neighborIndex,
-      segmentEndpoint: endpoint === 'start' ? 'end' : 'start',
-      trimLimit: neighborLength,
-    };
-  }
-
-  private getRadialEndpointFeatureNeighbor(edgePoint: Point, zeroX: number): EndpointFeatureNeighbor {
-    const radialDelta = zeroX - edgePoint.x;
-    const radialGap = Math.abs(radialDelta);
-    if (radialGap <= EDGE_FEATURE_EPSILON) {
-      throw new Error('Error: chamfer or fillet requires a radial edge');
-    }
-
-    return {
-      direction: {x: Math.sign(radialDelta), z: 0},
-      segment: null,
-      segmentIndex: null,
-      segmentEndpoint: null,
-      trimLimit: radialGap,
-    };
-  }
-
-  private getChamferNeighborPoint(neighbor: EndpointFeatureNeighbor, edgePoint: Point, size: number): Point {
-    if (!neighbor.segment) {
-      this.validateEndpointFeatureFit(size, neighbor.trimLimit);
-      return addVector(edgePoint, scaleVector(neighbor.direction, size));
-    }
-
-    return pointAtHorizontalTrim(neighbor.segment, neighbor.segmentEndpoint!, size);
-  }
-
-  private getFilletNeighborPoint(neighbor: EndpointFeatureNeighbor, edgePoint: Point, tangentDistance: number): Point {
-    if (!neighbor.segment) {
-      this.validateEndpointFeatureFit(tangentDistance, neighbor.trimLimit);
-      return addVector(edgePoint, scaleVector(neighbor.direction, tangentDistance));
-    }
-
-    return addVector(edgePoint, scaleVector(neighbor.direction, tangentDistance));
-  }
-
-  private validateEndpointFeatureFit(radialTrimDistance: number, radialGap: number): void {
-    if (radialTrimDistance - radialGap > EDGE_FEATURE_EPSILON) {
-      throw new Error('Error: chamfer or fillet is too large for the adjacent radial edge');
-    }
   }
 
   private validateSegmentFeatureFits(
@@ -1475,6 +1386,52 @@ function normalizeEdgeFeature(feature: EdgeFeature | null): EdgeFeature | null {
   return feature && feature.value > 0 ? feature : null;
 }
 
+function latheFeatureKind(feature: EdgeFeature): EdgeFeatureKind {
+  return feature.name === 'CH' ? 'chamfer' : 'fillet';
+}
+
+function segmentToEdgeFeatureSegment(segment: Segment): EdgeFeatureSegment {
+  return {
+    type: segment.type === 'LINE' ? 'line' : segment.type === 'BSPLINE' ? 'spline' : 'curve',
+    start: {radius: segment.start.x, z: segment.start.z},
+    end: {radius: segment.end.x, z: segment.end.z},
+  };
+}
+
+function edgeFeaturePointToPoint(point: EdgeFeaturePoint): Point {
+  return new Point(point.radius, point.z);
+}
+
+function getRequiredEndpointFeatureNeighborPoint(
+  segment: EdgeFeatureSegment,
+  context: EndpointFeatureContext,
+  feature: {kind: EdgeFeatureKind, size: number},
+): Point {
+  const point = getEndpointFeatureNeighborPoint(segment, context, feature);
+  if (!point) throwEndpointFeatureContextError(context);
+  return edgeFeaturePointToPoint(point);
+}
+
+function throwEndpointFeatureContextError(context: EndpointFeatureContext): never {
+  if (context.kind !== 'invalid') throw new Error('Error: chamfer or fillet requires a corner angle');
+  if (context.reason === 'no-edge') throw new Error('Error: chamfer or fillet requires a radial edge');
+  if (context.reason === 'unsupported-neighbor') {
+    throw new Error('Error: chamfers and fillets are not supported next to CONV, CONC, or BSPLINE segments');
+  }
+  throw new Error('Error: chamfer or fillet requires a corner angle');
+}
+
+function validateEndpointConnectorFeatureFit(
+  segment: EdgeFeatureSegment,
+  context: EndpointFeatureContext,
+  feature: {kind: EdgeFeatureKind, size: number},
+): void {
+  if (context.kind !== 'connector') return;
+  if (getEndpointFeatureConnectorTrimDistance(segment, context, feature) - context.trimLimit > EDGE_FEATURE_EPSILON) {
+    throw new Error('Error: chamfer or fillet is too large for the adjacent radial edge');
+  }
+}
+
 function appendSegments(result: Segment[], segments: Segment[]): void {
   for (const segment of segments) appendSegment(result, segment);
 }
@@ -1482,16 +1439,6 @@ function appendSegments(result: Segment[], segments: Segment[]): void {
 function appendSegment(result: Segment[], segment: Segment): void {
   if (distance(segment.start, segment.end) <= EDGE_FEATURE_EPSILON) return;
   result.push(segment);
-}
-
-function pointAtHorizontalTrim(segment: Segment, endpoint: 'start' | 'end', trimDistance: number): Point {
-  const span = horizontalSpan(segment);
-  if (span <= EDGE_FEATURE_EPSILON) throw new Error('Error: chamfer or fillet requires horizontal segment length');
-  const ratio = trimDistance / span;
-  const vector = pointDelta(segment.start, segment.end);
-  return endpoint === 'start'
-    ? new Point(segment.start.x + vector.x * ratio, segment.start.z + vector.z * ratio)
-    : new Point(segment.end.x - vector.x * ratio, segment.end.z - vector.z * ratio);
 }
 
 function horizontalSpan(segment: Segment): number {
@@ -1536,49 +1483,11 @@ function normalizeAngle(angle: number): number {
 }
 
 function distance(a: Point, b: Point): number {
-  return vectorLength(pointDelta(a, b));
+  return Math.hypot(b.x - a.x, b.z - a.z);
 }
 
 function pointsEqual(left: readonly Point[], right: readonly Point[]): boolean {
   return left.length === right.length && left.every((point, index) => point.isEqual(right[index]));
-}
-
-function pointDelta(a: Point, b: Point): Vector {
-  return {x: b.x - a.x, z: b.z - a.z};
-}
-
-function vectorLength(vector: Vector): number {
-  return Math.hypot(vector.x, vector.z);
-}
-
-function normalizeVector(vector: Vector): Vector {
-  const length = vectorLength(vector);
-  if (length <= EDGE_FEATURE_EPSILON) throw new Error('Error: unable to normalize zero-length vector');
-  return {x: vector.x / length, z: vector.z / length};
-}
-
-function addVector(point: Point, vector: Vector): Point {
-  return new Point(point.x + vector.x, point.z + vector.z);
-}
-
-function addVectors(a: Vector, b: Vector): Vector {
-  return {x: a.x + b.x, z: a.z + b.z};
-}
-
-function scaleVector(vector: Vector, scale: number): Vector {
-  return {x: vector.x * scale, z: vector.z * scale};
-}
-
-function angleBetween(a: Vector, b: Vector): number {
-  return Math.acos(clamp(dot(a, b) / (vectorLength(a) * vectorLength(b)), -1, 1));
-}
-
-function dot(a: Vector, b: Vector): number {
-  return a.x * b.x + a.z * b.z;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }
 
 function isStraightLine(line: LatheLine): line is StraightLine {
