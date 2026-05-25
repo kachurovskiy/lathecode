@@ -213,7 +213,32 @@ describe('Editor', () => {
       'FEED MOVE8 PASS2 PART0.5\n' +
       'MODE TURN\n' +
       'AXES LEFT UP\n' +
-      'L2 R3');
+      'L0.07874 R0.11811');
+  });
+
+  it('converts lathecode values from the units dialog', () => {
+    const container = createEditorContainer(
+      'UNITS MM\n' +
+      'STOCK D25.4 ID2.54\n' +
+      'TOOL RECT R0.254 L2.54\n' +
+      'DEPTH CUT0.254 FINISH0.127\n' +
+      'FEED MOVE25.4 PASS12.7 PART2.54\n' +
+      'L25.4 R12.7\n' +
+      'L2.54');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.unitsButton')!.click();
+    document.querySelector<HTMLButtonElement>('.setupChoiceButton[data-unit="IN"]')!.click();
+    clickDialogButton('Use units');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value).toBe(
+      'UNITS IN\n' +
+      'STOCK D1 ID0.1\n' +
+      'TOOL RECT R0.01 L0.1\n' +
+      'DEPTH CUT0.01 FINISH0.005\n' +
+      'FEED MOVE1 PASS0.5 PART0.1\n' +
+      'L1 R0.5\n' +
+      'L0.1');
   });
 
   it('keeps feed preview speed proportional for slow feeds', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LatheCode, Point, Segment, removeColinearSegments, removeEmptySegments } from './lathecode';
+import { LatheCode, Point, Segment, removeColinearSegments, removeEmptySegments, type ProfileSegmentDefinition } from './lathecode';
 
 describe('segment', () => {
   it('empty', () => {
@@ -83,6 +83,48 @@ describe('lathecode', () => {
     expect(tool.widthMm).toBeCloseTo(7.75 * 25.4);
     expect(tool.angleDeg).toBe(30);
     expect(tool.noseAngleDeg).toBe(55);
+  });
+
+  it('converts unit-bearing values when changing units', () => {
+    const input = `UNITS MM
+STOCK D10 ID2 A0.5 ; stock
+TOOL ANG R0.2 L7.8 A32.5 NA55
+DEPTH CUT0.5 FINISH0.1
+FEED MOVE200 PASS50 PART10
+L2 D4 FI0.2 ; straight
+L1 D6
+L3 DS6 DE8
+L2 RS4 A10
+L1 ; parting
+INSIDE
+L2 RS1 RE2 CONC
+L6 DS4 DE6 BSPLINE D5 R3`;
+    const converted = new LatheCode(input).convertUnits('IN');
+
+    expect(converted).toBe(`UNITS IN
+STOCK D0.393701 ID0.07874 A0.019685 ; stock
+TOOL ANG R0.007874 L0.307087 A32.5 NA55
+DEPTH CUT0.019685 FINISH0.003937
+FEED MOVE7.874016 PASS1.968504 PART0.393701
+L0.07874 D0.15748 FI0.007874 ; straight
+L0.03937 D0.23622
+L0.11811 DS0.23622 DE0.314961
+L0.07874 RS0.15748 A10
+L0.03937 ; parting
+INSIDE
+L0.07874 RS0.03937 RE0.07874 CONC
+L0.23622 DS0.15748 DE0.23622 BSPLINE D0.19685 R0.11811`);
+
+    const original = new LatheCode(input);
+    const result = new LatheCode(converted);
+    expect(result.getStock()!.diameter).toBeCloseTo(original.getStock()!.diameter);
+    expect(result.getStock()!.innerDiameter).toBeCloseTo(original.getStock()!.innerDiameter);
+    expect(result.getTool().cornerRadiusMm).toBeCloseTo(original.getTool().cornerRadiusMm);
+    expect(result.getTool().widthMm).toBeCloseTo(original.getTool().widthMm);
+    expect(result.getDepth().cutMm).toBeCloseTo(original.getDepth().cutMm);
+    expect(result.getFeed().moveMmMin).toBeCloseTo(original.getFeed().moveMmMin);
+    expectDefinitionsClose(result.getOutsidePartProfileSegmentDefinitions(), original.getOutsidePartProfileSegmentDefinitions());
+    expectDefinitionsClose(result.getInsidePartProfileSegmentDefinitions(), original.getInsidePartProfileSegmentDefinitions());
   });
 
   it('face + cylinder', () => {
@@ -521,6 +563,34 @@ function expectPoints(text: string, o: string, i: string) {
 
 function pointsToString(points: Segment[]): string {
   return points.join(' ');
+}
+
+function expectDefinitionsClose(actual: ProfileSegmentDefinition[], expected: ProfileSegmentDefinition[]) {
+  expect(actual.length).toBe(expected.length);
+  for (let i = 0; i < actual.length; i++) {
+    expectSegmentClose(actual[i].segment, expected[i].segment);
+    expect(actual[i].startFeature?.name ?? null).toBe(expected[i].startFeature?.name ?? null);
+    expect(actual[i].endFeature?.name ?? null).toBe(expected[i].endFeature?.name ?? null);
+    if (actual[i].startFeature || expected[i].startFeature) {
+      expect(actual[i].startFeature?.value).toBeCloseTo(expected[i].startFeature!.value, 4);
+    }
+    if (actual[i].endFeature || expected[i].endFeature) {
+      expect(actual[i].endFeature?.value).toBeCloseTo(expected[i].endFeature!.value, 4);
+    }
+  }
+}
+
+function expectSegmentClose(actual: Segment, expected: Segment) {
+  expect(actual.type).toBe(expected.type);
+  expect(actual.start.x).toBeCloseTo(expected.start.x, 4);
+  expect(actual.start.z).toBeCloseTo(expected.start.z, 4);
+  expect(actual.end.x).toBeCloseTo(expected.end.x, 4);
+  expect(actual.end.z).toBeCloseTo(expected.end.z, 4);
+  expect(actual.controlPoints.length).toBe(expected.controlPoints.length);
+  for (let j = 0; j < actual.controlPoints.length; j++) {
+    expect(actual.controlPoints[j].x).toBeCloseTo(expected.controlPoints[j].x, 4);
+    expect(actual.controlPoints[j].z).toBeCloseTo(expected.controlPoints[j].z, 4);
+  }
 }
 
 function outsidePoints(text: string): string {

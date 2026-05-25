@@ -1,4 +1,5 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
+import { LatheCode } from '../common/lathecode.ts';
 
 export type SetupDialogKind = 'units' | 'stock' | 'depth' | 'feed' | 'mode' | 'axes';
 
@@ -91,7 +92,12 @@ function openUnitsDialog(getText: () => string, applyText: (text: string) => voi
   updateSelected();
 
   showSetupDialog('Units', form, 'Use units', applyText, () => {
-    return upsertDirectiveLine(getText(), 'UNITS', `UNITS ${selectedUnits}`);
+    const text = getText();
+    if (!text.trim()) return `UNITS ${selectedUnits}`;
+    if (selectedUnits === parseCurrentUnits(text)) {
+      return upsertDirectiveLine(text, 'UNITS', `UNITS ${selectedUnits}`);
+    }
+    return new LatheCode(text).convertUnits(selectedUnits);
   }, choiceGrid.querySelector<HTMLButtonElement>(`.setupChoiceButton[data-unit="${selectedUnits}"]`) || undefined);
 }
 

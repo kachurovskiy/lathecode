@@ -19,6 +19,7 @@ import {
   type StockDirective,
   type StraightLine,
   type ToolDirective,
+  type UnitType,
   type UnitsDirective,
   type XDirection,
   type ZDirection,
@@ -150,6 +151,7 @@ const UNITS: {
   "IN": 25.4,
 };
 const SCALE_DECIMAL_PLACES = 4;
+const UNIT_CONVERSION_DECIMAL_PLACES = 6;
 const EDGE_FEATURE_EPSILON = 1e-9;
 const FILLET_ARC_CHORD_MM = 0.1;
 
@@ -759,6 +761,53 @@ export class LatheCode {
     pushComments(this.data.trailingComments);
     return lines.join('\n');
   }
+
+  convertUnits(unit: UnitType): string {
+    const targetMultiplier = UNITS[unit];
+    const unitScale = this.unitsMultiplier / targetMultiplier;
+    const lines: string[] = [];
+    const pushComments = (comments: CommentList) => lines.push(...comments.map(commentToString));
+    const pushEntries = (entries: readonly LatheEntry[]) => {
+      for (const entry of entries) {
+        pushComments(entry.comments);
+        lines.push(scaleLatheLine(entry.line, unitScale, unitScale, {
+          decimalPlaces: UNIT_CONVERSION_DECIMAL_PLACES,
+          scaleConeAngle: false,
+          scaleParting: true,
+        }));
+      }
+    };
+
+    pushComments(this.data.leadingComments);
+    lines.push(unitsDirectiveToString({
+      keyword: 'UNITS',
+      unit,
+      comment: this.data.units?.comment ?? '',
+    }));
+    pushComments(this.data.afterUnitsComments);
+    if (this.data.stock) lines.push(stockDirectiveToString(scaleStockDirectiveForUnits(this.data.stock, unitScale)));
+    pushComments(this.data.afterStockComments);
+    if (this.data.tool) lines.push(toolDirectiveToString(scaleToolDirectiveForUnits(this.data.tool, unitScale)));
+    pushComments(this.data.afterToolComments);
+    if (this.data.depth) lines.push(depthDirectiveToString(scaleDepthDirectiveForUnits(this.data.depth, unitScale)));
+    pushComments(this.data.afterDepthComments);
+    if (this.data.feed) lines.push(feedDirectiveToString(scaleFeedDirectiveForUnits(this.data.feed, unitScale)));
+    pushComments(this.data.afterFeedComments);
+    if (this.data.mode) lines.push(modeDirectiveToString(this.data.mode));
+    pushComments(this.data.afterModeComments);
+    if (this.data.axes) lines.push(axesDirectiveToString(this.data.axes));
+    pushEntries(this.data.outside);
+
+    const insideBlock = this.data.inside;
+    if (insideBlock) {
+      pushComments(insideBlock.comments);
+      lines.push(insideDirectiveToString(insideBlock.directive));
+      pushEntries(insideBlock.entries);
+    }
+
+    pushComments(this.data.trailingComments);
+    return lines.join('\n');
+  }
 }
 
 function reverseEntries(entries: readonly LatheEntry[]): string[] {
@@ -1031,56 +1080,112 @@ function scaleStockDirective(directive: StockDirective, xScale: number, scaledPa
   };
 }
 
-function scaleLatheLine(line: LatheLine, xScale: number, zScale: number): string {
+function scaleStockDirectiveForUnits(directive: StockDirective, scale: number): StockDirective {
+  return {
+    ...directive,
+    size: scaleNumber(directive.size, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+    hole: scaleNumericParam(directive.hole, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+    allowance: scaleNumericParam(directive.allowance, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+  };
+}
+
+function scaleToolDirectiveForUnits(directive: ToolDirective, scale: number): ToolDirective {
+  return {
+    ...directive,
+    radius: scaleNumericParam(directive.radius, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+    length: scaleNumericParam(directive.length, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+    height: scaleNumericParam(directive.height, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+  };
+}
+
+function scaleDepthDirectiveForUnits(directive: DepthDirective, scale: number): DepthDirective {
+  return {
+    ...directive,
+    cut: scaleNumericParam(directive.cut, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+    finish: scaleNumericParam(directive.finish, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+  };
+}
+
+function scaleFeedDirectiveForUnits(directive: FeedDirective, scale: number): FeedDirective {
+  return {
+    ...directive,
+    move: scaleNumericParam(directive.move, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+    pass: scaleNumericParam(directive.pass, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+    part: scaleNumericParam(directive.part, scale, UNIT_CONVERSION_DECIMAL_PLACES),
+  };
+}
+
+type LatheLineScaleOptions = {
+  readonly decimalPlaces?: number;
+  readonly scaleConeAngle?: boolean;
+  readonly scaleParting?: boolean;
+};
+
+function scaleLatheLine(line: LatheLine, xScale: number, zScale: number, options: LatheLineScaleOptions = {}): string {
+  const decimalPlaces = options.decimalPlaces ?? SCALE_DECIMAL_PLACES;
   if (isCurvedLine(line)) {
     return latheLineToString({
       ...line,
-      length: scaleNumber(line.length, zScale),
-      start: scaleNumber(line.start, xScale),
-      end: scaleNumber(line.end, xScale),
-      angle: line.angle ? {...line.angle, value: scaleConeAngle(line.angle.value, xScale, zScale)} : null,
-      startFeature: scaleEdgeFeature(line.startFeature, xScale),
-      endFeature: scaleEdgeFeature(line.endFeature, xScale),
+      length: scaleNumber(line.length, zScale, decimalPlaces),
+      start: scaleNumber(line.start, xScale, decimalPlaces),
+      end: scaleNumber(line.end, xScale, decimalPlaces),
+      angle: line.angle && (options.scaleConeAngle ?? true)
+        ? {...line.angle, value: scaleConeAngle(line.angle.value, xScale, zScale)}
+        : line.angle,
+      startFeature: scaleEdgeFeature(line.startFeature, xScale, decimalPlaces),
+      endFeature: scaleEdgeFeature(line.endFeature, xScale, decimalPlaces),
     });
   }
   if (isSplineLine(line)) {
     return latheLineToString({
       ...line,
-      length: scaleNumber(line.length, zScale),
-      start: scaleNumber(line.start, xScale),
-      end: scaleNumber(line.end, xScale),
+      length: scaleNumber(line.length, zScale, decimalPlaces),
+      start: scaleNumber(line.start, xScale, decimalPlaces),
+      end: scaleNumber(line.end, xScale, decimalPlaces),
       controls: line.controls.map(control => ({
         ...control,
-        size: scaleNumber(control.size, xScale),
+        size: scaleNumber(control.size, xScale, decimalPlaces),
       })),
     });
   }
   if (isStraightLine(line)) {
     return latheLineToString({
       ...line,
-      length: scaleNumber(line.length, zScale),
-      size: scaleNumber(line.size, xScale),
-      startFeature: scaleEdgeFeature(line.startFeature, xScale),
-      endFeature: scaleEdgeFeature(line.endFeature, xScale),
+      length: scaleNumber(line.length, zScale, decimalPlaces),
+      size: scaleNumber(line.size, xScale, decimalPlaces),
+      startFeature: scaleEdgeFeature(line.startFeature, xScale, decimalPlaces),
+      endFeature: scaleEdgeFeature(line.endFeature, xScale, decimalPlaces),
+    });
+  }
+  if (options.scaleParting) {
+    return latheLineToString({
+      ...line,
+      length: scaleNumber(line.length, zScale, decimalPlaces),
     });
   }
   return latheLineToString(line);
 }
 
-function scaleNumericParam<Name extends string>(param: NumericParam<Name> | null, scale: number): NumericParam<Name> | null {
-  return param ? {...param, value: scaleNumber(param.value, scale)} : null;
+function scaleNumericParam<Name extends string>(
+    param: NumericParam<Name> | null,
+    scale: number,
+    decimalPlaces = SCALE_DECIMAL_PLACES): NumericParam<Name> | null {
+  return param ? {...param, value: scaleNumber(param.value, scale, decimalPlaces)} : null;
 }
 
-function scaleEdgeFeature(feature: EdgeFeature | null, scale: number): EdgeFeature | null {
-  return feature ? {...feature, value: scaleNumber(feature.value, scale)} : null;
+function scaleEdgeFeature(
+    feature: EdgeFeature | null,
+    scale: number,
+    decimalPlaces = SCALE_DECIMAL_PLACES): EdgeFeature | null {
+  return feature ? {...feature, value: scaleNumber(feature.value, scale, decimalPlaces)} : null;
 }
 
 function scaleEdgeFeatureToUnits(feature: EdgeFeature | null, unitsMultiplier: number): EdgeFeature | null {
   return feature ? {...feature, value: feature.value * unitsMultiplier} : null;
 }
 
-function scaleNumber(value: number, scale: number): number {
-  const multiplier = 10 ** SCALE_DECIMAL_PLACES;
+function scaleNumber(value: number, scale: number, decimalPlaces = SCALE_DECIMAL_PLACES): number {
+  const multiplier = 10 ** decimalPlaces;
   const rounded = Math.round(value * scale * multiplier) / multiplier;
   const integer = Math.round(rounded);
   return integer !== 0 && Math.abs(rounded - integer) <= 1 / multiplier ? integer : rounded;
