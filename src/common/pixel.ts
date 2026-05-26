@@ -31,13 +31,14 @@ export type PixelMoveData = {
   cutArea: number,
   cutPixels?: Pixel[],
   cutBounds?: PixelBounds | null,
+  isFinishPass?: boolean,
 };
 
 const MERGED_CUT_PIXELS_INLINE_LIMIT = 10000;
 
 export class PixelMove {
-  static withoutCut(xStart: number, yStart: number, xDelta: number, yDelta: number) {
-    return new PixelMove(xStart, yStart, xDelta, yDelta, 0, []);
+  static withoutCut(xStart: number, yStart: number, xDelta: number, yDelta: number, isFinishPass = false) {
+    return new PixelMove(xStart, yStart, xDelta, yDelta, 0, [], null, isFinishPass);
   }
 
   static fromData(data: PixelMoveData): PixelMove {
@@ -49,6 +50,7 @@ export class PixelMove {
       data.cutArea,
       data.cutPixels?.map(pixel => new Pixel(pixel.x, pixel.y)) ?? [],
       data.cutBounds ?? getPixelBounds(data.cutPixels ?? []),
+      data.isFinishPass ?? false,
     );
   }
 
@@ -59,7 +61,8 @@ export class PixelMove {
     readonly yDelta: number,
     readonly cutArea: number,
     readonly cutPixels: Pixel[],
-    readonly cutBounds: PixelBounds | null = getPixelBounds(cutPixels)) {}
+    readonly cutBounds: PixelBounds | null = getPixelBounds(cutPixels),
+    readonly isFinishPass = false) {}
 
   toString() {
     return `${this.xDelta},${this.yDelta}:${this.cutArea}`;
@@ -127,6 +130,7 @@ export class PixelMove {
       this.cutArea + m.cutArea,
       cutPixels,
       mergePixelBounds(this.cutBounds, m.cutBounds),
+      this.isFinishPass || m.isFinishPass,
     );
   }
 
@@ -140,7 +144,7 @@ export class PixelMove {
 
   withoutCutPixels(): PixelMove {
     if (!this.cutPixels.length) return this;
-    return new PixelMove(this.xStart, this.yStart, this.xDelta, this.yDelta, this.cutArea, [], this.cutBounds);
+    return new PixelMove(this.xStart, this.yStart, this.xDelta, this.yDelta, this.cutArea, [], this.cutBounds, this.isFinishPass);
   }
 }
 

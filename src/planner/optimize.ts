@@ -106,6 +106,14 @@ function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: strin
       continue;
     }
 
+    const roughStair = detectRoughStair(moves, i, settings);
+    if (roughStair.length > roughStair.moves.length) {
+      result.push(... roughStair.moves);
+      i += roughStair.length;
+      progressCallback(`Optimized ${roughStair.length} rough stair moves to ${roughStair.moves.length}`);
+      continue;
+    }
+
     if (!m.cutArea) {
       const travel = detectTravel(moves, i, travelRetractionSide);
       if (travel.length > 1 && travel.moves.length < travel.length) {
@@ -151,6 +159,104 @@ function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: strin
     i++;
   }
   return result;
+}
+
+export function detectRoughStair(moves: PixelMove[], i: number, settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS): {moves: PixelMove[], length: number} {
+  const normalizedSettings = normalizeAppSettings(settings);
+  const tolerancePx = normalizedSettings.pixelRoughStairToleranceMm * normalizedSettings.pxPerMm;
+  if (tolerancePx <= 0) return {moves: [moves[i]], length: 1};
+
+  const maxStepPx = Math.max(1, Math.ceil(tolerancePx * 2));
+  let end = i;
+  let xSign = 0;
+  let ySign = 0;
+  let totalCutArea = 0;
+  while (end < moves.length) {
+    const move = moves[end];
+    if (!isRoughStairMove(move, maxStepPx)) break;
+
+    const moveXSign = Math.sign(move.xDelta);
+    const moveYSign = Math.sign(move.yDelta);
+    if (moveXSign && xSign && moveXSign !== xSign) break;
+    if (moveYSign && ySign && moveYSign !== ySign) break;
+
+    if (moveXSign) xSign = moveXSign;
+    if (moveYSign) ySign = moveYSign;
+    totalCutArea += move.cutArea;
+    end++;
+  }
+
+  const length = end - i;
+  if (length < 6 || totalCutArea <= 0 || !xSign || !ySign) return {moves: [moves[i]], length: 1};
+
+  const points = movePoints(moves, i, end);
+  const pointIndices = simplifyPolylineIndices(points, tolerancePx);
+  if (pointIndices.length >= points.length) return {moves: [moves[i]], length: 1};
+
+  const simplifiedMoves: PixelMove[] = [];
+  for (let pointIndex = 1; pointIndex < pointIndices.length; pointIndex++) {
+    const startMoveIndex = i + pointIndices[pointIndex - 1];
+    const endMoveIndex = i + pointIndices[pointIndex];
+    const move = mergeMoves(moves, startMoveIndex, endMoveIndex - startMoveIndex);
+    if (!move.isEmpty()) simplifiedMoves.push(move);
+  }
+
+  if (!simplifiedMoves.length || simplifiedMoves.length >= length) return {moves: [moves[i]], length: 1};
+  return {moves: simplifiedMoves, length};
+}
+
+function isRoughStairMove(move: PixelMove, maxStepPx: number): boolean {
+  return !move.isFinishPass &&
+    !move.isEmpty() &&
+    Math.max(Math.abs(move.xDelta), Math.abs(move.yDelta)) <= maxStepPx;
+}
+
+function movePoints(moves: PixelMove[], start: number, end: number): {x: number, y: number}[] {
+  const first = moves[start];
+  const points = [{x: first.xStart, y: first.yStart}];
+  for (let i = start; i < end; i++) {
+    points.push({
+      x: moves[i].xStart + moves[i].xDelta,
+      y: moves[i].yStart + moves[i].yDelta,
+    });
+  }
+  return points;
+}
+
+function simplifyPolylineIndices(points: {x: number, y: number}[], tolerancePx: number): number[] {
+  const keep = new Set([0, points.length - 1]);
+  const stack: {start: number, end: number}[] = [{start: 0, end: points.length - 1}];
+
+  while (stack.length) {
+    const {start, end} = stack.pop()!;
+    let maxDistance = 0;
+    let maxIndex = -1;
+    for (let i = start + 1; i < end; i++) {
+      const distance = distanceToSegment(points[i], points[start], points[end]);
+      if (distance > maxDistance) {
+        maxDistance = distance;
+        maxIndex = i;
+      }
+    }
+    if (maxIndex !== -1 && maxDistance > tolerancePx) {
+      keep.add(maxIndex);
+      stack.push({start, end: maxIndex}, {start: maxIndex, end});
+    }
+  }
+
+  return Array.from(keep).sort((a, b) => a - b);
+}
+
+function distanceToSegment(point: {x: number, y: number}, start: {x: number, y: number}, end: {x: number, y: number}): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (!lengthSq) return Math.sqrt((point.x - start.x) ** 2 + (point.y - start.y) ** 2);
+
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq));
+  const projectedX = start.x + t * dx;
+  const projectedY = start.y + t * dy;
+  return Math.sqrt((point.x - projectedX) ** 2 + (point.y - projectedY) ** 2);
 }
 
 export function detectTravel(moves: PixelMove[], i: number, travelRetractionSide: TravelRetractionSide = 'maxY'): {moves: PixelMove[], length: number} {

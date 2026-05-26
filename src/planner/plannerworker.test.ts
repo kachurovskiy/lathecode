@@ -96,6 +96,35 @@ L1 D0.5`, 10);
     }
   });
 
+  it('simplifies tiny pixel roughing stair moves', () => {
+    const text = `STOCK D32
+TOOL ROUND R3
+DEPTH CUT0.45 FINISH0.1
+FEED MOVE180 PASS36 PART9
+MODE TURN
+
+L3 D10
+L24 DS10 DE22 BSPLINE D14 D26 D18 D28
+L4 D28 CH0.5`;
+    const withoutSimplification = planMoves(text, {
+      pxPerMm: 100,
+      plannerEngine: 'pixel',
+      pixelRoughStairToleranceMm: 0,
+    }).filter((move): move is PixelMove => move instanceof PixelMove);
+    const withSimplification = planMoves(text, {
+      pxPerMm: 100,
+      plannerEngine: 'pixel',
+      pixelRoughStairToleranceMm: 0.025,
+    }).filter((move): move is PixelMove => move instanceof PixelMove);
+
+    const tinyCutMoveCountWithoutSimplification = countTinyCutMoves(withoutSimplification, 10);
+    const tinyCutMoveCountWithSimplification = countTinyCutMoves(withSimplification, 10);
+
+    expect(tinyCutMoveCountWithoutSimplification).toBeGreaterThan(0);
+    expect(tinyCutMoveCountWithSimplification).toBeLessThan(tinyCutMoveCountWithoutSimplification);
+    expect(withSimplification.some(move => move.cutArea > 0)).toBe(true);
+  });
+
   it('does not change vector-generated moves when pxPerMm changes', () => {
     const text = 'STOCK D6\nTOOL RECT R0 L1 H1\nDEPTH CUT0.75 FINISH0.15\nL3 R2\nL2 R1.5';
 
@@ -177,4 +206,8 @@ function planMessages(text: string, settings: number | Partial<AppSettings>): Pl
     postMessage: message => messages.push(message),
   });
   return messages;
+}
+
+function countTinyCutMoves(moves: PixelMove[], maxCutAreaPx: number): number {
+  return moves.filter(move => move.cutArea > 0 && move.cutArea <= maxCutAreaPx).length;
 }

@@ -12,7 +12,7 @@
 ; L3 R9
 ; L3
 
-; Run time 10.2 min, cutting 85% of time
+; Run time 7.6 min, cutting 79% of time
 ; Working area 33.00 by 10.34 mm
 ; Axes expected: Z+ points left, X+ points up
 
@@ -200,18 +200,7 @@ F50
 Z0.1 X0.06 ; cut 0.0011 mm2 at 59.04°
 Z0.11 X0.11 ; cut 0.0018 mm2 at 45.00°
 Z0.05 X0.11 ; cut 0.1778 mm2 at 24.44°
-
-F10
-X0.04 ; cut 0.1189 mm2
-
-F50
-X-1.34 ; cut 0.0134 mm2
-
-F200
-Z0.01
-
-F10
-X10.34 ; cut 26.0588 mm2
+Z0.01 X9.04 ; cut 26.1911 mm2 at 0.06°
 
 F200
 X-10.34
@@ -398,18 +387,7 @@ F50
 Z0.1 X0.06 ; cut 0.0011 mm2 at 59.04°
 Z0.11 X0.11 ; cut 0.0018 mm2 at 45.00°
 Z0.05 X0.11 ; cut 0.1778 mm2 at 24.44°
-
-F10
-X0.04 ; cut 0.1189 mm2
-
-F50
-X-1.34 ; cut 0.0134 mm2
-
-F200
-Z0.01
-
-F10
-X10.34 ; cut 26.0588 mm2
+Z0.01 X9.04 ; cut 26.1911 mm2 at 0.06°
 
 F200
 X-10.34
@@ -596,18 +574,7 @@ F50
 Z0.1 X0.06 ; cut 0.0011 mm2 at 59.04°
 Z0.11 X0.11 ; cut 0.0018 mm2 at 45.00°
 Z0.05 X0.11 ; cut 0.1778 mm2 at 24.44°
-
-F10
-X0.04 ; cut 0.1189 mm2
-
-F50
-X-1.34 ; cut 0.0134 mm2
-
-F200
-Z0.01
-
-F10
-X10.34 ; cut 26.0588 mm2
+Z0.01 X9.04 ; cut 26.1911 mm2 at 0.06°
 
 F200
 X-10.34

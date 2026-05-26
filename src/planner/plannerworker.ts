@@ -169,8 +169,9 @@ class PixelPlannerWorker {
       : this.moves;
     if (this.usesDefaultOptimizeMoves) this.moves = [];
     this.postMessage({progressMessage: `Optimizing ${moveCount} moves...`});
+    const optimizerSettings = this.getOptimizerSettings();
     if (this.canOptimizeAsynchronously) {
-      void this.finishPlanningAsync(movesForOptimization).catch(error => {
+      void this.finishPlanningAsync(movesForOptimization, optimizerSettings).catch(error => {
         this.postMessage({error: error instanceof Error ? error.message : String(error)});
       });
     } else {
@@ -178,17 +179,25 @@ class PixelPlannerWorker {
         movesForOptimization,
         (progressMessage) => this.postMessage({progressMessage}),
         this.profileSide === 'inside' ? 'minY' : 'maxY',
-        this.settings,
+        optimizerSettings,
       ));
     }
   }
 
-  private async finishPlanningAsync(movesForOptimization: PixelMove[]) {
+  private getOptimizerSettings(): AppSettings {
+    const finishAllowance = Math.max(0, this.latheCode.getDepth().finishMm);
+    return {
+      ...this.settings,
+      pixelRoughStairToleranceMm: Math.min(this.settings.pixelRoughStairToleranceMm, finishAllowance / 4),
+    };
+  }
+
+  private async finishPlanningAsync(movesForOptimization: PixelMove[], optimizerSettings: AppSettings) {
     const moves = await optimizeMovesParallel(
       movesForOptimization,
       (progressMessage) => this.postMessage({progressMessage}),
       this.profileSide === 'inside' ? 'minY' : 'maxY',
-      this.settings,
+      optimizerSettings,
     );
     this.postOptimizedMoves(moves);
   }
@@ -464,12 +473,12 @@ class PixelPlannerWorker {
     }
     // Don't optimize away moves during the finish pass for better results.
     const pixelCount = Math.max(this.isFinishPass && this.toolX < this.canvas.width ? 1 : 0, pixels.length);
-    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixelCount, pixels);
+    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixelCount, pixels, undefined, this.isFinishPass);
   }
 
   private normalizeMovesForOutput(moves: PixelMove[]): PixelMove[] {
     if (this.profileSide === 'outside') return moves;
-    return moves.map(m => new PixelMove(m.xStart, m.yStart + this.toolOvershootY, m.xDelta, m.yDelta, m.cutArea, m.cutPixels, m.cutBounds));
+    return moves.map(m => new PixelMove(m.xStart, m.yStart + this.toolOvershootY, m.xDelta, m.yDelta, m.cutArea, m.cutPixels, m.cutBounds, m.isFinishPass));
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, optimizeMoves, isSmoothingAllowed, smoothMoves } from './optimize';
+import { sameMoves, countPatterns, mergeMoves, detectCodirectional, optimizeTravel, detectTravel, optimizeMoves, isSmoothingAllowed, smoothMoves, detectRoughStair } from './optimize';
 import { PixelMove } from '../common/pixel';
 import { PlannerWorker } from './plannerworker';
 import { LatheCode } from '../common/lathecode';
@@ -354,6 +354,42 @@ describe('plannerworker', () => {
     ]);
   });
 
+  it('simplifies monotone rough stair moves into bounded linear moves', () => {
+    const moves = roughStairMoves(30);
+
+    const stair = detectRoughStair(moves, 0, {
+      pxPerMm: 100,
+      pixelRoughStairToleranceMm: 0.025,
+    });
+
+    expect(stair.length).toBe(60);
+    expect(stair.moves.length).toBeLessThanOrEqual(3);
+    expect(stair.moves.reduce((sum, move) => sum + move.cutArea, 0))
+      .toBe(moves.reduce((sum, move) => sum + move.cutArea, 0));
+    expect(stair.moves[0].xStart).toBe(moves[0].xStart);
+    expect(stair.moves[0].yStart).toBe(moves[0].yStart);
+    const end = stair.moves.at(-1)!;
+    expect({x: end.xStart + end.xDelta, y: end.yStart + end.yDelta})
+      .toEqual({x: moves.at(-1)!.xStart + moves.at(-1)!.xDelta, y: moves.at(-1)!.yStart + moves.at(-1)!.yDelta});
+
+    const optimized = optimizeMoves(moves, () => {}, 'maxY', {
+      pxPerMm: 100,
+      pixelRoughStairToleranceMm: 0.025,
+      smoothingEpsilonPx: 0,
+    });
+    expect(optimized.length).toBeLessThanOrEqual(3);
+  });
+
+  it('does not simplify finish stair moves', () => {
+    const moves = roughStairMoves(30).map(move =>
+      new PixelMove(move.xStart, move.yStart, move.xDelta, move.yDelta, move.cutArea, [], move.cutBounds, true));
+
+    expect(detectRoughStair(moves, 0, {
+      pxPerMm: 100,
+      pixelRoughStairToleranceMm: 0.025,
+    })).toEqual({moves: [moves[0]], length: 1});
+  });
+
   it('isSmoothingAllowed', () => {
     expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 0), 0.7)).toBeTruthy();
     expect(isSmoothingAllowed(PixelMove.withoutCut(0, 0, 1, 1), PixelMove.withoutCut(1, 1, 1, 1), 0.7)).toBeTruthy();
@@ -385,6 +421,19 @@ describe('plannerworker', () => {
     ]);
   });
 });
+
+function roughStairMoves(stepCount: number): PixelMove[] {
+  const moves: PixelMove[] = [];
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < stepCount; i++) {
+    moves.push(PixelMove.withoutCut(x, y, 0, 3));
+    y += 3;
+    moves.push(new PixelMove(x, y, -4, 0, 8, []));
+    x -= 4;
+  }
+  return moves;
+}
 
 function bitmap(width: number, height: number, cellAt: (x: number, y: number) => PlannerCell): PlannerBitmap {
   const result = new PlannerBitmap(width, height);
