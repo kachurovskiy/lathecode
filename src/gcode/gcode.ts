@@ -1,10 +1,18 @@
 import { LatheCode } from '../common/lathecode';
 import { Sender, SenderMode } from './sender';
 import { Move } from '../common/move';
-import { createGCode } from './gcodeutils';
+import { createGCodeWithLineMap } from './gcodeutils';
 import { loadAppSettings } from '../common/settings';
 
-export class GCode {
+export class GCodeMoveSelectionEvent extends Event {
+  static readonly type = 'moveselectionchange';
+
+  constructor(readonly moveCount: number) {
+    super(GCodeMoveSelectionEvent.type);
+  }
+}
+
+export class GCode extends EventTarget {
   private runTextarea: HTMLTextAreaElement;
   private copyButton: HTMLButtonElement;
   private h4Controls: HTMLElement;
@@ -18,11 +26,17 @@ export class GCode {
   private copyStateTimeout = 0;
   private saveName = 'Part 1';
   private latheCode: LatheCode | null = null;
+  private lineMoveCounts: number[] = [];
+  private lastSelectedMoveCount: number | null = null;
 
   constructor(private container: HTMLElement) {
+    super();
     container.style.display = 'none';
 
     this.runTextarea = container.getElementsByTagName('textarea')[0];
+    for (const eventName of ['click', 'keyup', 'mouseup', 'select', 'selectionchange', 'input']) {
+      this.runTextarea.addEventListener(eventName, () => this.updateSelectedMoveCount());
+    }
     this.senderError = container.querySelector<HTMLDivElement>('.senderError')!;
     this.runProgress = container.getElementsByTagName('progress')[0];
 
@@ -76,13 +90,30 @@ export class GCode {
 
   hide() {
     this.container.style.display = 'none';
+    this.lineMoveCounts = [];
+    this.lastSelectedMoveCount = null;
   }
 
   show(latheCode: LatheCode, moves: Move[]) {
     this.latheCode = latheCode;
-    this.runTextarea.value = createGCode(latheCode, moves);
+    const generated = createGCodeWithLineMap(latheCode, moves);
+    this.runTextarea.value = generated.text;
+    this.lineMoveCounts = generated.lineMoveCounts;
+    this.lastSelectedMoveCount = null;
     this.container.style.display = 'block';
     this.runTextarea.scrollIntoView({ behavior: "smooth" });
+  }
+
+  private updateSelectedMoveCount() {
+    if (!this.lineMoveCounts.length) return;
+
+    const lineIndex = getLineIndexAtOffset(this.runTextarea.value, this.runTextarea.selectionStart);
+    const clampedLineIndex = Math.max(0, Math.min(this.lineMoveCounts.length - 1, lineIndex));
+    const moveCount = this.lineMoveCounts[clampedLineIndex] ?? 0;
+    if (moveCount === this.lastSelectedMoveCount) return;
+
+    this.lastSelectedMoveCount = moveCount;
+    this.dispatchEvent(new GCodeMoveSelectionEvent(moveCount));
   }
 
   private async copyGCode() {
@@ -131,4 +162,12 @@ export class GCode {
       this.senderError.innerText = status.error || '';
     }
   }
+}
+
+function getLineIndexAtOffset(text: string, offset: number): number {
+  let lineIndex = 0;
+  for (let i = 0; i < offset && i < text.length; i++) {
+    if (text[i] === '\n') lineIndex++;
+  }
+  return lineIndex;
 }

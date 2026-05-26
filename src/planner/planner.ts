@@ -13,6 +13,8 @@ export class Planner extends EventTarget {
   private canvas: HTMLCanvasElement | null = null;
   private tool: HTMLCanvasElement | null = null;
   private worker: Worker | null = null;
+  private moveViewers: MovesViewerElement[] = [];
+  private selectedMoveCount: number | null = null;
   private settings: AppSettings = DEFAULT_APP_SETTINGS;
 
   constructor(private container: HTMLElement) {
@@ -34,7 +36,9 @@ export class Planner extends EventTarget {
       this.generationProgressMessage = null;
       this.canvas = null;
       this.tool = null;
+      this.moveViewers = [];
     }
+    this.selectedMoveCount = null;
     this.latheCode = value;
     if (this.latheCode) {
       this.container.insertAdjacentHTML('beforeend', '<h2>Planner</h2>');
@@ -51,6 +55,14 @@ export class Planner extends EventTarget {
 
   getMoves(): Move[] | null {
     return this.moves;
+  }
+
+  showMovesThrough(moveCount: number) {
+    this.selectedMoveCount = moveCount;
+    this.moveViewers = this.moveViewers.filter(viewer => viewer.isConnected);
+    for (const viewer of this.moveViewers) {
+      viewer.setMoveCount(moveCount);
+    }
   }
 
   private handleMessage(data: FromWorkerMessage) {
@@ -112,17 +124,24 @@ export class Planner extends EventTarget {
 
   private drawMoves(moves: Move[]): void {
     this.container.insertAdjacentHTML('beforeend', '<h3>Toolpath</h3>');
-    this.container.appendChild(createMovesViewer(moves, this.settings.plannerCanvasSizePx, this.settings.plannerCanvasSizePx / 2, this.settings.moveTimeoutMs));
+    const viewer = createMovesViewer(moves, this.settings.plannerCanvasSizePx, this.settings.plannerCanvasSizePx / 2, this.settings.moveTimeoutMs);
+    this.addMovesViewer(viewer);
+    this.container.appendChild(viewer);
     const button = document.createElement('button');
     button.innerText = 'Zoom in';
     button.addEventListener('click', () => {
       const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
       const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      createFullScreenDialog(
-        createMovesViewer(moves, viewportWidth - 100, viewportHeight - 200, this.settings.moveTimeoutMs),
-        'Toolpath');
+      const dialogViewer = createMovesViewer(moves, viewportWidth - 100, viewportHeight - 200, this.settings.moveTimeoutMs);
+      this.addMovesViewer(dialogViewer);
+      createFullScreenDialog(dialogViewer, 'Toolpath');
     });
     this.container.appendChild(button);
+  }
+
+  private addMovesViewer(viewer: MovesViewerElement) {
+    this.moveViewers.push(viewer);
+    if (this.selectedMoveCount !== null) viewer.setMoveCount(this.selectedMoveCount);
   }
 }
 
@@ -132,9 +151,13 @@ export function createMovesCanvas(moves: Move[], width: number, height: number, 
   return renderer.canvas;
 }
 
-export function createMovesViewer(moves: Move[], width: number, height: number, moveTimeoutMs = DEFAULT_MOVE_TIMEOUT_MS): HTMLDivElement {
+export interface MovesViewerElement extends HTMLDivElement {
+  setMoveCount(moveCount: number): void;
+}
+
+export function createMovesViewer(moves: Move[], width: number, height: number, moveTimeoutMs = DEFAULT_MOVE_TIMEOUT_MS): MovesViewerElement {
   const renderer = createMovesRenderer(moves, width, height);
-  const viewer = document.createElement('div');
+  const viewer = document.createElement('div') as MovesViewerElement;
   viewer.className = 'movesViewer';
   viewer.appendChild(renderer.canvas);
 
@@ -163,11 +186,16 @@ export function createMovesViewer(moves: Move[], width: number, height: number, 
   };
 
   range.addEventListener('input', () => {
-    renderer.stopAnimation();
     const moveCount = clampMoveCount(Number(range.value), moves.length);
-    renderer.render(moveCount);
-    updateScrubber(moveCount);
+    viewer.setMoveCount(moveCount);
   });
+
+  viewer.setMoveCount = (moveCount: number) => {
+    const clampedMoveCount = clampMoveCount(moveCount, moves.length);
+    renderer.stopAnimation();
+    renderer.render(clampedMoveCount);
+    updateScrubber(clampedMoveCount);
+  };
 
   renderer.startAnimation(moveTimeoutMs, updateScrubber);
   return viewer;

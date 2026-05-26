@@ -1,41 +1,61 @@
 import { Feed, LatheCode, Tool } from "../common/lathecode";
 import { Move } from "../common/move";
 
+export interface GeneratedGCode {
+  text: string;
+  lineMoveCounts: number[];
+}
+
 export function createGCode(latheCode: LatheCode, moves: Move[]): string {
+  return createGCodeWithLineMap(latheCode, moves).text;
+}
+
+export function createGCodeWithLineMap(latheCode: LatheCode, moves: Move[]): GeneratedGCode {
   let feed = latheCode.getFeed().moveMmMin;
   const first = moves[0]!;
   const area = getMoveArea(moves);
-  const lines = [
-    ... latheCode.getText().trim().split('\n').map(line => line.startsWith(';') ? line : `; ${line}`),
-    '',
-    '; Run time $duration min, cutting $cutPercent% of time',
-    `; Working area ${area.widthMm.toFixed(2)} by ${area.heightMm.toFixed(2)} mm`,
-    `; Axes expected: Z+ points ${latheCode.getZDirection().toLowerCase()}, X+ points ${latheCode.getXDirection().toLowerCase()}`,
-    '',
-    'G21 ; metric',
-    'G18 ; ZX plane',
-    'G90 ; absolute positioning',
-    feedToGCode(feed),
-    `X${first.yStartMm} ; zero your tool X on centerline`,
-    `Z0 ; zero your tool Z at the right edge of the stock`,
-    'G91 ; relative positioning',
-  ];
+  const lines: string[] = [];
+  const lineMoveCounts: number[] = [];
+  let moveCount = 0;
+  const pushLine = (line: string) => {
+    lines.push(line);
+    lineMoveCounts.push(moveCount);
+  };
+
+  for (const line of latheCode.getText().trim().split('\n')) {
+    pushLine(line.startsWith(';') ? line : `; ${line}`);
+  }
+  pushLine('');
+  pushLine('; Run time $duration min, cutting $cutPercent% of time');
+  pushLine(`; Working area ${area.widthMm.toFixed(2)} by ${area.heightMm.toFixed(2)} mm`);
+  pushLine(`; Axes expected: Z+ points ${latheCode.getZDirection().toLowerCase()}, X+ points ${latheCode.getXDirection().toLowerCase()}`);
+  pushLine('');
+  pushLine('G21 ; metric');
+  pushLine('G18 ; ZX plane');
+  pushLine('G90 ; absolute positioning');
+  pushLine(feedToGCode(feed));
+  pushLine(`X${first.yStartMm} ; zero your tool X on centerline`);
+  pushLine(`Z0 ; zero your tool Z at the right edge of the stock`);
+  pushLine('G91 ; relative positioning');
   let duration = 0;
   let cutDuration = 0;
   for (const m of moves) {
     const newFeed = getFeedMmMin(m, latheCode.getFeed(), latheCode.getTool());
     if (feed !== newFeed) {
       feed = newFeed;
-      lines.push('', feedToGCode(feed));
+      pushLine('');
+      pushLine(feedToGCode(feed));
     }
-    lines.push(moveToGCode(latheCode, m));
+    moveCount++;
+    pushLine(moveToGCode(latheCode, m));
     const moveDuration = getDurationMin(m, feed);
     duration += moveDuration;
     if (m.cutAreaMmSq) cutDuration += moveDuration;
   }
-  return lines.join('\n')
+  const text = lines.join('\n')
       .replace('$duration', duration.toFixed(1))
       .replace('$cutPercent', (cutDuration * 100 / duration).toFixed(0));
+  return {text, lineMoveCounts};
 }
 
 export function getMoveArea(moves: Move[]): {widthMm: number, heightMm: number} {

@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { GCode } from './gcode';
+import { LatheCode } from '../common/lathecode';
+import { Move } from '../common/move';
+import { GCode, GCodeMoveSelectionEvent } from './gcode';
 
 describe('GCode', () => {
   beforeEach(() => {
     localStorage.clear();
     document.body.innerHTML = '';
+    HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
   it('shows Copy and hides NanoEls H4 controls by default', () => {
@@ -49,7 +52,50 @@ describe('GCode', () => {
 
     expect(writeText).toHaveBeenCalledWith('G1 X2');
   });
+
+  it('emits the completed move count for the selected generated GCode line', () => {
+    const container = createGCodeContainer();
+    const gcode = new GCode(container);
+    const moveCounts: number[] = [];
+    gcode.addEventListener(GCodeMoveSelectionEvent.type, event => {
+      moveCounts.push((event as GCodeMoveSelectionEvent).moveCount);
+    });
+
+    gcode.show(new LatheCode(`STOCK D4
+TOOL RECT R0 L1 H1
+DEPTH CUT0.5 FINISH0.1
+L2 R1`), [
+      new Move(0, -2, 1, 0, 1, 1),
+      new Move(1, -2, 0, 1, 0, 0),
+    ]);
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!;
+    const lines = textarea.value.split('\n');
+    const relativeLineIndex = lines.findIndex(line => line.startsWith('G91'));
+    const firstMoveLineIndex = lines.findIndex((line, index) => index > relativeLineIndex && line.startsWith('Z1'));
+    const secondMoveLineIndex = lines.findIndex((line, index) => index > firstMoveLineIndex && line.startsWith('X1'));
+    expect(relativeLineIndex).toBeGreaterThanOrEqual(0);
+    expect(firstMoveLineIndex).toBeGreaterThan(relativeLineIndex);
+    expect(secondMoveLineIndex).toBeGreaterThan(firstMoveLineIndex);
+
+    setCursorToLine(textarea, 0);
+    textarea.dispatchEvent(new Event('click', {bubbles: true}));
+    setCursorToLine(textarea, firstMoveLineIndex);
+    textarea.dispatchEvent(new KeyboardEvent('keyup', {bubbles: true}));
+    setCursorToLine(textarea, secondMoveLineIndex);
+    textarea.dispatchEvent(new KeyboardEvent('keyup', {bubbles: true}));
+
+    expect(moveCounts).toEqual([0, 1, 2]);
+  });
 });
+
+function setCursorToLine(textarea: HTMLTextAreaElement, lineIndex: number) {
+  const offset = textarea.value
+    .split('\n')
+    .slice(0, lineIndex)
+    .reduce((sum, line) => sum + line.length + 1, 0);
+  textarea.setSelectionRange(offset, offset);
+}
 
 function createGCodeContainer(): HTMLElement {
   const container = document.createElement('div');

@@ -1,7 +1,7 @@
 import './style.css'
 import { Scene } from './scene.ts';
 import { createDownloadLink } from './stl.ts';
-import { GCode } from './gcode/gcode.ts';
+import { GCode, GCodeMoveSelectionEvent } from './gcode/gcode.ts';
 import { Editor, PlanEvent } from './editor/editor.ts';
 import { StartLatheCodeEvent, StartPanel, StartStlEvent } from './start/index.ts';
 import { Planner } from './planner/planner.ts';
@@ -83,4 +83,8 @@ planner.addEventListener('change', () => {
   } else {
     gcode.hide();
   }
+});
+
+gcode.addEventListener(GCodeMoveSelectionEvent.type, (event) => {
+  planner.showMovesThrough((event as GCodeMoveSelectionEvent).moveCount);
 });

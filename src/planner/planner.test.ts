@@ -63,6 +63,12 @@ describe('createMovesCanvas', () => {
 
       expect(output.textContent).toBe('Move 1 / 2');
       expect(strokeCount).toBe(1);
+
+      strokeCount = 0;
+      viewer.setMoveCount(0);
+
+      expect(output.textContent).toBe('Move 0 / 2');
+      expect(strokeCount).toBe(0);
     } finally {
       HTMLCanvasElement.prototype.getContext = originalGetContext;
     }
