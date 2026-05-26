@@ -4,6 +4,7 @@ import { Pixel, PixelMove } from "../common/pixel";
 import { Move } from '../common/move';
 import { AppSettings, normalizeAppSettings } from '../common/settings';
 import { PlannerBitmap, type PlannerBitmapImageData, PlannerCell } from './bitmap';
+import { optimizeMovesParallel } from './paralleloptimize';
 import { Rasterizer } from './rasterizer';
 import { VectorPlannerWorker } from './vectorplanner';
 
@@ -84,6 +85,8 @@ class PixelPlannerWorker {
   private postMessage: PlannerWorkerPostMessage;
   private postPixelMoves: boolean;
   private optimizeMoves: typeof optimizePlannerMoves;
+  private usesDefaultOptimizeMoves: boolean;
+  private canOptimizeAsynchronously: boolean;
   private settings: AppSettings;
   private pxPerMm: number;
   private isLargePreview: boolean;
@@ -104,6 +107,8 @@ class PixelPlannerWorker {
     this.radialCutDirection = this.profileSide === 'inside' ? 1 : -1;
     this.postMessage = options.postMessage || (message => postMessage(message));
     this.postPixelMoves = !!options.postMessage;
+    this.usesDefaultOptimizeMoves = !options.optimizeMoves;
+    this.canOptimizeAsynchronously = this.usesDefaultOptimizeMoves && !options.postMessage;
     this.optimizeMoves = options.optimizeMoves || optimizePlannerMoves;
     this.rasterizer = options.rasterizer || new Rasterizer(latheCode, this.pxPerMm);
     this.canvas = this.rasterizer.createPartBitmap();
@@ -153,13 +158,43 @@ class PixelPlannerWorker {
 
     this.pullBackRadially();
     this.addMove(PixelMove.withoutCut(this.toolX, this.toolY, this.canvas.width - this.toolX, 0)); // return right
+    this.finishPlanning();
+  }
+
+  private finishPlanning() {
     this.postProgress(true);
-    this.postMessage({progressMessage: `Optimizing ${this.moves.length} moves...`});
-    const moves = this.normalizeMovesForOutput(this.optimizeMoves(
-      this.moves,
+    const moveCount = this.moves.length;
+    const movesForOptimization = this.usesDefaultOptimizeMoves
+      ? this.moves.map(move => move.withoutCutPixels())
+      : this.moves;
+    if (this.usesDefaultOptimizeMoves) this.moves = [];
+    this.postMessage({progressMessage: `Optimizing ${moveCount} moves...`});
+    if (this.canOptimizeAsynchronously) {
+      void this.finishPlanningAsync(movesForOptimization).catch(error => {
+        this.postMessage({error: error instanceof Error ? error.message : String(error)});
+      });
+    } else {
+      this.postOptimizedMoves(this.optimizeMoves(
+        movesForOptimization,
+        (progressMessage) => this.postMessage({progressMessage}),
+        this.profileSide === 'inside' ? 'minY' : 'maxY',
+        this.settings,
+      ));
+    }
+  }
+
+  private async finishPlanningAsync(movesForOptimization: PixelMove[]) {
+    const moves = await optimizeMovesParallel(
+      movesForOptimization,
       (progressMessage) => this.postMessage({progressMessage}),
       this.profileSide === 'inside' ? 'minY' : 'maxY',
-      this.settings));
+      this.settings,
+    );
+    this.postOptimizedMoves(moves);
+  }
+
+  private postOptimizedMoves(optimizedMoves: PixelMove[]) {
+    const moves = this.normalizeMovesForOutput(optimizedMoves);
     this.postMessage({progressMessage: `Showing ${moves.length} moves...`});
     this.postMessage({moves: this.postPixelMoves ? moves : moves.map(m => m.toMove(this.pxPerMm))});
   }
@@ -434,7 +469,7 @@ class PixelPlannerWorker {
 
   private normalizeMovesForOutput(moves: PixelMove[]): PixelMove[] {
     if (this.profileSide === 'outside') return moves;
-    return moves.map(m => new PixelMove(m.xStart, m.yStart + this.toolOvershootY, m.xDelta, m.yDelta, m.cutArea, m.cutPixels));
+    return moves.map(m => new PixelMove(m.xStart, m.yStart + this.toolOvershootY, m.xDelta, m.yDelta, m.cutArea, m.cutPixels, m.cutBounds));
   }
 }
 

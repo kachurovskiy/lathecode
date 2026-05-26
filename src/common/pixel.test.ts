@@ -70,4 +70,15 @@ describe('pixel', () => {
   it('getCut', () => {
     expect(new PixelMove(10, 20, 1, -1, 5, [new Pixel(11, 19), new Pixel(12, 19), new Pixel(13, 19), new Pixel(14, 19), new Pixel(14, 18)]).getCut()).toEqual({width: 4, height: 2});
   });
+
+  it('keeps cut bounds after dropping raw cut pixels', () => {
+    const move = new PixelMove(10, 20, 1, -1, 5, [
+      new Pixel(11, 19),
+      new Pixel(14, 18),
+    ]).withoutCutPixels();
+
+    expect(move.cutPixels).toEqual([]);
+    expect(move.getCut()).toEqual({width: 4, height: 2});
+    expect(move.getMaxCutWidth()).toBe(4);
+  });
 });

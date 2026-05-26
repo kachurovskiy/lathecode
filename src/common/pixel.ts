@@ -16,9 +16,40 @@ export class Pixel {
   }
 }
 
+export type PixelBounds = {
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+};
+
+export type PixelMoveData = {
+  xStart: number,
+  yStart: number,
+  xDelta: number,
+  yDelta: number,
+  cutArea: number,
+  cutPixels?: Pixel[],
+  cutBounds?: PixelBounds | null,
+};
+
+const MERGED_CUT_PIXELS_INLINE_LIMIT = 10000;
+
 export class PixelMove {
   static withoutCut(xStart: number, yStart: number, xDelta: number, yDelta: number) {
     return new PixelMove(xStart, yStart, xDelta, yDelta, 0, []);
+  }
+
+  static fromData(data: PixelMoveData): PixelMove {
+    return new PixelMove(
+      data.xStart,
+      data.yStart,
+      data.xDelta,
+      data.yDelta,
+      data.cutArea,
+      data.cutPixels?.map(pixel => new Pixel(pixel.x, pixel.y)) ?? [],
+      data.cutBounds ?? getPixelBounds(data.cutPixels ?? []),
+    );
   }
 
   constructor(
@@ -27,7 +58,8 @@ export class PixelMove {
     readonly xDelta: number,
     readonly yDelta: number,
     readonly cutArea: number,
-    readonly cutPixels: Pixel[]) {}
+    readonly cutPixels: Pixel[],
+    readonly cutBounds: PixelBounds | null = getPixelBounds(cutPixels)) {}
 
   toString() {
     return `${this.xDelta},${this.yDelta}:${this.cutArea}`;
@@ -49,14 +81,8 @@ export class PixelMove {
   }
 
   getMaxCutWidth() {
-    if (!this.cutPixels.length) return 0;
-    let minX = this.cutPixels[0].x;
-    let maxX = minX;
-    for (let p of this.cutPixels) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-    }
-    return maxX - minX + 1;
+    if (!this.cutBounds) return 0;
+    return this.cutBounds.maxX - this.cutBounds.minX + 1;
   }
 
   isEmpty() {
@@ -89,21 +115,57 @@ export class PixelMove {
 
   merge(m: PixelMove) {
     if (this.xStart + this.xDelta !== m.xStart || this.yStart + this.yDelta !== m.yStart) throw new Error(`merge error: ${this} + ${m}`);
-    return new PixelMove(this.xStart, this.yStart, this.xDelta + m.xDelta, this.yDelta + m.yDelta, this.cutArea + m.cutArea, this.cutPixels.concat(m.cutPixels));
+    const cutPixelCount = this.cutPixels.length + m.cutPixels.length;
+    const cutPixels = cutPixelCount <= MERGED_CUT_PIXELS_INLINE_LIMIT
+      ? this.cutPixels.concat(m.cutPixels)
+      : [];
+    return new PixelMove(
+      this.xStart,
+      this.yStart,
+      this.xDelta + m.xDelta,
+      this.yDelta + m.yDelta,
+      this.cutArea + m.cutArea,
+      cutPixels,
+      mergePixelBounds(this.cutBounds, m.cutBounds),
+    );
   }
 
   getCut(): {width: number, height: number} {
-    if (!this.cutArea) return {width: 0, height: 0};
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    for (let p of this.cutPixels) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    return {width: maxX - minX + 1, height: maxY - minY + 1};
+    if (!this.cutBounds) return {width: 0, height: 0};
+    return {
+      width: this.cutBounds.maxX - this.cutBounds.minX + 1,
+      height: this.cutBounds.maxY - this.cutBounds.minY + 1,
+    };
   }
+
+  withoutCutPixels(): PixelMove {
+    if (!this.cutPixels.length) return this;
+    return new PixelMove(this.xStart, this.yStart, this.xDelta, this.yDelta, this.cutArea, [], this.cutBounds);
+  }
+}
+
+function getPixelBounds(pixels: readonly Pixel[]): PixelBounds | null {
+  if (!pixels.length) return null;
+  let minX = pixels[0].x;
+  let maxX = minX;
+  let minY = pixels[0].y;
+  let maxY = minY;
+  for (const pixel of pixels) {
+    minX = Math.min(minX, pixel.x);
+    maxX = Math.max(maxX, pixel.x);
+    minY = Math.min(minY, pixel.y);
+    maxY = Math.max(maxY, pixel.y);
+  }
+  return {minX, maxX, minY, maxY};
+}
+
+function mergePixelBounds(a: PixelBounds | null, b: PixelBounds | null): PixelBounds | null {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    minX: Math.min(a.minX, b.minX),
+    maxX: Math.max(a.maxX, b.maxX),
+    minY: Math.min(a.minY, b.minY),
+    maxY: Math.max(a.maxY, b.maxY),
+  };
 }

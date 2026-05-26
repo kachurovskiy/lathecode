@@ -76,6 +76,16 @@ export function optimizeMoves(
   travelRetractionSide: TravelRetractionSide = 'maxY',
   settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS): PixelMove[] {
   const normalizedSettings = normalizeAppSettings(settings);
+  const result = optimizeMovesBeforeSmoothing(moves, progressCallback, travelRetractionSide, normalizedSettings);
+  return smoothMoves(result, normalizedSettings.smoothingEpsilonPx);
+}
+
+export function optimizeMovesBeforeSmoothing(
+  moves: PixelMove[],
+  progressCallback: (message: string) => void,
+  travelRetractionSide: TravelRetractionSide = 'maxY',
+  settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS): PixelMove[] {
+  const normalizedSettings = normalizeAppSettings(settings);
   let result = moves;
   let prevLength = result.length;
   do {
@@ -83,7 +93,7 @@ export function optimizeMoves(
     result = optimizeMovesOnce(result, progressCallback, travelRetractionSide, normalizedSettings);
     progressCallback(`Optimized moves to ${result.length}`);
   } while (result.length < prevLength)
-  return smoothMoves(result, normalizedSettings.smoothingEpsilonPx);
+  return result;
 }
 
 function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: string) => void, travelRetractionSide: TravelRetractionSide, settings: AppSettings): PixelMove[] {
