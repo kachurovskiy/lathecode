@@ -79,6 +79,25 @@ L1`, 10);
     expect(finishMessages.length).toBe(2);
   });
 
+  it('cuts a finish pass for outside profiles on tube stock', () => {
+    const moves = planMoves(`STOCK D10 ID4
+TOOL ANG R0.2 L6 A35 NA55
+DEPTH CUT0.6 FINISH0.1
+MODE TURN
+L3 R3.5
+L4 RS3.5 RE4.6
+L2 R4.6`, 100);
+    const finishCutMoves = moves.filter(move =>
+      move instanceof PixelMove &&
+      move.isFinishPass &&
+      move.cutArea > 0 &&
+      move.cutBounds);
+    const finishCutArea = finishCutMoves.reduce((sum, move) => sum + (move as PixelMove).cutArea, 0);
+
+    expect(finishCutMoves.length).toBeGreaterThan(0);
+    expect(finishCutArea).toBeGreaterThan(5000);
+  });
+
   it('keeps inch depth-of-cut passes on the integer pixel grid', () => {
     const moves = planMoves(`UNITS IN
 STOCK D1

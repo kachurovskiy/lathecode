@@ -7,6 +7,7 @@ export enum PlannerCell {
   Part = 3,
   Removed = 4,
   Tool = 5,
+  ProtectedEmpty = 6,
 }
 
 const CELL_RGB: Record<number, number> = {
@@ -16,6 +17,7 @@ const CELL_RGB: Record<number, number> = {
   [PlannerCell.Part]: Colors.COLOR_PART.rgbNumber(),
   [PlannerCell.Removed]: Colors.COLOR_REMOVED.rgbNumber(),
   [PlannerCell.Tool]: Colors.COLOR_TOOL.rgbNumber(),
+  [PlannerCell.ProtectedEmpty]: 0x000000,
 };
 
 const CELL_PREVIEW_PRIORITY: Record<number, number> = {
@@ -25,6 +27,7 @@ const CELL_PREVIEW_PRIORITY: Record<number, number> = {
   [PlannerCell.Tool]: 2,
   [PlannerCell.Stock]: 3,
   [PlannerCell.Finish]: 4,
+  [PlannerCell.ProtectedEmpty]: 0,
 };
 
 export type PlannerBitmapImageData = {

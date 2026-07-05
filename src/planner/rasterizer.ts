@@ -25,6 +25,10 @@ export class Rasterizer {
       this.toDimensionPixels(stock.diameter / 2));
     const finishDepth = this.latheCode.getDepth().finishMm * (profile.side === 'inside' ? -1 : 1);
     this.fillSegments(bitmap, stock.getSegments(), PlannerCell.Stock);
+    if (profile.side === 'outside' && stock.innerRadius > 0) {
+      // The bore is empty material, but OD tools still must not route through it.
+      this.fillSegments(bitmap, radiusBandSegments(0, stock.innerRadius, stock.length), PlannerCell.ProtectedEmpty);
+    }
     if (finishDepth !== 0) this.fillSegments(bitmap, profile.segments.map(s => s.offsetBy(finishDepth, 0)), PlannerCell.Finish);
     this.fillSegments(bitmap, profile.segments, PlannerCell.Part);
     return bitmap;
@@ -91,6 +95,15 @@ export class Rasterizer {
   private toDimensionPixels(mm: number): number {
     return Math.max(1, Math.ceil(mm * this.pxPerMm));
   }
+}
+
+function radiusBandSegments(innerRadius: number, outerRadius: number, length: number): Segment[] {
+  return [
+    new Segment('LINE', new Point(innerRadius, 0), new Point(outerRadius, 0)),
+    new Segment('LINE', new Point(outerRadius, 0), new Point(outerRadius, length)),
+    new Segment('LINE', new Point(outerRadius, length), new Point(innerRadius, length)),
+    new Segment('LINE', new Point(innerRadius, length), new Point(innerRadius, 0)),
+  ];
 }
 
 export function fillPolygon(bitmap: PlannerBitmap, polygon: RasterPoint[], cell: PlannerCell) {

@@ -463,7 +463,7 @@ class PixelPlannerWorker {
       const rgb = this.getBitmap(topLeftX + p.x, topLeftY + p.y);
       if (rgb === PlannerCell.Stock || (rgb === PlannerCell.Finish && this.isFinishPass)) {
         pixels.push(new Pixel(topLeftX + p.x, topLeftY + p.y));
-      } else if (rgb === PlannerCell.Part) {
+      } else if (rgb === PlannerCell.Part || rgb === PlannerCell.ProtectedEmpty) {
         // Not allowed to place cutter onto the part.
         return null;
       } else if (rgb === PlannerCell.Finish) {
