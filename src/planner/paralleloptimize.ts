@@ -6,6 +6,8 @@ import { optimizeMoves, TravelRetractionSide } from "./optimize";
 const PARALLEL_OPTIMIZE_MIN_MOVES = 100000;
 const PARALLEL_OPTIMIZE_MIN_MOVES_PER_WORKER = 30000;
 const PARALLEL_OPTIMIZE_MAX_WORKERS = 8;
+// Keep pending workers strongly reachable so Firefox cannot collect them.
+const activeOptimizeWorkers = new Set<Worker>();
 
 type OptimizeWorkerResponse = {
   moves?: PixelMoveData[],
@@ -92,10 +94,10 @@ function optimizeChunkInWorker(
   travelRetractionSide: TravelRetractionSide,
   settings: AppSettings,
 ): Promise<PixelMove[]> {
-  return new Promise((resolve, reject) => {
-    const worker = new OptimizeWorker();
+  const worker = new OptimizeWorker();
+  activeOptimizeWorkers.add(worker);
+  return new Promise<PixelMove[]>((resolve, reject) => {
     worker.onmessage = (event: MessageEvent<OptimizeWorkerResponse>) => {
-      worker.terminate();
       if (event.data.error) {
         reject(new Error(event.data.error));
         return;
@@ -103,7 +105,6 @@ function optimizeChunkInWorker(
       resolve((event.data.moves ?? []).map(move => PixelMove.fromData(move)));
     };
     worker.onerror = event => {
-      worker.terminate();
       reject(new Error(event.message));
     };
     worker.postMessage({
@@ -111,6 +112,9 @@ function optimizeChunkInWorker(
       settings,
       travelRetractionSide,
     });
+  }).finally(() => {
+    worker.terminate();
+    activeOptimizeWorkers.delete(worker);
   });
 }
 
