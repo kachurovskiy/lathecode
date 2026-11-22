@@ -15,7 +15,7 @@
 ; L30 D18
 ; L2
 
-; Run time 29.2 min, cutting 78% of time
+; Run time 30.2 min, cutting 78% of time
 ; Working area 102.00 by 15.16 mm
 ; Axes expected: Z+ points left, X+ points up
 
@@ -321,7 +321,13 @@ Z29.83 ; cut 2.8253 mm2
 Z0.06 X0.02 ; cut 0.0011 mm2 at 71.57°
 Z0.07 X0.07 ; cut 0.0569 mm2 at 45.00°
 Z0.03 X0.07 ; cut 0.1401 mm2 at 23.20°
-Z0.01 X9 ; cut 17.7751 mm2 at 0.06°
+X-6.16 ; cut 0.0616 mm2
+Z0.01 X6.17 ; cut 0.0372 mm2 at 0.09°
+
+F10
+X8.99 ; cut 17.6763 mm2
+
+F60
 X-15.16 ; cut 0.0433 mm2
 
 F300

@@ -5,6 +5,7 @@ import { PixelMove } from '../common/pixel';
 import { AppSettings } from '../common/settings';
 import { PlannerBitmap, PlannerCell } from './bitmap';
 import { PLANNER_PREVIEW_MAX_PIXELS, PlannerWorker } from './plannerworker';
+import { getFeedMmMin } from '../gcode/gcodeutils';
 
 describe('PlannerWorker', () => {
   it('uses the pixel planner by default', () => {
@@ -102,6 +103,9 @@ L7.41 R0`).getLatheCodeForProfile('outside')!;
     expect(cutoffMoves.length).toBeGreaterThan(0);
     expect(cutoffMoves.reduce((area, move) => area + move.cutArea, 0) / 100 ** 2).toBeGreaterThan(40);
     expect(cutoffMoves.some(move => move.cutBounds?.minY === 0)).toBe(true);
+    expect(cutoffMoves.every(move => move.xDelta === 0)).toBe(true);
+    expect(cutoffMoves.every(move => getFeedMmMin(move.toMove(100), code.getFeed(), code.getTool()) === code.getFeed().partMmMin)).toBe(true);
+    expect(moves.slice(moves.indexOf(cutoffMoves.at(-1)!) + 1)).toHaveLength(2); // retract and return, without repeated empty plunges
     expect(moves.every(move => [move.xStart, move.yStart, move.xDelta, move.yDelta].every(Number.isInteger))).toBe(true);
   }, 120000);
 
@@ -118,6 +122,25 @@ L1.05 D2`, 10) as PixelMove[];
       move.cutArea > 0 &&
       move.cutBounds?.minY === 0 &&
       move.cutBounds.minX > 10 && move.cutBounds.maxX < 23)).toBe(true);
+  });
+
+  it.each([0.9, 1, 1.25, 1.5, 5])('preserves coarse-resolution cutoff direction and feed at smoothing %s', smoothingEpsilonPx => {
+    for (const mode of ['FACE', 'TURN']) {
+      const code = new LatheCode(`STOCK D1
+TOOL RECT R0 L1 H1
+FEED MOVE200 PASS50 PART12
+MODE ${mode}
+L2 D0.8
+L1`);
+      const moves = planMoves(code.getText(), {pxPerMm: 10, smoothingEpsilonPx}) as PixelMove[];
+      // Finish tracing assigns a synthetic cut count even in cleared space.
+      // Require removed-material bounds to check the actual parting cut.
+      const cutoffs = moves.filter(move => move.cutArea > 0 && move.cutBounds && move.xStart + move.xDelta === 0 && move.yStart + move.yDelta <= 0);
+
+      expect(cutoffs.length, mode).toBeGreaterThan(0);
+      expect(cutoffs.every(move => move.xDelta === 0 && move.isParting), mode).toBe(true);
+      expect(cutoffs.every(move => getFeedMmMin(move.toMove(10), code.getFeed(), code.getTool()) === 12), mode).toBe(true);
+    }
   });
 
   it('cuts a finish pass for outside profiles on tube stock', () => {

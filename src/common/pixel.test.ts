@@ -81,4 +81,12 @@ describe('pixel', () => {
     expect(move.getCut()).toEqual({width: 4, height: 2});
     expect(move.getMaxCutWidth()).toBe(4);
   });
+  it('preserves cutoff boundaries through worker serialization and merging', () => {
+    const move = new PixelMove(0, 10, 0, -1, 2, [new Pixel(0, 9), new Pixel(1, 9)], undefined, false, true);
+    const restored = PixelMove.fromData(JSON.parse(JSON.stringify(move.withoutCutPixels())));
+    const next = new PixelMove(0, 9, 0, -1, 2, [], null, false, true);
+    expect(restored.merge(next).isParting).toBe(true);
+    expect(restored.canMergeWith(PixelMove.withoutCut(0, 9, -1, -1))).toBe(false);
+    expect(restored.canMergeWith(PixelMove.withoutCut(0, 9, 0, 1))).toBe(false);
+  });
 });

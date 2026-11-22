@@ -37,6 +37,7 @@ export function getCuttingEdges(tool: PlannerBitmap, radialEdge: RadialCuttingEd
 }
 
 export function isSmoothingAllowed(m1: PixelMove, m2: PixelMove, epsilonPx: number) {
+  if (!m1.canMergeWith(m2)) return false;
   const m = mergeGeometry(m1, m2);
   const angleDegrees = m.getAngleToDegrees(m1);
   if (angleDegrees === 180) return false;
@@ -114,7 +115,7 @@ function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: strin
       continue;
     }
 
-    if (!m.cutArea) {
+    if (!m.cutArea && !m.isParting) {
       const travel = detectTravel(moves, i, travelRetractionSide);
       if (travel.length > 1 && travel.moves.length < travel.length) {
         result.push(... travel.moves);
@@ -134,12 +135,14 @@ function optimizeMovesOnce(moves: PixelMove[], progressCallback: (message: strin
 
     // Detect cones.
     if (i + 1 < moves.length &&
+        !moves[i].isParting && !moves[i + 1].isParting &&
         moves[i].isBasic() &&
         moves[i + 1].isHorizontalOrVertical()) {
       let count = 1;
       while (i + 1 + count * 2 < moves.length) {
         const j = i + count * 2;
         if (moves[j].isBasic() &&
+            !moves[j].isParting && !moves[j + 1].isParting &&
             moves[j + 1].isHorizontalOrVertical() &&
             mergeGeometry(moves[j - 2], moves[j - 1]).getAngleToDegrees(mergeGeometry(moves[j], moves[j + 1])) < settings.optimizeEpsilonDegrees) {
           count++;
@@ -206,7 +209,7 @@ export function detectRoughStair(moves: PixelMove[], i: number, settings: Partia
 }
 
 function isRoughStairMove(move: PixelMove, maxStepPx: number): boolean {
-  return !move.isFinishPass &&
+  return !move.isFinishPass && !move.isParting &&
     !move.isEmpty() &&
     Math.max(Math.abs(move.xDelta), Math.abs(move.yDelta)) <= maxStepPx;
 }
@@ -262,7 +265,7 @@ function distanceToSegment(point: {x: number, y: number}, start: {x: number, y: 
 export function detectTravel(moves: PixelMove[], i: number, travelRetractionSide: TravelRetractionSide = 'maxY'): {moves: PixelMove[], length: number} {
   if (moves[i].cutArea) throw new Error('expecting a travel move');
   let end = i;
-  while (end < moves.length - 1 && !moves[end + 1].cutArea) {
+  while (end < moves.length - 1 && !moves[end + 1].cutArea && !moves[end + 1].isParting) {
     end++;
   }
   return {moves: optimizeTravel(moves.slice(i, end + 1), travelRetractionSide), length: end - i + 1};
@@ -310,7 +313,7 @@ export function detectCodirectional(moves: PixelMove[], i: number): {move: Pixel
   let length = 1;
   while (i < moves.length - 1) {
     const m1 = moves[i + 1];
-    if (!m1.getAngleToDegrees(m)) {
+    if (m.canMergeWith(m1) && !m1.getAngleToDegrees(m)) {
       m = m.merge(m1);
       length++;
       i++;

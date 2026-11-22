@@ -131,3 +131,55 @@ test('lathecode fixtures to gcode and images', async () => {
     savePng(name + '.moves', result.movesPng);
   }
 }, {timeout: 900000});
+
+test('parallel browser workers preserve parting strokes across smoothing settings', async () => {
+  const results = await page.evaluate(async input => {
+    const browserImport = (path: string) => new Function('path', 'return import(path)')(path);
+    const [{LatheCode}, {PlannerWorker}, {optimizeMovesParallel}, {getFeedMmMin}] = await Promise.all([
+      browserImport('/src/common/lathecode.ts'),
+      browserImport('/src/planner/plannerworker.ts'),
+      browserImport('/src/planner/paralleloptimize.ts'),
+      browserImport('/src/gcode/gcodeutils.ts'),
+    ]);
+    const code = new LatheCode(input);
+    let rawMoves: any[] = [];
+    new PlannerWorker(code, {pxPerMm: 100, plannerPreviewSourcePixelLimit: 1}, {
+      postMessage: (message: any) => { if (message.moves) rawMoves = message.moves; },
+      optimizeMoves: (moves: any[]) => moves.map(move => move.withoutCutPixels()),
+    });
+
+    // Exercise real Worker transport even on machines exposing only one CPU.
+    const concurrency = Object.getOwnPropertyDescriptor(navigator, 'hardwareConcurrency');
+    Object.defineProperty(navigator, 'hardwareConcurrency', {configurable: true, value: 2});
+    try {
+      const results = [];
+      for (const smoothingEpsilonPx of [0.9, 1, 1.25, 1.5, 5]) {
+        const progress: string[] = [];
+        const moves = await optimizeMovesParallel(rawMoves, (message: string) => progress.push(message), 'maxY', {pxPerMm: 100, smoothingEpsilonPx});
+        const cutoffs = moves.filter((move: any) => move.cutArea > 0 && move.xStart + move.xDelta === 0 && move.yStart + move.yDelta <= 0);
+        results.push({
+          smoothingEpsilonPx,
+          usedWorkers: progress.some(message => message.includes('using 2 workers')),
+          fallback: progress.some(message => message.includes('Parallel optimization failed')),
+          cutoffCount: cutoffs.length,
+          radial: cutoffs.every((move: any) => move.xDelta === 0 && move.isParting),
+          partFeed: cutoffs.every((move: any) => getFeedMmMin(move.toMove(100), code.getFeed(), code.getTool()) === code.getFeed().partMmMin),
+          cutAreaMmSq: cutoffs.reduce((sum: number, move: any) => sum + move.cutArea, 0) / 100 ** 2,
+        });
+      }
+      return results;
+    } finally {
+      if (concurrency) Object.defineProperty(navigator, 'hardwareConcurrency', concurrency);
+      else Reflect.deleteProperty(navigator, 'hardwareConcurrency');
+    }
+  }, getInput('sample-lathe-part2-body-turn'));
+
+  for (const result of results) {
+    expect(result.usedWorkers, `smoothing ${result.smoothingEpsilonPx}`).toBe(true);
+    expect(result.fallback).toBe(false);
+    expect(result.cutoffCount).toBeGreaterThan(0);
+    expect(result.radial).toBe(true);
+    expect(result.partFeed).toBe(true);
+    expect(result.cutAreaMmSq).toBeGreaterThan(40);
+  }
+}, 240000);

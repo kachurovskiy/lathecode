@@ -32,6 +32,7 @@ export type PixelMoveData = {
   cutPixels?: Pixel[],
   cutBounds?: PixelBounds | null,
   isFinishPass?: boolean,
+  isParting?: boolean,
 };
 
 const MERGED_CUT_PIXELS_INLINE_LIMIT = 10000;
@@ -51,6 +52,7 @@ export class PixelMove {
       data.cutPixels?.map(pixel => new Pixel(pixel.x, pixel.y)) ?? [],
       data.cutBounds ?? getPixelBounds(data.cutPixels ?? []),
       data.isFinishPass ?? false,
+      data.isParting ?? false,
     );
   }
 
@@ -62,7 +64,8 @@ export class PixelMove {
     readonly cutArea: number,
     readonly cutPixels: Pixel[],
     readonly cutBounds: PixelBounds | null = getPixelBounds(cutPixels),
-    readonly isFinishPass = false) {}
+    readonly isFinishPass = false,
+    readonly isParting = false) {}
 
   toString() {
     return `${this.xDelta},${this.yDelta}:${this.cutArea}`;
@@ -118,6 +121,7 @@ export class PixelMove {
 
   merge(m: PixelMove) {
     if (this.xStart + this.xDelta !== m.xStart || this.yStart + this.yDelta !== m.yStart) throw new Error(`merge error: ${this} + ${m}`);
+    if (!this.canMergeWith(m)) throw new Error('Cannot merge across a parting stroke boundary');
     const cutPixelCount = this.cutPixels.length + m.cutPixels.length;
     const cutPixels = cutPixelCount <= MERGED_CUT_PIXELS_INLINE_LIMIT
       ? this.cutPixels.concat(m.cutPixels)
@@ -131,6 +135,7 @@ export class PixelMove {
       cutPixels,
       mergePixelBounds(this.cutBounds, m.cutBounds),
       this.isFinishPass || m.isFinishPass,
+      this.isParting,
     );
   }
 
@@ -144,7 +149,13 @@ export class PixelMove {
 
   withoutCutPixels(): PixelMove {
     if (!this.cutPixels.length) return this;
-    return new PixelMove(this.xStart, this.yStart, this.xDelta, this.yDelta, this.cutArea, [], this.cutBounds, this.isFinishPass);
+    return new PixelMove(this.xStart, this.yStart, this.xDelta, this.yDelta, this.cutArea, [], this.cutBounds, this.isFinishPass, this.isParting);
+  }
+
+  canMergeWith(other: PixelMove): boolean {
+    if (!this.isParting && !other.isParting) return true;
+    return this.isParting && other.isParting &&
+      this.xDelta === 0 && other.xDelta === 0 && this.yDelta * other.yDelta > 0;
   }
 }
 

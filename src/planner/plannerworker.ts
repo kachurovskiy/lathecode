@@ -78,6 +78,7 @@ class PixelPlannerWorker {
   private radialMaxY = 0;
   private mode: 'FACE' | 'TURN';
   private passes: Pass[];
+  private cutoffXs: Set<number>;
   private previousFinishPass: Pass|null = null;
   private moves: PixelMove[] = [];
   private radialCutAllowed = true;
@@ -134,15 +135,13 @@ class PixelPlannerWorker {
 
     // Plan passes in advance so that we can finish the part fully before cutting off.
     const cutXCoords = this.latheCode.getCutoffStarts().map(z => {
-      // Match the rasterizer's physical origin and pixel-center boundary rule.
-      // canvas.width is rounded up and can include an extra empty column; using
-      // it here misaligns tool-width slots. Fractional pass coordinates also
-      // make bitmap lookups see empty space instead of stock or protected part.
+      // Use the rasterizer's physical origin and pixel-center boundary rule.
       const boundaryPx = this.latheCode.getStock()!.length * this.pxPerMm - z * this.pxPerMm;
       const firstPartPixel = Math.ceil(boundaryPx - 0.5);
       return firstPartPixel - this.tool.width + 1;
     });
     this.passes = cutXCoords.map(x => new Pass(x, true)).concat(cutXCoords.map(x => new Pass(x - 1, false)));
+    this.cutoffXs = new Set(cutXCoords.map(x => x - 1));
     if (this.mode === 'FACE') {
       let x = this.canvas.width;
       while (true) {
@@ -480,12 +479,14 @@ class PixelPlannerWorker {
     }
     // Don't optimize away moves during the finish pass for better results.
     const pixelCount = Math.max(this.isFinishPass && this.toolX < this.canvas.width ? 1 : 0, pixels.length);
-    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixelCount, pixels, undefined, this.isFinishPass);
+    // Keep actual cutoff plunges radial without disabling contour smoothing.
+    const isParting = pixels.length > 0 && !xDelta && yDelta === this.radialCutDirection && this.cutoffXs.has(this.toolX);
+    return new PixelMove(this.toolX, this.toolY, xDelta, yDelta, pixelCount, pixels, undefined, this.isFinishPass, isParting);
   }
 
   private normalizeMovesForOutput(moves: PixelMove[]): PixelMove[] {
     if (this.profileSide === 'outside') return moves;
-    return moves.map(m => new PixelMove(m.xStart, m.yStart + this.toolOvershootY, m.xDelta, m.yDelta, m.cutArea, m.cutPixels, m.cutBounds, m.isFinishPass));
+    return moves.map(m => new PixelMove(m.xStart, m.yStart + this.toolOvershootY, m.xDelta, m.yDelta, m.cutArea, m.cutPixels, m.cutBounds, m.isFinishPass, m.isParting));
   }
 }
 
