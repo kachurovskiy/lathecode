@@ -14,6 +14,7 @@ import { createLatheCodePreview } from './preview';
 import * as previews from './preview';
 import { SAMPLE_SECTIONS, START_SAMPLE_DEFINITIONS } from './samples';
 import { StartLatheCodeEvent, StartPanel } from './start';
+import { createFullScreenDialog } from '../common/dialog';
 
 vi.mock('../llm/pricing', async () => ({...await vi.importActual<object>('../llm/pricing'), estimateCost: async () => null}));
 
@@ -1704,6 +1705,88 @@ describe('StartPanel', () => {
     });
   });
 
+  it.each(['body', 'selection'])('accepts image paste routed to the %s outside the focused drawing form', target => {
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    const container = createStartContainer();
+    new StartPanel(container);
+    const selected = document.createElement('p');
+    selected.textContent = 'Selected text from the previous screen';
+    container.appendChild(selected);
+    const range = document.createRange();
+    range.selectNodeContents(selected);
+    document.getSelection()!.addRange(range);
+    container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
+    expect(document.activeElement).toBe(document.querySelector('.llmPasteTarget'));
+
+    const event = dispatchDrawingPaste(target === 'body' ? document.body : selected, [new File(['drawing'], 'clipboard.png', {type: 'image/png'})]);
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.querySelectorAll('.llmImagePreview')).toHaveLength(1);
+    clickDialogButton('Close');
+    document.getSelection()!.removeAllRanges();
+  });
+
+  it('handles image paste only for the topmost drawing dialog', () => {
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    const container = createStartContainer();
+    new StartPanel(container);
+    const open = container.querySelector<HTMLButtonElement>('.startDrawingButton')!;
+    open.click();
+    const first = document.querySelector<HTMLElement>('.fullScreenDialog')!;
+    open.click();
+    const second = Array.from(document.querySelectorAll<HTMLElement>('.fullScreenDialog')).at(-1)!;
+    const file = new File(['drawing'], 'clipboard.png', {type: 'image/png'});
+    const overlay = createFullScreenDialog(document.createElement('div'), 'Another dialog');
+    expect(dispatchDrawingPaste(document.body, [file]).defaultPrevented).toBe(false);
+    expect(document.querySelector('.llmImagePreview')).toBeNull();
+    overlay.remove();
+    dispatchDrawingPaste(document.body, [file]);
+    expect(first.querySelector('.llmImagePreview')).toBeNull();
+    expect(second.querySelectorAll('.llmImagePreview')).toHaveLength(1);
+    second.remove();
+    dispatchDrawingPaste(document.body, [file]);
+    expect(first.querySelectorAll('.llmImagePreview')).toHaveLength(1);
+    first.remove();
+  });
+
+  it('leaves ordinary text paste unchanged in drawing notes', () => {
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    const container = createStartContainer();
+    new StartPanel(container);
+    container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
+    const notes = document.querySelector<HTMLTextAreaElement>('.llmTextArea')!;
+    notes.focus();
+    const event = new Event('paste', {bubbles: true, cancelable: true});
+    Object.defineProperty(event, 'clipboardData', {value: {items: [{kind: 'string', type: 'text/plain'}], files: []}});
+    notes.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(notes);
+    expect(document.querySelector('.llmImagePreview')).toBeNull();
+    clickDialogButton('Close');
+  });
+
+  it.each(['close', 'escape', 'remove', 'success'])('removes the document paste listener after drawing dialog %s', async action => {
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    const container = createStartContainer();
+    new StartPanel(container);
+    vi.stubGlobal('fetch', mockOpenRouterLatheCodeResponse('STOCK D14\nL7 R6'));
+    const addListener = vi.spyOn(document, 'addEventListener');
+    const removeListener = vi.spyOn(document, 'removeEventListener');
+    container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
+    const pasteListener = addListener.mock.calls.find(([type]) => type === 'paste')![1];
+    if (action === 'close') clickDialogButton('Close');
+    else if (action === 'escape') document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+    else if (action === 'remove') document.querySelector<HTMLElement>('.fullScreenDialog')!.remove();
+    else {
+      pasteDrawingImages(new File(['drawing'], 'clipboard.png', {type: 'image/png'}));
+      clickDialogButton('Create lathecode');
+      await waitForAsyncWork();
+    }
+    expect(document.querySelector('.llmDialog')).toBeNull();
+    expect(removeListener).toHaveBeenCalledWith('paste', pasteListener);
+    const event = dispatchDrawingPaste(document.body, [new File(['drawing'], 'later.png', {type: 'image/png'})]);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it('excludes removed pasted and uploaded images from the drawing request', async () => {
     localStorage.setItem('openRouterApiKey', 'sk-or-test');
     const container = createStartContainer();
@@ -1738,6 +1821,10 @@ describe('StartPanel', () => {
 });
 
 function pasteDrawingImages(...files: File[]) {
+  return dispatchDrawingPaste(document.activeElement!, files);
+}
+
+function dispatchDrawingPaste(target: EventTarget, files: File[]) {
   const event = new Event('paste', {bubbles: true, cancelable: true}) as ClipboardEvent;
   Object.defineProperty(event, 'clipboardData', {
     value: {
@@ -1745,7 +1832,8 @@ function pasteDrawingImages(...files: File[]) {
       files: files.map(file => new File([file], file.name, {type: file.type, lastModified: file.lastModified + 1})),
     },
   });
-  document.activeElement!.dispatchEvent(event);
+  target.dispatchEvent(event);
+  return event;
 }
 
 function createStartContainer(): HTMLElement {

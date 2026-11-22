@@ -273,7 +273,9 @@ export class StartPanel extends EventTarget {
       updateSelectedFiles();
     };
     const handlePaste = (event: ClipboardEvent) => {
-      if (fileInput.disabled) return;
+      // Native paste can target an existing page selection outside the focused dialog.
+      const topDialog = Array.from(document.querySelectorAll('.fullScreenDialog')).at(-1);
+      if (fileInput.disabled || !dialog.isConnected || topDialog !== dialog) return;
       const pastedFiles = getClipboardImageFiles(event.clipboardData);
       if (!pastedFiles.length) return;
       event.preventDefault();
@@ -287,7 +289,6 @@ export class StartPanel extends EventTarget {
       fileInput.value = '';
       error.textContent = '';
     });
-    form.addEventListener('paste', handlePaste);
     updateSelectedFiles();
 
     let dialog: HTMLDivElement;
@@ -308,7 +309,6 @@ export class StartPanel extends EventTarget {
           await cost.refresh();
           submitButton.textContent = 'Creating...';
           const text = await createLatheCodeFromDrawing(images, notes);
-          cost.dispose();
           dialog.remove();
           this.dispatchEvent(new StartLatheCodeEvent(text, {sourceImages: images}));
         } finally {
@@ -319,7 +319,14 @@ export class StartPanel extends EventTarget {
       });
     });
 
-    dialog = createFullScreenDialog(form, 'From technical drawing', cost.dispose);
+    const dispose = () => {
+      cost.dispose();
+      document.removeEventListener('paste', handlePaste);
+    };
+    dialog = createFullScreenDialog(form, 'From technical drawing', dispose);
+    const remove = dialog.remove.bind(dialog);
+    dialog.remove = () => {dispose(); remove();};
+    document.addEventListener('paste', handlePaste);
     pasteTarget.focus();
   }
 
