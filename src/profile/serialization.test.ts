@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LatheCode } from '../common/lathecode';
 import { applyDrawingFeatureCorrections, buildLatheCodeFromDrawing, buildOutgoingLatheCodeFromDrawing, getDrawingFeatureCorrections } from './serialization';
-import { canSelectedSegmentEndpointHaveFeature, cloneDrawingState, createInitialState, ensureProfileEnabled, getDefaultSegmentFeatureSize, insertPoint, recordUndoState, redoDrawingState, resizeDrawing, setSelectedSegmentTool, undoDrawingState, updatePointPosition } from './state';
+import { canSelectedSegmentEndpointHaveFeature, cloneDrawingState, createInitialState, ensureProfileEnabled, getDefaultSegmentFeatureSize, insertPoint, recordUndoState, redoDrawingState, removeSelectedPoint, resizeDrawing, setSelectedSegmentTool, undoDrawingState, updatePointPosition } from './state';
 import { START_SAMPLE_DEFINITIONS } from '../start/samples';
 import type { DrawingState, ProfileDraft, SegmentEdgeFeatures } from './types';
 
@@ -298,15 +298,81 @@ describe('profile serialization', () => {
     expect(() => new LatheCode(buildOutgoingLatheCodeFromDrawing(state))).not.toThrow();
   });
 
-  it('keeps features when changing segment type until removal is explicitly accepted', () => {
-    const state = createInitialState('STOCK D30\nL20 DS10 CH1 DE20');
-    state.segmentSelection = {side: 'outside', index: 0};
+  it.each(['convex', 'concave', 'spline'] as const)('removes endpoint features when converting a segment to %s', tool => {
+    for (const side of ['outside', 'inside'] as const) {
+      const source = `STOCK D30\n${side === 'inside' ? 'L20 D30\nINSIDE\n' : ''}L20 DS10 CH1 DE20 FI1 ; edges`;
+      const state = createInitialState(source);
+      const history = {undoStack: [] as DrawingState[], redoStack: [] as DrawingState[]};
+      state.segmentSelection = {side, index: 0};
+      recordUndoState(history, cloneDrawingState(state));
+
+      expect(setSelectedSegmentTool(state, tool)).toBe(true);
+      expect(state.profiles[side].segmentFeatures[0]).toEqual(emptyFeatures());
+      expect(getDrawingFeatureCorrections(state)).toEqual([]);
+      const output = buildOutgoingLatheCodeFromDrawing(state);
+      expect(output).not.toMatch(/\b(?:CH|FI)1\b/);
+      expect(output).toContain('; edges');
+      expect(() => new LatheCode(output)).not.toThrow();
+
+      expect(undoDrawingState(state, history)).toBe(true);
+      expect(buildOutgoingLatheCodeFromDrawing(state)).toBe(source);
+      expect(redoDrawingState(state, history)).toBe(true);
+      expect(buildOutgoingLatheCodeFromDrawing(state)).toBe(output);
+      setSelectedSegmentTool(state, 'line');
+      expect(state.profiles[side].segmentFeatures[0]).toEqual(emptyFeatures());
+    }
+  });
+
+  it('removes features at a new curved neighbor while retaining supported edges', () => {
+    const state = drawingState({
+      points: [{z: 0, radius: 2}, {z: 2, radius: 3}, {z: 4, radius: 2}],
+      segmentFeatures: [
+        {start: {kind: 'chamfer', size: 0.25}, end: {kind: 'fillet', size: 0.25}},
+        {start: null, end: {kind: 'chamfer', size: 0.25}},
+      ],
+    });
+    state.segmentSelection = {side: 'outside', index: 1};
     setSelectedSegmentTool(state, 'convex');
-    expect(state.profiles.outside.segmentFeatures[0].end?.size).toBe(1);
-    expect(() => buildOutgoingLatheCodeFromDrawing(state)).toThrow(/Chamfers/);
-    const corrections = getDrawingFeatureCorrections(state);
-    expect(corrections.some(correction => correction.after === null)).toBe(true);
-    applyDrawingFeatureCorrections(state, corrections);
+    expect(state.profiles.outside.segmentFeatures).toEqual([
+      {start: {kind: 'chamfer', size: 0.25}, end: null},
+      emptyFeatures(),
+    ]);
+    expect(() => buildOutgoingLatheCodeFromDrawing(state)).not.toThrow();
+  });
+
+  it.each(['convex', 'concave', 'spline'] as const)('removes inherited endpoint features when drawing with %s', tool => {
+    const state = createInitialState('STOCK D30\nL50 DS20 CH1 DE20 FI1');
+    insertPoint(state, 'outside', {z: 25, radius: 8}, tool);
+    expect(state.profiles.outside.segmentFeatures).toEqual([emptyFeatures(), emptyFeatures()]);
+    expect(() => buildOutgoingLatheCodeFromDrawing(state)).not.toThrow();
+  });
+
+  it('removes inherited features when deleting a point merges a line into an arc', () => {
+    const state = drawingState({
+      points: [{z: 0, radius: 2}, {z: 2, radius: 3}, {z: 4, radius: 4}],
+      segmentTools: ['convex', 'line'],
+      segmentFeatures: [emptyFeatures(), {start: null, end: {kind: 'fillet', size: 0.25}}],
+    });
+    state.selection = {side: 'outside', index: 1};
+    expect(removeSelectedPoint(state)).toBe(true);
+    expect(state.profiles.outside.segmentFeatures).toEqual([emptyFeatures()]);
+    expect(() => buildOutgoingLatheCodeFromDrawing(state)).not.toThrow();
+  });
+
+  it('removes a corner feature when moving a point makes the adjoining segments collinear', () => {
+    const state = drawingState({
+      points: [{z: 0, radius: 2}, {z: 2, radius: 3}, {z: 4, radius: 2}],
+      segmentFeatures: [{start: null, end: {kind: 'fillet', size: 0.25}}, emptyFeatures()],
+    });
+    updatePointPosition(state, {side: 'outside', index: 1}, {z: 2, radius: 2}, false);
+    expect(state.profiles.outside.segmentFeatures).toEqual([emptyFeatures(), emptyFeatures()]);
+    expect(() => buildOutgoingLatheCodeFromDrawing(state)).not.toThrow();
+  });
+
+  it('removes an endpoint feature when resizing closes its radial edge against the stock bore', () => {
+    const state = createInitialState('STOCK D30 ID4\nL20 D8 CH1');
+    resizeDrawing(state, 15, 20);
+    expect(state.profiles.outside.segmentFeatures).toEqual([emptyFeatures()]);
     expect(() => buildOutgoingLatheCodeFromDrawing(state)).not.toThrow();
   });
 

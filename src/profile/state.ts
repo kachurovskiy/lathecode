@@ -401,6 +401,7 @@ export function insertPoint(state: DrawingState, side: ProfileSide, point: Profi
     profile.segmentSourceIds.splice(insertIndex - 1, 1, sourceId, sourceId);
   }
   normalizeProfileSplineControlZ(profile);
+  removeUnsupportedProfileFeatures(state, side);
   state.selection = { side, index: insertIndex };
   state.segmentSelection = null;
 }
@@ -432,6 +433,7 @@ export function updatePointPosition(state: DrawingState, selection: Exclude<Poin
   }
   profile.points[selection.index] = clamped;
   normalizeProfileSplineControlZ(profile);
+  removeUnsupportedProfileFeatures(state, selection.side);
   state.selection = selection;
   state.segmentSelection = null;
 }
@@ -449,6 +451,7 @@ export function removeSelectedPoint(state: DrawingState): boolean {
   });
   if (profile.segmentSourceIds) profile.segmentSourceIds.splice(index - 1, 2, profile.segmentSourceIds[index - 1] ?? profile.segmentSourceIds[index]);
   normalizeProfileSplineControlZ(profile);
+  removeUnsupportedProfileFeatures(state, side);
   state.selection = { side, index: Math.min(index, profile.points.length - 1) };
   state.segmentSelection = null;
   return true;
@@ -508,8 +511,10 @@ export function setSelectedSegmentTool(state: DrawingState, tool: SegmentTool): 
     profile.segmentTools[index] = tool;
     changed = true;
   }
-  if (changed)
+  if (changed) {
     normalizeProfileSplineControlZ(profile);
+    removeUnsupportedProfileFeatures(state, selection.side);
+  }
   return changed;
 }
 export function getSelectedSegmentFeature(state: DrawingState, endpoint: SegmentFeatureEndpoint): SegmentEdgeFeature | null {
@@ -538,8 +543,9 @@ export function setSelectedSegmentFeature(state: DrawingState, endpoint: Segment
 }
 export function canSelectedSegmentEndpointHaveFeature(state: DrawingState, endpoint: SegmentFeatureEndpoint): boolean {
   const selection = state.segmentSelection;
-  if (!selection)
-    return false;
+  return !!selection && canSegmentEndpointHaveFeature(state, selection, endpoint);
+}
+function canSegmentEndpointHaveFeature(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint): boolean {
   const profile = state.profiles[selection.side];
   if (profile.segmentTools[selection.index] !== 'line')
     return false;
@@ -548,6 +554,16 @@ export function canSelectedSegmentEndpointHaveFeature(state: DrawingState, endpo
   if (!start || !end || !hasSegmentLength(start, end))
     return false;
   return getSelectedSegmentEndpointFeatureLimit(state, selection, endpoint) > GEOMETRY_EPSILON;
+}
+function removeUnsupportedProfileFeatures(state: DrawingState, side: ProfileSide): void {
+  // Keep cleanup in the geometry edit so undo restores the features with the shape.
+  state.profiles[side].segmentFeatures.forEach((features, index) => {
+    for (const endpoint of ['start', 'end'] as const) {
+      if (features[endpoint] && !canSegmentEndpointHaveFeature(state, {side, index}, endpoint)) {
+        features[endpoint] = null;
+      }
+    }
+  });
 }
 export function getSelectedSegmentEndpointFeatureLimit(state: DrawingState, selection: Exclude<SegmentSelection, null>, endpoint: SegmentFeatureEndpoint): number {
   const context = getSelectedSegmentEndpointFeatureContext(state, selection, endpoint);
@@ -709,6 +725,7 @@ export function snapNumber(value: number, increment: number): number {
   return Math.round(value / increment) * increment;
 }
 export function resizeDrawing(state: DrawingState, nextDiameterMm: number, nextLengthMm: number): void {
+  const changed = nextDiameterMm !== state.diameterMm || nextLengthMm !== state.lengthMm;
   if (nextDiameterMm !== state.diameterMm) {
     scaleRadii(state, nextDiameterMm / state.diameterMm);
     state.diameterMm = nextDiameterMm;
@@ -716,6 +733,9 @@ export function resizeDrawing(state: DrawingState, nextDiameterMm: number, nextL
   if (nextLengthMm !== state.lengthMm) {
     scaleZ(state, nextLengthMm / state.lengthMm);
     state.lengthMm = nextLengthMm;
+  }
+  if (changed) {
+    for (const side of PROFILE_SIDES) removeUnsupportedProfileFeatures(state, side);
   }
 }
 export function scaleRadii(state: DrawingState, scale: number): void {

@@ -863,6 +863,39 @@ describe('StartPanel', () => {
     expect(() => new LatheCode(started[0])).not.toThrow();
   });
 
+  it.each(['convex', 'concave', 'spline'])('keeps the profile usable after changing a featured segment to %s', tool => {
+    const container = createStartContainer();
+    const start = new StartPanel(container, {
+      getCurrentLatheCodeText: () => 'STOCK D30\nL50 DS10 FI1 DE20 CH1',
+    });
+    const started: string[] = [];
+    start.addEventListener('start', event => {
+      started.push((event as StartLatheCodeEvent).text);
+    });
+
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+    clickDialogButton('Select');
+    dispatchProfileMouse(svg, 'mousedown', 25, 15);
+    document.querySelector<HTMLButtonElement>(`.profileDrawingSegmentTypeButton[data-tool="${tool}"]`)!.click();
+
+    expect(document.querySelector<HTMLElement>('.toolDialogError')!.textContent).toBe('');
+    expect(document.querySelector<HTMLElement>('.profileDrawingCorrectFeatures')!.hidden).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingAcceptButton')!.disabled).toBe(false);
+    expect(document.querySelectorAll('.profileDrawingSegmentFeatureButton.selected[data-feature="none"]')).toHaveLength(2);
+
+    clickDialogButton('Undo');
+    expect(document.querySelector('.profileDrawingSegmentFeatureButton.selected[data-feature="chamfer"]')).not.toBeNull();
+    expect(document.querySelector('.profileDrawingSegmentFeatureButton.selected[data-feature="fillet"]')).not.toBeNull();
+    clickDialogButton('Redo');
+    expect(document.querySelector<HTMLElement>('.toolDialogError')!.textContent).toBe('');
+    clickDialogButton('Use lathecode');
+
+    expect(started).toHaveLength(1);
+    expect(started[0]).not.toMatch(/\b(?:CH|FI)1\b/);
+    expect(() => new LatheCode(started[0])).not.toThrow();
+  });
+
   it('offers explicit feature corrections when profile edits make a segment shorter', () => {
     const container = createStartContainer();
     const start = new StartPanel(container, {

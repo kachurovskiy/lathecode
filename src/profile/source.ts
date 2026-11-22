@@ -86,7 +86,7 @@ export function buildSourceLatheCode(state: DrawingState): string {
     text = lines.join(newline);
   }
   if (text === source.text) return source.text;
-  // This also rejects edits whose endpoint features no longer fit. Never strip them.
+  // Validate the remaining endpoint feature sizes after the geometry edit.
   new LatheCode(text);
   return text;
 }
