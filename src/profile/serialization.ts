@@ -3,6 +3,7 @@ import { fitProfileEdgeFeatures } from './edgefeatures.ts';
 import { hasSegmentLength, normalizeSegmentLength, sameSplineSpan } from './geometry.ts';
 import { createEmptySegmentFeatures, hasDrawableProfile } from './state.ts';
 import { buildSourceLatheCode } from './source.ts';
+import { formatDrawingInput, getDrawingUnitLabel } from './units.ts';
 import { assertFeaturesSupported, edgeFeaturesEqual, formatProgramNumber as formatNumber, segmentLineToLatheCode, splineLineToLatheCode } from './programlines.ts';
 import { PROFILE_SIDES, type DrawingState, type ProfileDraft, type ProfileSide, type SegmentEdgeFeature, type SegmentFeatureEndpoint, } from './types.ts';
 export function buildLatheCodeFromDrawing(state: DrawingState): string {
@@ -27,7 +28,7 @@ export function buildOutgoingLatheCodeFromDrawing(state: DrawingState): string {
     if (!isEdgeFeatureValidationError(caught))
       throw caught;
     const corrections = getDrawingFeatureCorrections(state);
-    const details = corrections.map(formatFeatureCorrection).join('\n');
+    const details = corrections.map(correction => formatFeatureCorrection(correction, state)).join('\n');
     throw new Error(`${caught instanceof Error ? caught.message : caught}\n${details}\nReduce the affected feature sizes or explicitly remove them. No features were changed.`);
   }
 }
@@ -93,9 +94,10 @@ export function getDrawingFeatureCorrections(state: DrawingState): DrawingFeatur
   }
   return corrections;
 }
-export function formatFeatureCorrection(correction: DrawingFeatureCorrection): string {
+export function formatFeatureCorrection(correction: DrawingFeatureCorrection, state: DrawingState): string {
   const {side, index, endpoint, before, after} = correction;
-  return `${side === 'outside' ? 'Outside' : 'Inside'} segment ${index + 1}, ${endpoint} ${before.kind}: ${formatNumber(before.size)} mm → ${after ? `${formatNumber(after.size)} mm` : 'remove'}`;
+  const unit = getDrawingUnitLabel(state);
+  return `${side === 'outside' ? 'Outside' : 'Inside'} segment ${index + 1}, ${endpoint} ${before.kind}: ${formatDrawingInput(state, before.size)} ${unit} → ${after ? `${formatDrawingInput(state, after.size)} ${unit}` : 'remove'}`;
 }
 export function applyDrawingFeatureCorrections(state: DrawingState, corrections: readonly DrawingFeatureCorrection[]): void {
   for (const correction of corrections) {

@@ -669,12 +669,131 @@ describe('StartPanel', () => {
     start.addEventListener('start', event => started.push((event as StartLatheCodeEvent).text));
     container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
     expect(document.querySelector('.profileDrawingStockBore')).not.toBeNull();
-    expect(document.querySelector<HTMLElement>('.profileDrawingStockBoreLabel')!.textContent).toContain('3.175');
-    expect(Number(document.querySelector<HTMLInputElement>('[name="drawingDiameter"]')!.value)).toBeCloseTo(8.4582, 10);
-    setInputValue('[name="drawingSnap"]', '0.1');
-    setInputValue('[name="drawingGrid"]', '1');
+    expect(document.querySelector<HTMLElement>('.profileDrawingStockBoreLabel')!.textContent).toBe('Stock bore D0.125 in');
+    expect(document.querySelector<HTMLInputElement>('[name="drawingDiameter"]')!.value).toBe('0.333');
+    expect(document.querySelector<HTMLInputElement>('[name="drawingLength"]')!.value).toBe('0.333');
+    expect(document.querySelector<HTMLInputElement>('[name="drawingSnap"]')!.value).toBe('0.01');
+    expect(document.querySelector<HTMLInputElement>('[name="drawingGrid"]')!.value).toBe('0.05');
+    expect(getProfileSizeHintTexts('horizontal')).toContain('0.333');
+    expect(Array.from(document.querySelectorAll('.profileDrawingDimensionField .settingHeading'))
+      .every(heading => heading.textContent!.endsWith('(in)'))).toBe(true);
+    setInputValue('[name="drawingSnap"]', '0.025');
+    setInputValue('[name="drawingGrid"]', '0.1');
     clickDialogButton('Inside');
     expect(document.querySelector<HTMLFormElement>('.profileDrawingDialog')!.checkValidity()).toBe(true);
+    clickDialogButton('Use lathecode');
+    expect(started).toEqual([source]);
+  });
+
+  it('resizes, snaps, and edits points in inches while exporting the correct physical dimensions', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container, {getCurrentLatheCodeText: () => 'UNITS IN\nSTOCK D1\nL1 D1'});
+    const started: string[] = [];
+    start.addEventListener('start', event => started.push((event as StartLatheCodeEvent).text));
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+    expect(document.querySelector<HTMLInputElement>('[name="drawingGrid"]')!.value).toBe('0.1');
+
+    setInputValue('[name="drawingDiameter"]', '1.25');
+    setInputValue('[name="drawingLength"]', '2');
+    setInputValue('[name="drawingSnap"]', '0.125');
+    setInputValue('[name="drawingGrid"]', '0.25');
+    expect(document.querySelectorAll('.profileDrawingGridLine')).toHaveLength(9);
+    expect(getProfileSizeHintTexts('horizontal')).toContain('2');
+    const dimensions = {lengthMm: 2 * 25.4, stockDiameterMm: 1.25 * 25.4};
+    dispatchProfileMouse(svg, 'mousedown', 0.62 * 25.4, 0.74 * 25.4, dimensions);
+    dispatchProfileMouse(window, 'mouseup', 0.62 * 25.4, 0.74 * 25.4, dimensions);
+    const pointZ = document.querySelector<HTMLInputElement>('[name="drawingPointZ"]')!;
+    const pointDiameter = document.querySelector<HTMLInputElement>('[name="drawingPointDiameter"]')!;
+    expect(pointZ.value).toBe('0.625');
+    expect(pointDiameter.value).toBe('0.75');
+    expect(pointZ.max).toBe('2');
+    expect(pointDiameter.max).toBe('1.25');
+
+    setInputValue('[name="drawingPointZ"]', '0.6875');
+    setInputValue('[name="drawingPointDiameter"]', '0.8125');
+    expect(pointZ.value).toBe('0.6875');
+    expect(pointDiameter.value).toBe('0.8125');
+    expect(getProfileSizeHintTexts('horizontal')).toContain('0.6875');
+    expect(getProfileSizeHintTexts('vertical')).toContain('0.21875');
+    clickDialogButton('Use lathecode');
+
+    expect(started).toHaveLength(1);
+    expect(started[0]).toContain('UNITS IN');
+    expect(started[0]).toContain('DE0.8125');
+    const result = new LatheCode(started[0]);
+    expect(result.getStock()!.diameter).toBeCloseTo(31.75, 10);
+    expect(result.getStock()!.length).toBeCloseTo(50.8, 10);
+  });
+
+  it('displays and edits chamfers and fillets in inches', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container, {getCurrentLatheCodeText: () => 'UNITS IN\nSTOCK D1\nL1 DS1 FI0.0625 DE1 CH0.03125'});
+    const started: string[] = [];
+    start.addEventListener('start', event => started.push((event as StartLatheCodeEvent).text));
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    clickDialogButton('Select');
+    dispatchProfileMouse(document.querySelector<SVGSVGElement>('.profileDrawingSvg')!, 'mousedown', 12.7, 25.4,
+      {lengthMm: 25.4, stockDiameterMm: 25.4});
+    expect(document.querySelector<HTMLInputElement>('[name="drawingSegmentStartFeatureSize"]')!.value).toBe('0.03125');
+    expect(document.querySelector<HTMLInputElement>('[name="drawingSegmentEndFeatureSize"]')!.value).toBe('0.0625');
+
+    document.querySelector<HTMLButtonElement>('.profileDrawingSegmentFeatureButton[data-endpoint="start"][data-feature="none"]')!.click();
+    document.querySelector<HTMLButtonElement>('.profileDrawingSegmentFeatureButton[data-endpoint="start"][data-feature="chamfer"]')!.click();
+    expect(document.querySelector<HTMLInputElement>('[name="drawingSegmentStartFeatureSize"]')!.value).toBe('0.01');
+    setInputValue('[name="drawingSegmentStartFeatureSize"]', '0.04');
+    setInputValue('[name="drawingSegmentEndFeatureSize"]', '0.08');
+    clickDialogButton('Use lathecode');
+
+    expect(started[0]).toContain('CH0.04');
+    expect(started[0]).toContain('FI0.08');
+    const definition = new LatheCode(started[0]).getOutsidePartProfileSegmentDefinitions()[0];
+    expect(definition.startFeature?.value).toBeCloseTo(0.08 * 25.4, 10);
+    expect(definition.endFeature?.value).toBeCloseTo(0.04 * 25.4, 10);
+  });
+
+  it('shows proposed feature corrections in inches', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container, {getCurrentLatheCodeText: () => 'UNITS IN\nSTOCK D1\nL2 DS1 FI0.04 DE1 CH0.04'});
+    const started: string[] = [];
+    start.addEventListener('start', event => started.push((event as StartLatheCodeEvent).text));
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    setInputValue('[name="drawingLength"]', '0.04');
+    const details = document.querySelector('.profileDrawingFeatureCorrections')!.textContent!;
+    expect(details).toContain('0.04 in');
+    expect(details).not.toContain('mm');
+    expect(document.querySelector<HTMLButtonElement>('.profileDrawingAcceptButton')!.disabled).toBe(true);
+    clickDialogButton('Apply listed feature corrections');
+    clickDialogButton('Use lathecode');
+    expect(started).toHaveLength(1);
+    expect(new LatheCode(started[0]).getStock()!.length).toBeCloseTo(0.04 * 25.4, 10);
+  });
+
+  it('restores displayed units through reset, undo, redo, and snapshots', () => {
+    const source = 'UNITS IN\nSTOCK D1\nL0.7 D0.75';
+    const container = createStartContainer();
+    const start = new StartPanel(container, {getCurrentLatheCodeText: () => source});
+    const started: string[] = [];
+    start.addEventListener('start', event => started.push((event as StartLatheCodeEvent).text));
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const length = document.querySelector<HTMLInputElement>('[name="drawingLength"]')!;
+    const snapshotSelect = document.querySelector<HTMLSelectElement>('.profileDrawingSnapshotSelect')!;
+    const inchSnapshot = snapshotSelect.value;
+    const expectLength = (value: string, unit: string) => {
+      expect(length.value).toBe(value);
+      expect(length.closest('label')!.querySelector('.settingHeading')!.textContent).toBe(`Length (${unit})`);
+    };
+    expectLength('0.7', 'in');
+    clickDialogButton('Reset');
+    expectLength('50', 'mm');
+    clickDialogButton('Undo');
+    expectLength('0.7', 'in');
+    clickDialogButton('Redo');
+    expectLength('50', 'mm');
+    snapshotSelect.value = inchSnapshot;
+    snapshotSelect.dispatchEvent(new Event('change', {bubbles: true}));
+    expectLength('0.7', 'in');
+    expect(document.querySelector('.profileDrawingDialog .settingGuide')!.textContent).toContain('dimensions are in inches.');
     clickDialogButton('Use lathecode');
     expect(started).toEqual([source]);
   });

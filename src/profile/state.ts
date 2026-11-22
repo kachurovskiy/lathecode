@@ -2,6 +2,7 @@ import { LatheCode, Segment, type ProfileSegmentDefinition } from '../common/lat
 import { getProfileEndpointFeatureContext, getProfileEndpointFeatureSizeLimit } from './edgefeatures.ts';
 import { DEFAULT_DIAMETER_MM, DEFAULT_GRID_MM, DEFAULT_LENGTH_MM, DEFAULT_SNAP_MM, GEOMETRY_EPSILON, HISTORY_LIMIT, IMPORT_EPSILON, MIN_SEGMENT_LENGTH_MM, PROFILE_SIDES, type DrawingHistory, type DrawingState, type ProfileDraft, type ProfilePoint, type ProfileSide, type SegmentEdgeFeature, type SegmentEdgeFeatures, type SegmentFeatureEndpoint, type SegmentSelection, type SegmentTool, type PointSelection, } from './types.ts';
 import { getDefaultGridMm, hasSegmentLength, sameSplineSpan } from './geometry.ts';
+import { getDefaultDrawingSnapMm, getDrawingUnitMm } from './units.ts';
 export function createInitialState(initialText?: string | null): DrawingState {
   if (!initialText?.trim()) return createDefaultState();
   new LatheCode(initialText); // Surface invalid source instead of silently replacing it.
@@ -185,7 +186,7 @@ export function tryCreateStateFromLatheCode(text: string): DrawingState | null {
       },
       diameterMm,
       lengthMm,
-      snapMm: DEFAULT_SNAP_MM,
+      snapMm: getDefaultDrawingSnapMm(latheCode.getUnitsMultiplier()),
       gridMm: getDefaultGridMm(lengthMm, diameterMm),
       profiles: {
         outside: outsideDraft,
@@ -196,6 +197,7 @@ export function tryCreateStateFromLatheCode(text: string): DrawingState | null {
       selection: { side: activeSide, index: 1 },
       segmentSelection: null,
     };
+    state.gridMm = getDefaultGridMm(lengthMm, diameterMm, getDrawingUnitMm(state));
     selectDefaultPoint(state, activeSide);
     return state;
   }
@@ -580,17 +582,18 @@ export function getSelectedSegmentEndpointContinuousCornerLimit(state: DrawingSt
     : 0;
 }
 export function getDefaultSegmentFeatureSize(state: DrawingState, endpoint: SegmentFeatureEndpoint): number {
+  const defaultSize = getDefaultDrawingSnapMm(getDrawingUnitMm(state));
   const selection = state.segmentSelection;
   if (!selection)
-    return 1;
+    return defaultSize;
   const profile = state.profiles[selection.side];
   const start = profile.points[selection.index];
   const end = profile.points[selection.index + 1];
   if (!start || !end)
-    return 1;
+    return defaultSize;
   const segmentLength = Math.abs(end.z - start.z);
   const edgeLimit = getSelectedSegmentEndpointFeatureLimit(state, selection, endpoint);
-  const preferred = state.snapMm > 0 ? state.snapMm : 1;
+  const preferred = state.snapMm > 0 ? state.snapMm : defaultSize;
   const limit = Math.min(segmentLength / 4, edgeLimit / 2);
   if (!Number.isFinite(limit) || limit <= GEOMETRY_EPSILON)
     return preferred;

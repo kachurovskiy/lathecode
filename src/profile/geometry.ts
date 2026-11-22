@@ -16,9 +16,9 @@ export function getGridTicks(limit: number, step: number): number[] {
 export function roundGridTick(value: number): number {
   return Math.round(value * 1e9) / 1e9;
 }
-export function getDefaultGridMm(lengthMm: number, diameterMm: number): number {
+export function getDefaultGridMm(lengthMm: number, diameterMm: number, unitMm = 1): number {
   const span = Math.max(lengthMm, diameterMm / 2, DEFAULT_GRID_MM);
-  return getReasonableGridStep(span / 10);
+  return getReasonableGridStep(span / 10 / unitMm) * unitMm;
 }
 export function getReasonableGridStep(rough: number): number {
   const power = 10 ** Math.floor(Math.log10(rough || 1));

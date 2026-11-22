@@ -1,7 +1,8 @@
-import { appendSvg, clampNumber, formatNumber, formatSvgNumber } from './dom.ts';
+import { appendSvg, clampNumber, formatSvgNumber } from './dom.ts';
 import { GEOMETRY_EPSILON, ORIENTATION_ICON_HALF_LENGTH_PX, ORIENTATION_ICON_OFFSET_PX, PADDING_RIGHT, POINT_RADIUS_PX, PROFILE_SIDES, SELECTED_POINT_RADIUS_PX, SIZE_HINT_GUIDE_OFFSET_PX, SIZE_HINT_LABEL_OFFSET_PX, SIZE_HINT_SCREEN_PADDING_PX, SIZE_HINT_VERTICAL_LABEL_GAP_PX, VIEW_WIDTH, type DrawingState, type ProfilePoint, type ProfileSide, type SvgScreenMetrics, } from './types.ts';
 import { getGridTicks, getPlotBounds, getProfileSamplePoints, getSelectableSegmentRanges, isSameRadius, isSameZ, profileToScreen, getSvgScreenMetrics, } from './geometry.ts';
 import { hasDrawableProfile, isProfileVisible } from './state.ts';
+import { formatDrawingLength, getDrawingUnitLabel } from './units.ts';
 export function renderDrawing(svg: SVGSVGElement, state: DrawingState, freehandStroke: readonly ProfilePoint[] = []): void {
   svg.replaceChildren();
   const metrics = getSvgScreenMetrics(svg);
@@ -75,7 +76,7 @@ export function renderDrawing(svg: SVGSVGElement, state: DrawingState, freehandS
     const label = appendSvg(svg, 'text', {
       x: plot.left + 6, y: plot.axisY - 5, class: 'profileDrawingStockBoreLabel',
     });
-    label.textContent = `Stock bore D${formatNumber(stockBoreRadius * 2)} mm`;
+    label.textContent = `Stock bore D${formatDrawingLength(state, stockBoreRadius * 2)} ${getDrawingUnitLabel(state)}`;
   }
   for (const side of PROFILE_SIDES) {
     if (!isProfileVisible(state, side))
@@ -143,14 +144,14 @@ export function appendSegmentSizeHints(svg: SVGSVGElement, state: DrawingState, 
     const startScreen = profileToScreen(state, start);
     const endScreen = profileToScreen(state, end);
     if (radialLength <= GEOMETRY_EPSILON) {
-      appendHorizontalSizeHint(svg, startScreen, endScreen, zLength, metrics);
+      appendHorizontalSizeHint(svg, startScreen, endScreen, formatDrawingLength(state, zLength), metrics);
     }
     else if (zLength <= GEOMETRY_EPSILON) {
       const centerX = (startScreen.x + endScreen.x) / 2;
-      appendVerticalSizeHint(svg, startScreen, endScreen, radialLength, metrics, getOppositeSide(getVerticalHintSide(centerX)));
+      appendVerticalSizeHint(svg, startScreen, endScreen, formatDrawingLength(state, radialLength), metrics, getOppositeSide(getVerticalHintSide(centerX)));
     }
     else {
-      appendProjectedSizeHints(svg, startScreen, endScreen, zLength, radialLength, getProfilePolylineLength(range.points), metrics, range.tool === 'line');
+      appendProjectedSizeHints(svg, startScreen, endScreen, formatDrawingLength(state, zLength), formatDrawingLength(state, radialLength), formatDrawingLength(state, getProfilePolylineLength(range.points)), metrics, range.tool === 'line');
     }
   }
 }
@@ -160,7 +161,7 @@ export function appendHorizontalSizeHint(svg: SVGSVGElement, start: {
 }, end: {
   x: number;
   y: number;
-}, length: number, metrics: SvgScreenMetrics): void {
+}, length: string, metrics: SvgScreenMetrics): void {
   appendSizeHintText(svg, {
     x: (start.x + end.x) / 2,
     y: Math.max(start.y, end.y) + metrics.px(SIZE_HINT_LABEL_OFFSET_PX),
@@ -172,7 +173,7 @@ export function appendVerticalSizeHint(svg: SVGSVGElement, start: {
 }, end: {
   x: number;
   y: number;
-}, length: number, metrics: SvgScreenMetrics, preferredSide?: -1 | 1): void {
+}, length: string, metrics: SvgScreenMetrics, preferredSide?: -1 | 1): void {
   const centerX = (start.x + end.x) / 2;
   const side = preferredSide ?? getVerticalHintSide(centerX);
   appendSizeHintText(svg, {
@@ -186,7 +187,7 @@ export function appendProjectedSizeHints(svg: SVGSVGElement, start: {
 }, end: {
   x: number;
   y: number;
-}, zLength: number, radialLength: number, segmentLength: number, metrics: SvgScreenMetrics, showDiagonalLength: boolean): void {
+}, zLength: string, radialLength: string, segmentLength: string, metrics: SvgScreenMetrics, showDiagonalLength: boolean): void {
   const corner = { x: end.x, y: start.y };
   appendSvg(svg, 'line', {
     x1: formatSvgNumber(start.x),
@@ -216,7 +217,7 @@ export function appendDiagonalSizeHint(svg: SVGSVGElement, start: {
 }, corner: {
   x: number;
   y: number;
-}, length: number, metrics: SvgScreenMetrics): void {
+}, length: string, metrics: SvgScreenMetrics): void {
   const center = {
     x: (start.x + end.x) / 2,
     y: (start.y + end.y) / 2,
@@ -241,7 +242,7 @@ export function appendDiagonalSizeHint(svg: SVGSVGElement, start: {
 export function appendSizeHintText(svg: SVGSVGElement, point: {
   x: number;
   y: number;
-}, length: number, variant: string, textAnchor: 'start' | 'middle' | 'end', metrics: SvgScreenMetrics): void {
+}, length: string, variant: string, textAnchor: 'start' | 'middle' | 'end', metrics: SvgScreenMetrics): void {
   const padding = metrics.px(SIZE_HINT_SCREEN_PADDING_PX);
   const text = appendSvg(svg, 'text', {
     x: formatSvgNumber(clampNumber(point.x, metrics.viewBox.x + padding, metrics.viewBox.x + metrics.viewBox.width - padding)),
@@ -250,7 +251,7 @@ export function appendSizeHintText(svg: SVGSVGElement, point: {
     'text-anchor': textAnchor,
     'dominant-baseline': 'middle',
   });
-  text.textContent = formatNumber(length);
+  text.textContent = length;
 }
 export function getProfilePolylineLength(points: readonly ProfilePoint[]): number {
   let length = 0;

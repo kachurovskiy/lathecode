@@ -7,6 +7,7 @@ import { findNearestPointSelection, findNearestSegmentSelection, getDrawingViewB
 import { canAddPointNextToPoint, canRemoveSelectedPoint, canSelectedSegmentEndpointHaveFeature, canSplitSegmentAtProfilePoint, cloneDrawingState, cloneProfileDraft, createInitialState, ensureProfileEnabled, getDefaultSegmentFeatureSize, getProfileSideLabel, getSelectedPoint, getSelectedSegmentFeature, getSelectedSegmentFeatureSize, getSelectedSegmentTool, insertPoint, isInternalSplineControlPoint, midpointProfilePoint, recordUndoState, recordUndoStateIfChanged, redoDrawingState, removeSelectedPoint, resetDrawingState, resizeDrawing, restoreDrawingState, selectDefaultPoint, setSelectedSegmentFeature, setSelectedSegmentTool, tryCreateStateFromLatheCodeForDrawing, undoDrawingState, updatePointPosition, } from './state.ts';
 import { appendFreehandStrokePoint, createFreehandCandidates, createFreehandPartPreview, createFreehandProfilePreview, } from './freehand.ts';
 import { renderDrawing } from './render.ts';
+import { formatDrawingInput, getDrawingUnitLabel, getDrawingUnitMm } from './units.ts';
 import { applyDrawingFeatureCorrections, buildLatheCodeFromDrawing, buildOutgoingLatheCodeFromDrawing, formatFeatureCorrection, getDrawingFeatureCorrections, isEdgeFeatureValidationError, type DrawingFeatureCorrection } from './serialization.ts';
 
 type ProfileDrawingSnapshot = {
@@ -55,16 +56,14 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   const controls = document.createElement('div');
   controls.className = 'profileDrawingControls';
   form.appendChild(controls);
-  if (state.source) {
-    const guide = document.createElement('p');
-    guide.className = 'settingGuide';
-    guide.textContent = 'Drawing dimensions are in mm. The original units, stock bore, machining setup, and comments are retained. Overall resizing scales the profile; endpoint features must still fit.';
-    form.appendChild(guide);
-  }
-  const diameterField = createNumberField('Diameter', 'drawingDiameter', state.diameterMm, {min: 0, step: 'any'});
-  const lengthField = createNumberField('Length', 'drawingLength', state.lengthMm, {min: 0, step: 'any'});
-  const snapField = createNumberField('Snap', 'drawingSnap', state.snapMm, { min: 0, step: 'any' });
-  const gridField = createNumberField('Grid', 'drawingGrid', state.gridMm, { min: 0, step: 'any' });
+  const guide = document.createElement('p');
+  guide.className = 'settingGuide';
+  form.appendChild(guide);
+  const dimensionFields: {control: FieldControl; label: string}[] = [];
+  const diameterField = createDimensionField('Diameter', 'drawingDiameter', state.diameterMm);
+  const lengthField = createDimensionField('Length', 'drawingLength', state.lengthMm);
+  const snapField = createDimensionField('Snap', 'drawingSnap', state.snapMm);
+  const gridField = createDimensionField('Grid', 'drawingGrid', state.gridMm);
   controls.append(diameterField.field, lengthField.field, snapField.field, gridField.field);
   const profileBar = createSegmentedGroup('profileDrawingProfileTools', 'Profile side');
   controls.appendChild(profileBar);
@@ -157,8 +156,8 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   pointEditor.className = 'profileDrawingPointEditor';
   const pointFields = document.createElement('div');
   pointFields.className = 'profileDrawingPointFields';
-  const pointZField = createNumberField('Z', 'drawingPointZ', 0, { min: 0, step: 'any' });
-  const pointDiameterField = createNumberField('Diameter', 'drawingPointDiameter', 0, { min: 0, step: 'any' });
+  const pointZField = createDimensionField('Z', 'drawingPointZ', 0);
+  const pointDiameterField = createDimensionField('Diameter', 'drawingPointDiameter', 0);
   pointFields.append(pointZField.field, pointDiameterField.field);
   pointEditor.appendChild(pointFields);
   const deletePointButton = createButton('Delete point', 'setupSegmentButton profileDrawingDeletePointButton');
@@ -205,7 +204,7 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       button.appendChild(createSegmentFeatureIcon(feature.value));
       button.addEventListener('click', () => {
         const before = cloneDrawingState(state);
-        const nextFeature = feature.value === 'none' ? null : { kind: feature.value, size: getSelectedSegmentFeatureSize(state, endpoint) ?? readNonNegativeNumber(segmentFeatureSizeFields.get(endpoint)!.input, getDefaultSegmentFeatureSize(state, endpoint)), };
+        const nextFeature = feature.value === 'none' ? null : { kind: feature.value, size: getSelectedSegmentFeatureSize(state, endpoint) ?? readDimension(segmentFeatureSizeFields.get(endpoint)!.input, getDefaultSegmentFeatureSize(state, endpoint), readNonNegativeNumber), };
         if (!setSelectedSegmentFeature(state, endpoint, nextFeature))
           return;
         clearFreehandWork();
@@ -216,13 +215,13 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       featureBar.appendChild(button);
     }
     row.appendChild(featureBar);
-    const sizeField = createNumberField('Size', `drawingSegment${capitalize(endpoint)}FeatureSize`, 1, { min: 0, step: 'any' });
+    const sizeField = createDimensionField('Size', `drawingSegment${capitalize(endpoint)}FeatureSize`, 1);
     sizeField.input.addEventListener('input', () => {
       const current = getSelectedSegmentFeature(state, endpoint);
       if (!current)
         return;
       const before = cloneDrawingState(state);
-      const size = readNonNegativeNumber(sizeField.input, current.size);
+      const size = readDimension(sizeField.input, current.size, readNonNegativeNumber);
       if (!setSelectedSegmentFeature(state, endpoint, { ...current, size }))
         return;
       clearFreehandWork();
@@ -266,11 +265,11 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   form.append(correctionDetails, correctionButton);
   const handleDimensionInput = (event: Event) => {
     const before = cloneDrawingState(state);
-    const nextDiameter = event.target === diameterField.input ? readPositiveNumber(diameterField.input, state.diameterMm) : state.diameterMm;
-    const nextLength = event.target === lengthField.input ? readPositiveNumber(lengthField.input, state.lengthMm) : state.lengthMm;
+    const nextDiameter = event.target === diameterField.input ? readDimension(diameterField.input, state.diameterMm, readPositiveNumber) : state.diameterMm;
+    const nextLength = event.target === lengthField.input ? readDimension(lengthField.input, state.lengthMm, readPositiveNumber) : state.lengthMm;
     const dimensionsChanged = Math.abs(nextDiameter - state.diameterMm) > GEOMETRY_EPSILON || Math.abs(nextLength - state.lengthMm) > GEOMETRY_EPSILON;
-    state.snapMm = readNonNegativeNumber(snapField.input, state.snapMm);
-    state.gridMm = readPositiveNumber(gridField.input, state.gridMm);
+    if (event.target === snapField.input) state.snapMm = readDimension(snapField.input, state.snapMm, readNonNegativeNumber);
+    if (event.target === gridField.input) state.gridMm = readDimension(gridField.input, state.gridMm, readPositiveNumber);
     resizeDrawing(state, nextDiameter, nextLength);
     forceImmediatePreviewUpdate = forceImmediatePreviewUpdate || dimensionsChanged;
     clearFreehandWork();
@@ -288,8 +287,8 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     if (!point)
       return;
     const before = cloneDrawingState(state);
-    const z = event.target === pointZField.input ? readFiniteNumber(pointZField.input, point.z) : point.z;
-    const diameter = event.target === pointDiameterField.input ? readFiniteNumber(pointDiameterField.input, point.radius * 2) : point.radius * 2;
+    const z = event.target === pointZField.input ? readDimension(pointZField.input, point.z, readFiniteNumber) : point.z;
+    const diameter = event.target === pointDiameterField.input ? readDimension(pointDiameterField.input, point.radius * 2, readFiniteNumber) : point.radius * 2;
     updatePointPosition(state, state.selection, { z, radius: diameter / 2 }, false);
     clearFreehandWork();
     recordUndoStateIfChanged(history, before, state);
@@ -514,6 +513,12 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   dialog.tabIndex = -1;
   dialog.focus();
   function render() {
+    const unit = getDrawingUnitLabel(state);
+    for (const {control, label} of dimensionFields) {
+      control.field.querySelector('.settingHeading')!.textContent = `${label} (${unit})`;
+    }
+    guide.hidden = !state.source;
+    guide.textContent = `Drawing dimensions are in ${unit === 'in' ? 'inches' : 'millimetres'}. The original units, stock bore, machining setup, and comments are retained. Overall resizing scales the profile; endpoint features must still fit.`;
     updateWorkspaceLayout();
     renderDrawing(svg, state, freehandStroke ?? []);
     let text: string | null = null;
@@ -527,7 +532,7 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
         + (previewText ? '\nThe 3D preview shows the last valid profile.' : '');
       if (isEdgeFeatureValidationError(caught)) pendingCorrections = getDrawingFeatureCorrections(state);
     }
-    correctionDetails.textContent = pendingCorrections.map(formatFeatureCorrection).join('\n');
+    correctionDetails.textContent = pendingCorrections.map(correction => formatFeatureCorrection(correction, state)).join('\n');
     correctionDetails.hidden = correctionButton.hidden = !pendingCorrections.length;
     acceptButton.disabled = text === null;
     updatePointEditor();
@@ -681,12 +686,12 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     const profile = state.profiles[state.selection.side];
     const zLocked = isInternalSplineControlPoint(profile, state.selection.index);
     updatingPointFields = true;
-    pointZField.input.max = String(state.lengthMm);
+    pointZField.input.max = formatDrawingInput(state, state.lengthMm);
     pointZField.input.disabled = zLocked;
     pointZField.input.title = zLocked ? 'Spline control Z is set by the spline span' : '';
-    pointDiameterField.input.max = isInternalSplineControlPoint(profile, state.selection.index) ? '' : String(state.diameterMm);
-    pointZField.input.value = String(point.z);
-    pointDiameterField.input.value = String(point.radius * 2);
+    pointDiameterField.input.max = isInternalSplineControlPoint(profile, state.selection.index) ? '' : formatDrawingInput(state, state.diameterMm);
+    pointZField.input.value = formatDrawingInput(state, point.z);
+    pointDiameterField.input.value = formatDrawingInput(state, point.radius * 2);
     updatingPointFields = false;
     deletePointButton.disabled = !canRemoveSelectedPoint(state);
   }
@@ -711,7 +716,7 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       }
       const sizeField = segmentFeatureSizeFields.get(endpoint)!;
       sizeField.input.disabled = !endpointCanHaveFeature || !feature;
-      sizeField.input.value = String(feature?.size ?? getDefaultSegmentFeatureSize(state, endpoint));
+      sizeField.input.value = formatDrawingInput(state, feature?.size ?? getDefaultSegmentFeatureSize(state, endpoint));
     }
   }
   function applyFreehandCandidate(candidate: FreehandCandidate) {
@@ -979,11 +984,23 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     recordUndoStateIfChanged(history, before, state);
     render();
   }
+  function createDimensionField(label: string, name: string, valueMm: number): FieldControl {
+    const control = createNumberField(`${label} (${getDrawingUnitLabel(state)})`, name, 0, {min: 0, step: 'any'});
+    control.input.value = formatDrawingInput(state, valueMm);
+    dimensionFields.push({control, label});
+    return control;
+  }
+  function readDimension(input: HTMLInputElement, fallbackMm: number, readNumber: typeof readFiniteNumber): number {
+    const value = readNumber(input, NaN);
+    if (!Number.isFinite(value) || value === Number(formatDrawingInput(state, fallbackMm))) return fallbackMm;
+    const valueMm = value * getDrawingUnitMm(state);
+    return Number.isFinite(valueMm) ? valueMm : fallbackMm;
+  }
   function syncDimensionInputs() {
-    diameterField.input.value = String(state.diameterMm);
-    lengthField.input.value = String(state.lengthMm);
-    snapField.input.value = String(state.snapMm);
-    gridField.input.value = String(state.gridMm);
+    diameterField.input.value = formatDrawingInput(state, state.diameterMm);
+    lengthField.input.value = formatDrawingInput(state, state.lengthMm);
+    snapField.input.value = formatDrawingInput(state, state.snapMm);
+    gridField.input.value = formatDrawingInput(state, state.gridMm);
   }
   function recordCurrentSnapshot(): string {
     const text = getValidSnapshotText();
