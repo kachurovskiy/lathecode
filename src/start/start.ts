@@ -188,7 +188,7 @@ export class StartPanel extends EventTarget {
 
     const fileGuide = document.createElement('span');
     fileGuide.className = 'settingGuide';
-    fileGuide.textContent = 'Upload or paste local PNG, JPEG, WebP, or GIF technical drawing images.';
+    fileGuide.textContent = 'Upload or paste local PNG, JPEG, WebP, or GIF technical drawing images. For dense drawings, include the full sheet and close-up crops of small dimensions or section details. Review dimensions and any ; ASSUMPTION comments in the generated lathecode before planning.';
     fileField.appendChild(fileGuide);
     grid.appendChild(fileField);
 

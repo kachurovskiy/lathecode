@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LatheCode } from '../common/lathecode';
-import { createLatheCodeFromPrompt, modifyLatheCodeWithPrompt } from './openrouter';
+import { createLatheCodeFromDrawing, createLatheCodeFromPrompt, modifyLatheCodeWithPrompt } from './openrouter';
 
 describe('OpenRouter lathecode generation', () => {
   beforeEach(() => {
@@ -212,7 +212,7 @@ L80 DS0 DE0 BSPLINE D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 
     );
   });
 
-  it('requires provider routing that does not retain user inputs', async () => {
+  it('keeps data collection and ZDR routing filters on requests', async () => {
     const fetchMock = mockOpenRouterResponses([
       'STOCK D10\nL2 R3',
     ]);
@@ -225,6 +225,111 @@ L80 DS0 DE0 BSPLINE D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 D50 
       data_collection: 'deny',
       zdr: true,
     });
+  });
+
+  it('uses the recommended text model and reserves budget for reasoning', async () => {
+    const fetchMock = mockOpenRouterResponses(['STOCK D10\nL2 R3']);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createLatheCodeFromPrompt('simple cylinder');
+
+    expect(getOpenRouterRequest(fetchMock)).toMatchObject({
+      model: 'deepseek/deepseek-v4.1-flash-1017',
+      temperature: 0.2,
+      max_completion_tokens: 16384,
+      reasoning: {effort: 'medium'},
+    });
+  });
+
+  it('sends full drawings and detail crops with Terra parameters throughout repairs', async () => {
+    const fetchMock = mockOpenRouterResponses(['STOCK D10\nL2 D10 BAD', 'STOCK D10\nL2 D6']);
+    vi.stubGlobal('fetch', fetchMock);
+    const images = [
+      {name: 'sheet.png', dataUrl: 'data:image/png;base64,c2hlZXQ='},
+      {name: 'detail.png', dataUrl: 'data:image/png;base64,ZGV0YWls'},
+    ];
+
+    await createLatheCodeFromDrawing(images, 'All dimensions in mm');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (let index = 0; index < 2; index++) {
+      const request = getOpenRouterRequest(fetchMock, index);
+      expect(request).toMatchObject({
+        model: 'openai/gpt-6.1-terra',
+        max_completion_tokens: 16384,
+        reasoning: {effort: 'medium'},
+        provider: {data_collection: 'deny', zdr: true},
+      });
+      expect(request).not.toHaveProperty('temperature');
+      expect(request.messages[1].content).toEqual([
+        {type: 'text', text: expect.stringContaining('All dimensions in mm')},
+        ...images.map(image => ({type: 'image_url', image_url: {url: image.dataUrl}})),
+      ]);
+    }
+  });
+
+  it('uses Terra parameters when selected for editor edits with a routing suffix', async () => {
+    localStorage.setItem('openRouterModel', 'openai/gpt-6.1-terra:nitro');
+    const fetchMock = mockOpenRouterResponses(['STOCK D10\nL3 R3']);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await modifyLatheCodeWithPrompt('STOCK D10\nL2 R3', 'increase length to 3 mm');
+
+    expect(getOpenRouterRequest(fetchMock)).toMatchObject({
+      model: 'openai/gpt-6.1-terra:nitro',
+      reasoning: {effort: 'medium'},
+    });
+    expect(getOpenRouterRequest(fetchMock)).not.toHaveProperty('temperature');
+  });
+
+  it('preserves custom model request behavior', async () => {
+    localStorage.setItem('openRouterModel', 'custom/text-model');
+    const fetchMock = mockOpenRouterResponses(['STOCK D10\nL2 R3']);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createLatheCodeFromPrompt('simple cylinder');
+
+    expect(getOpenRouterRequest(fetchMock)).toMatchObject({
+      model: 'custom/text-model', temperature: 0.2, max_completion_tokens: 4096,
+    });
+    expect(getOpenRouterRequest(fetchMock)).not.toHaveProperty('reasoning');
+  });
+
+  it.each([
+    {finish_reason: 'length'},
+    {native_finish_reason: 'length'},
+    {finish_reason: 'stop', native_finish_reason: 'max_tokens'},
+  ])('rejects truncated output even when the partial profile parses: %j', async finish => {
+    const fetchMock = mockOpenRouterResponses([{content: 'STOCK D10\nL2 R3', ...finish}]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createLatheCodeFromPrompt('stepped shaft with a bore')).rejects.toThrow(
+      /incomplete lathecode.*completion token limit.*partial profile was not accepted/s,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects malformed truncated output without spending syntax correction retries', async () => {
+    const fetchMock = mockOpenRouterResponses([{content: 'STOCK D10\nL2 DS', finish_reason: 'length'}]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createLatheCodeFromPrompt('stepped shaft')).rejects.toThrow('incomplete lathecode');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([404, 200])('explains unavailable private routes without relaxing filters (HTTP %i)', async status => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: status === 200,
+      status,
+      statusText: 'Not Found',
+      json: async () => ({error: {code: 404, message: 'No endpoints found matching your data policy'}}),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createLatheCodeFromPrompt('simple cylinder')).rejects.toThrow(
+      /no available endpoint for deepseek\/deepseek-v4.1-flash-1017.*privacy.*filters have not been relaxed.*No endpoints found/s,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('normalizes commented setup directives and lone DS diameter lines', async () => {
@@ -492,8 +597,8 @@ function mockOpenRouterChoice(content: MockOpenRouterContent) {
   };
 }
 
-function getOpenRouterRequest(fetchMock: ReturnType<typeof mockOpenRouterResponses>) {
-  const body = fetchMock.mock.calls[0]?.[1]?.body;
+function getOpenRouterRequest(fetchMock: ReturnType<typeof mockOpenRouterResponses>, index = 0) {
+  const body = fetchMock.mock.calls[index]?.[1]?.body;
   if (typeof body !== 'string') throw new Error('OpenRouter request body not found');
   return JSON.parse(body) as {
     messages: {content: string}[],

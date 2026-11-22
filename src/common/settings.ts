@@ -1,8 +1,10 @@
+import { OPENROUTER_API_KEY_PRIVACY } from '../llm/privacy.ts';
+
 export const PX_PER_MM_OPTIONS = [10, 50, 100, 250, 500, 750, 1000] as const;
 export const PX_PER_MM_STORAGE_KEY = 'pxPerMm';
 export const PLANNER_ENGINE_OPTIONS = ['pixel', 'vector'] as const;
-export const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-v4-pro';
-export const DEFAULT_OPENROUTER_VISION_MODEL = 'google/gemini-3.1-flash-lite-preview';
+export const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-v4.1-flash-1017';
+export const DEFAULT_OPENROUTER_VISION_MODEL = 'openai/gpt-6.1-terra';
 
 export type PlannerEngine = typeof PLANNER_ENGINE_OPTIONS[number];
 
@@ -776,7 +778,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
   {
     id: 'llm',
     label: 'LLM',
-    guidance: 'OpenRouter settings used by prompt, drawing, and editor modification actions. LLM actions send only the data needed for that action from this browser to OpenRouter.',
+    guidance: 'OpenRouter settings used by prompt, drawing, and editor modification actions. Saved model choices are kept. Use recommended models to update both model fields, then save settings.',
     definitions: [
       {
         key: 'openRouterApiKey',
@@ -787,7 +789,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
         inputType: 'password',
         placeholder: 'sk-or-...',
         allowEmpty: true,
-        guidance: 'Stored locally in this browser. LLM requests use OpenRouter provider filters that deny data-collecting and non-ZDR endpoints.',
+        guidance: OPENROUTER_API_KEY_PRIVACY,
       },
       {
         key: 'openRouterModel',
@@ -805,7 +807,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
         storageKey: 'openRouterVisionModel',
         defaultValue: DEFAULT_APP_SETTINGS.openRouterVisionModel,
         placeholder: DEFAULT_OPENROUTER_VISION_MODEL,
-        guidance: 'Model used for technical drawing image uploads. DeepSeek V3.2 is text-only on OpenRouter, so image input needs a vision-capable model.',
+        guidance: 'Model used for technical drawing uploads. Choose a model that accepts images.',
       },
     ],
   },

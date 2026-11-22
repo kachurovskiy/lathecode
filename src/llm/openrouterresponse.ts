@@ -5,6 +5,7 @@ const OPENROUTER_RESPONSE_EXCERPT_LENGTH = 800;
 export type OpenRouterResponse = {
   choices?: OpenRouterChoice[],
   error?: {
+    code?: number,
     message?: string,
   },
 };
@@ -38,14 +39,30 @@ export function formatNoOpenRouterContentError(choice: OpenRouterChoice | undefi
   if (hasOpenRouterReasoning(choice.message)) {
     fields.push('The provider returned reasoning text, but message.content was empty, so there was no lathecode to parse.');
   }
-  if (finishReason === 'length') {
-    fields.push('The response hit the completion token limit before producing final lathecode. Try again or choose a model/settings combination that emits final text with less reasoning.');
+  if (isOpenRouterResponseTruncated(choice)) {
+    fields.push('The response hit the completion token limit before producing final lathecode. Reasoning and final text share this budget. Try a simpler request or choose a different model in Settings.');
   }
   const refusal = extractRefusalText(choice.message?.refusal);
   if (refusal) fields.push(`Refusal: ${truncateText(refusal, 240)}`);
 
   const excerpt = extractOpenRouterChoiceExcerpt(choice);
   if (excerpt) fields.push('', 'Model response excerpt:', truncateText(excerpt, OPENROUTER_RESPONSE_EXCERPT_LENGTH));
+  return fields.join('\n');
+}
+
+export function isOpenRouterResponseTruncated(choice: OpenRouterChoice | undefined): boolean {
+  return choice?.finish_reason === 'length'
+    || choice?.native_finish_reason === 'length'
+    || choice?.native_finish_reason === 'max_tokens';
+}
+
+export function formatTruncatedOpenRouterContentError(choice: OpenRouterChoice | undefined): string {
+  const fields = [
+    'OpenRouter returned incomplete lathecode because it reached the completion token limit.',
+    'Reasoning and final text share this budget. The partial profile was not accepted. Try a simpler request or choose a different model in Settings.',
+  ];
+  const text = extractAssistantText(choice?.message?.content);
+  if (text) fields.push('', 'Incomplete response excerpt:', truncateText(text, OPENROUTER_RESPONSE_EXCERPT_LENGTH));
   return fields.join('\n');
 }
 

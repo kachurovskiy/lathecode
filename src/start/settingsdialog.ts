@@ -1,4 +1,5 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
+import { createOpenRouterPrivacyLink } from '../llm/privacy.ts';
 import {
   APP_SETTING_DEFINITIONS,
   APP_SETTING_SECTIONS,
@@ -38,6 +39,22 @@ export function openSettingsDialog(onSave?: () => void) {
 
     for (const definition of sectionDefinition.definitions) {
       grid.appendChild(createSettingsField(definition, currentSettings));
+    }
+
+    if (sectionDefinition.id === 'llm') {
+      const modelActions = document.createElement('div');
+      modelActions.className = 'settingsModelActions';
+      const recommendedButton = document.createElement('button');
+      recommendedButton.type = 'button';
+      recommendedButton.textContent = 'Use recommended models';
+      recommendedButton.addEventListener('click', () => {
+        for (const key of ['openRouterModel', 'openRouterVisionModel'] as const) {
+          const input = form.elements.namedItem(key) as HTMLInputElement;
+          input.value = DEFAULT_APP_SETTINGS[key];
+        }
+      });
+      modelActions.append(recommendedButton, createOpenRouterPrivacyLink());
+      section.appendChild(modelActions);
     }
 
     form.appendChild(section);

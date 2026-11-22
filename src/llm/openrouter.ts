@@ -13,6 +13,8 @@ import {
 import {
   extractAssistantText,
   formatNoOpenRouterContentError,
+  formatTruncatedOpenRouterContentError,
+  isOpenRouterResponseTruncated,
   type OpenRouterResponse,
 } from './openrouterresponse.ts';
 
@@ -86,7 +88,7 @@ export async function createLatheCodeFromDrawing(images: readonly TechnicalDrawi
       type: 'text',
       text: `Analyze the uploaded technical drawing image files and create a complete lathecode part.
 
-Use visible dimensions as authoritative. If dimensions or units are missing, infer a practical turned profile, use MM, and add concise ; ASSUMPTION comments. Convert the final part profile to lathecode, not G-code.
+Use visible dimensions as authoritative, preserving decimal points and diameter/radius symbols. The images may include a full drawing and close-up crops of the same features; use the crops to read details, not as additional parts. If dimensions or units are missing or unreadable, infer a practical turned profile and use MM when units are unknown. List every inferred dimension, its feature, value, and unit in ; ASSUMPTION comments at the top for review. Never describe an inferred value as a measured dimension. Convert the final part profile to lathecode, not G-code.
 
 Files:
 ${imageSummary}
@@ -240,14 +242,16 @@ async function sendOpenRouterChatCompletion(
       model,
       messages,
       provider: OPENROUTER_PROVIDER_PRIVACY,
-      temperature: 0.2,
-      max_completion_tokens: 4096,
+      ...getOpenRouterModelParameters(model),
       stream: false,
     }),
   });
 
   const data = await readOpenRouterResponse(response);
-  if (!response.ok) {
+  if (!response.ok || data.error) {
+    if (response.status === 404 || data.error?.code === 404) {
+      throw new Error(`OpenRouter has no available endpoint for ${model} under the current model, privacy, and account settings. Choose another model in Settings or check OpenRouter availability. The data collection and ZDR filters have not been relaxed.\n\n${data.error?.message ?? response.statusText}`);
+    }
     throw new Error(`OpenRouter request failed (${response.status}): ${data.error?.message ?? response.statusText}`);
   }
 
@@ -255,7 +259,21 @@ async function sendOpenRouterChatCompletion(
   const content = choice?.message?.content;
   const text = extractAssistantText(content);
   if (!text.trim()) throw new Error(formatNoOpenRouterContentError(choice));
+  // A truncated profile can still parse successfully while silently omitting features.
+  if (isOpenRouterResponseTruncated(choice)) throw new Error(formatTruncatedOpenRouterContentError(choice));
   return text;
+}
+
+function getOpenRouterModelParameters(model: string) {
+  const modelId = model.split(':')[0];
+  if (modelId === 'openai/gpt-6.1-terra') {
+    // Reasoning shares the completion budget. Azure does not support temperature.
+    return {max_completion_tokens: 16384, reasoning: {effort: 'medium'}};
+  }
+  if (modelId === 'deepseek/deepseek-v4.1-flash-1017') {
+    return {temperature: 0.2, max_completion_tokens: 16384, reasoning: {effort: 'medium'}};
+  }
+  return {temperature: 0.2, max_completion_tokens: 4096};
 }
 
 function getOpenRouterReferer(): string | undefined {

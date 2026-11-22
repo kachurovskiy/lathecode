@@ -862,15 +862,20 @@ progress {
   line-height: 1.35;
 }
 
-.settingsActions {
+.settingsActions, .settingsModelActions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.settingsActions button {
+.settingsActions button, .settingsModelActions button {
   min-height: 32px;
   margin: 0;
+}
+
+.settingsModelActions {
+  margin-top: 10px;
+  align-items: center;
 }
 
 .llmDialog .settingsGrid {
@@ -2039,7 +2044,7 @@ button.profileDrawingDeletePointButton {
     align-items: stretch;
   }
 
-  .settingsActions button {
+  .settingsActions button, .settingsModelActions button {
     min-height: 44px;
   }
 

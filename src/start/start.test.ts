@@ -311,6 +311,43 @@ describe('StartPanel', () => {
     expect(changes.length).toBe(1);
   });
 
+  it.each([
+    ['deepseek/deepseek-v4-pro', 'google/gemini-3.1-flash-lite-preview'],
+    ['custom/text-model', 'custom/vision-model'],
+  ])('keeps saved model choices until the recommended models are saved: %s', (textModel, visionModel) => {
+    localStorage.setItem('openRouterModel', textModel);
+    localStorage.setItem('openRouterVisionModel', visionModel);
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    localStorage.setItem('pxPerMm', '750');
+    const container = createStartContainer();
+    new StartPanel(container);
+
+    container.querySelector<HTMLButtonElement>('.settingsButton')!.click();
+    expect(document.querySelector<HTMLInputElement>('[name="openRouterModel"]')!.value).toBe(textModel);
+    expect(document.querySelector<HTMLInputElement>('[name="openRouterVisionModel"]')!.value).toBe(visionModel);
+    expect(getSettingsSection('llm').textContent).toContain('"ZDR only"');
+
+    clickDialogButton('Use recommended models');
+    expect(document.querySelector<HTMLInputElement>('[name="openRouterModel"]')!.value)
+      .toBe('deepseek/deepseek-v4.1-flash-1017');
+    expect(document.querySelector<HTMLInputElement>('[name="openRouterVisionModel"]')!.value)
+      .toBe('openai/gpt-6.1-terra');
+    expect(document.querySelector<HTMLInputElement>('[name="openRouterApiKey"]')!.value).toBe('sk-or-test');
+    expect(document.querySelector<HTMLInputElement>('[name="pxPerMm"]')!.value).toBe('750');
+    expect(localStorage.getItem('openRouterModel')).toBe(textModel);
+    expect(localStorage.getItem('openRouterVisionModel')).toBe(visionModel);
+    clickDialogButton('Close');
+
+    container.querySelector<HTMLButtonElement>('.settingsButton')!.click();
+    expect(document.querySelector<HTMLInputElement>('[name="openRouterModel"]')!.value).toBe(textModel);
+    clickDialogButton('Use recommended models');
+    clickDialogButton('Save settings');
+    expect(localStorage.getItem('openRouterModel')).toBe('deepseek/deepseek-v4.1-flash-1017');
+    expect(localStorage.getItem('openRouterVisionModel')).toBe('openai/gpt-6.1-terra');
+    expect(localStorage.getItem('openRouterApiKey')).toBe('sk-or-test');
+    expect(localStorage.getItem('pxPerMm')).toBe('750');
+  });
+
   it('does not export an empty backup', () => {
     const container = createStartContainer();
     new StartPanel(container);
