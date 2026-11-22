@@ -1524,6 +1524,7 @@ describe('StartPanel', () => {
       value: [new File(['drawing'], 'drawing.png', {type: 'image/png'})],
       configurable: true,
     });
+    fileInput.dispatchEvent(new Event('change', {bubbles: true}));
     clickDialogButton('Create lathecode');
     await waitForAsyncWork();
 
@@ -1550,20 +1551,19 @@ describe('StartPanel', () => {
 
     container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
     const pastedFile = new File(['drawing'], 'pasted.png', {type: 'image/png'});
-    const pasteEvent = new Event('paste', {bubbles: true}) as ClipboardEvent;
-    Object.defineProperty(pasteEvent, 'clipboardData', {
-      value: {
-        items: [{
-          kind: 'file',
-          type: 'image/png',
-          getAsFile: () => pastedFile,
-        }],
-        files: [],
-      },
-      configurable: true,
-    });
-    document.querySelector<HTMLElement>('.llmPasteTarget')!.dispatchEvent(pasteEvent);
+    pasteDrawingImages(pastedFile);
     expect(document.querySelector<HTMLElement>('.llmSelectedFiles')!.textContent).toContain('pasted.png');
+    await waitForAsyncWork();
+    expect(document.querySelector<HTMLImageElement>('.llmImagePreview')!.src).toBe(`data:image/png;base64,${btoa('drawing')}`);
+    expect(document.querySelector<HTMLButtonElement>('.llmRemoveImage')!.getAttribute('aria-label')).toBe('Remove pasted.png');
+
+    document.querySelector<HTMLButtonElement>('.llmRemoveImage')!.click();
+    expect(document.querySelector('.llmImagePreview')).toBeNull();
+    expect(document.querySelector<HTMLElement>('.llmSelectedFiles')!.textContent).toBe('No images selected');
+    clickDialogButton('Create lathecode');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.querySelector<HTMLElement>('.toolDialogError')!.textContent).toBe('Select at least one drawing image');
+    pasteDrawingImages(pastedFile);
 
     clickDialogButton('Create lathecode');
     await waitForAsyncWork();
@@ -1576,7 +1576,47 @@ describe('StartPanel', () => {
       image_url: {url: expect.stringMatching(/^data:image\/png;base64,/)},
     });
   });
+
+  it('excludes removed pasted and uploaded images from the drawing request', async () => {
+    localStorage.setItem('openRouterApiKey', 'sk-or-test');
+    const container = createStartContainer();
+    new StartPanel(container);
+    const fetchMock = mockOpenRouterLatheCodeResponse('STOCK D14\nTOOL RECT R0.2 L2\nL7 R6');
+    vi.stubGlobal('fetch', fetchMock);
+    container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
+    pasteDrawingImages(
+      new File(['keep'], 'keep.png', {type: 'image/png'}),
+      new File(['remove'], 'remove-paste.png', {type: 'image/png'}),
+    );
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(fileInput, 'files', {
+      value: [new File(['upload'], 'remove-upload.png', {type: 'image/png'})], configurable: true,
+    });
+    fileInput.dispatchEvent(new Event('change', {bubbles: true}));
+    expect(document.querySelectorAll('.llmImagePreview')).toHaveLength(3);
+    document.querySelector<HTMLButtonElement>('[aria-label="Remove remove-paste.png"]')!.click();
+    document.querySelector<HTMLButtonElement>('[aria-label="Remove remove-upload.png"]')!.click();
+    await waitForAsyncWork();
+    expect(document.querySelectorAll('.llmImagePreview')).toHaveLength(1);
+    expect(document.querySelector<HTMLImageElement>('.llmImagePreview')!.src).toBe(`data:image/png;base64,${btoa('keep')}`);
+
+    clickDialogButton('Create lathecode');
+    await waitForAsyncWork();
+    const request = getOpenRouterRequest(fetchMock);
+    expect(request.messages[1].content).toHaveLength(2);
+    expect(request.messages[1].content[0].text).toContain('keep.png');
+    expect(request.messages[1].content[0].text).not.toContain('remove-');
+    expect(request.messages[1].content[1].image_url.url).toBe(`data:image/png;base64,${btoa('keep')}`);
+  });
 });
+
+function pasteDrawingImages(...files: File[]) {
+  const event = new Event('paste', {bubbles: true, cancelable: true}) as ClipboardEvent;
+  Object.defineProperty(event, 'clipboardData', {
+    value: {items: files.map(file => ({kind: 'file', type: file.type, getAsFile: () => file})), files: []},
+  });
+  document.querySelector<HTMLElement>('.llmPasteTarget')!.dispatchEvent(event);
+}
 
 function createStartContainer(): HTMLElement {
   const container = document.createElement('div');

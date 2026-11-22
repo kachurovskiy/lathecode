@@ -157,12 +157,13 @@ export class StartPanel extends EventTarget {
     const form = document.createElement('form');
     form.className = 'llmDialog settingsDialog';
     let files: File[] = [];
+    const imageData = new Map<File, ReturnType<typeof readImageFileAsDataUrl>>();
 
     const grid = document.createElement('div');
     grid.className = 'settingsGrid';
     form.appendChild(grid);
 
-    const fileField = document.createElement('label');
+    const fileField = document.createElement('div');
     fileField.className = 'settingField';
     const fileHeading = document.createElement('span');
     fileHeading.className = 'settingHeading';
@@ -174,6 +175,7 @@ export class StartPanel extends EventTarget {
     fileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
     fileInput.multiple = true;
     fileInput.className = 'settingInput';
+    fileInput.setAttribute('aria-label', 'Drawing images');
     fileField.appendChild(fileInput);
 
     const pasteTarget = document.createElement('div');
@@ -211,17 +213,56 @@ export class StartPanel extends EventTarget {
     actions.appendChild(submitButton);
     form.appendChild(actions);
 
+    const getImageData = (file: File) => {
+      let data = imageData.get(file);
+      if (!data) {
+        data = readImageFileAsDataUrl(file);
+        imageData.set(file, data);
+      }
+      return data;
+    };
     const updateSelectedFiles = () => {
-      selectedFiles.textContent = files.length
-        ? `Selected: ${files.map(file => file.name).join(', ')}`
-        : 'No images selected';
+      selectedFiles.replaceChildren();
+      if (!files.length) selectedFiles.textContent = 'No images selected';
+      for (const file of files) {
+        const card = document.createElement('div');
+        card.className = 'llmImageCard';
+        const preview = document.createElement('img');
+        preview.className = 'llmImagePreview';
+        preview.alt = `Preview of ${file.name}`;
+        getImageData(file).then(image => {
+          preview.src = image.dataUrl;
+        }).catch(() => {
+          preview.alt = `Preview unavailable for ${file.name}`;
+        });
+        const name = document.createElement('span');
+        name.className = 'llmImageName';
+        name.textContent = file.name;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'llmRemoveImage';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', `Remove ${file.name}`);
+        remove.disabled = fileInput.disabled;
+        remove.addEventListener('click', () => {
+          files = files.filter(selected => selected !== file);
+          imageData.delete(file);
+          updateSelectedFiles();
+          error.textContent = '';
+          pasteTarget.focus();
+        });
+        card.append(preview, name, remove);
+        selectedFiles.appendChild(card);
+      }
     };
     const addFiles = (incomingFiles: readonly File[]) => {
+      if (fileInput.disabled) return;
       const imageFiles = incomingFiles.filter(file => file.type.startsWith('image/'));
       files = mergeImageFiles(files, imageFiles);
       updateSelectedFiles();
     };
     const handlePaste = (event: ClipboardEvent) => {
+      if (fileInput.disabled) return;
       const pastedFiles = getClipboardImageFiles(event.clipboardData);
       if (!pastedFiles.length) return;
       event.preventDefault();
@@ -230,25 +271,37 @@ export class StartPanel extends EventTarget {
       pasteTarget.focus();
     };
 
-    fileInput.addEventListener('change', () => addFiles(Array.from(fileInput.files ?? [])));
-    pasteTarget.addEventListener('paste', handlePaste);
+    fileInput.addEventListener('change', () => {
+      addFiles(Array.from(fileInput.files ?? []));
+      fileInput.value = '';
+      error.textContent = '';
+    });
     form.addEventListener('paste', handlePaste);
     updateSelectedFiles();
 
     let dialog: HTMLDivElement;
     form.addEventListener('submit', event => {
       event.preventDefault();
-      addFiles(Array.from(fileInput.files ?? []));
+      if (submitButton.disabled) return;
       if (!files.length) {
         error.textContent = 'Select at least one drawing image';
         return;
       }
       runLlmDialogAction(submitButton, 'Reading...', error, async () => {
-        const images = await Promise.all(files.map(readImageFileAsDataUrl));
-        submitButton.textContent = 'Creating...';
-        const text = await createLatheCodeFromDrawing(images, notesInput.input.value);
-        dialog.remove();
-        this.dispatchEvent(new StartLatheCodeEvent(text));
+        fileInput.disabled = true;
+        pasteTarget.setAttribute('aria-disabled', 'true');
+        updateSelectedFiles();
+        try {
+          const images = await Promise.all(files.map(getImageData));
+          submitButton.textContent = 'Creating...';
+          const text = await createLatheCodeFromDrawing(images, notesInput.input.value);
+          dialog.remove();
+          this.dispatchEvent(new StartLatheCodeEvent(text));
+        } finally {
+          fileInput.disabled = false;
+          pasteTarget.removeAttribute('aria-disabled');
+          updateSelectedFiles();
+        }
       });
     });
 

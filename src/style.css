@@ -926,9 +926,35 @@ progress {
 }
 
 .llmSelectedFiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
   color: #333333;
   font-size: 13px;
   line-height: 1.35;
+}
+
+.llmImageCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #cccccc;
+  border-radius: 4px;
+}
+
+.llmImagePreview {
+  grid-column: 1 / -1;
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  background: white;
+}
+
+.llmImageName {
+  overflow-wrap: anywhere;
 }
 
 .profileDrawingDialog {
