@@ -306,7 +306,7 @@ export class StartPanel extends EventTarget {
     });
 
     dialog = createFullScreenDialog(form, 'From technical drawing');
-    fileInput.focus();
+    pasteTarget.focus();
   }
 
   updateSavedLatheCodes() {
@@ -601,6 +601,9 @@ function getClipboardImageFiles(data: DataTransfer | null): File[] {
     const file = item.getAsFile();
     if (file) files.push(file);
   }
+  // Both lists describe the same clipboard files; some browsers give the two
+  // File wrappers different lastModified values, so merging them duplicates images.
+  if (files.length) return files;
   for (const file of Array.from(data.files ?? [])) {
     if (file.type.startsWith('image/')) files.push(file);
   }

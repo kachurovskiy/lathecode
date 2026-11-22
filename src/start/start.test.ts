@@ -1501,6 +1501,7 @@ describe('StartPanel', () => {
 
     expect(document.querySelector('.openRouterKeyDialog')).toBeNull();
     expect(document.querySelector('input[type="file"]')).not.toBeNull();
+    expect(document.activeElement).toBe(document.querySelector('.llmPasteTarget'));
     expect(document.querySelector<HTMLElement>('.llmDialog .privacyDisclosure')!.textContent)
       .toContain('drawing images and notes');
   });
@@ -1551,7 +1552,9 @@ describe('StartPanel', () => {
 
     container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
     const pastedFile = new File(['drawing'], 'pasted.png', {type: 'image/png'});
+    expect(document.activeElement).toBe(document.querySelector('.llmPasteTarget'));
     pasteDrawingImages(pastedFile);
+    expect(document.querySelectorAll('.llmImagePreview')).toHaveLength(1);
     expect(document.querySelector<HTMLElement>('.llmSelectedFiles')!.textContent).toContain('pasted.png');
     await waitForAsyncWork();
     expect(document.querySelector<HTMLImageElement>('.llmImagePreview')!.src).toBe(`data:image/png;base64,${btoa('drawing')}`);
@@ -1613,9 +1616,12 @@ describe('StartPanel', () => {
 function pasteDrawingImages(...files: File[]) {
   const event = new Event('paste', {bubbles: true, cancelable: true}) as ClipboardEvent;
   Object.defineProperty(event, 'clipboardData', {
-    value: {items: files.map(file => ({kind: 'file', type: file.type, getAsFile: () => file})), files: []},
+    value: {
+      items: files.map(file => ({kind: 'file', type: file.type, getAsFile: () => file})),
+      files: files.map(file => new File([file], file.name, {type: file.type, lastModified: file.lastModified + 1})),
+    },
   });
-  document.querySelector<HTMLElement>('.llmPasteTarget')!.dispatchEvent(event);
+  document.activeElement!.dispatchEvent(event);
 }
 
 function createStartContainer(): HTMLElement {
