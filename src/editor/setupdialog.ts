@@ -102,6 +102,7 @@ function openUnitsDialog(getText: () => string, applyText: (text: string) => voi
 }
 
 function openStockDialog(getText: () => string, applyText: (text: string) => void) {
+  const unit = parseCurrentUnits(getText()).toLowerCase();
   const form = createSetupForm(
     'setupStockDialog',
     'Describe the raw round stock before cutting. The part length comes from the profile coordinates.');
@@ -113,11 +114,11 @@ function openStockDialog(getText: () => string, applyText: (text: string) => voi
   const diameterFields = document.createElement('div');
   diameterFields.className = 'setupFieldGroup stockDiameterFields';
   diameterFields.appendChild(createSetupField(
-    'Outer diameter',
+    `Outer diameter (${unit})`,
     diameterInput,
     'The starting bar or tube outside diameter.'));
   diameterFields.appendChild(createSetupField(
-    'Inner diameter',
+    `Inner diameter (${unit})`,
     innerDiameterInput,
     'Optional existing through-hole for tube stock or pre-drilled blanks.'));
   controls.appendChild(diameterFields);
@@ -136,6 +137,7 @@ function openStockDialog(getText: () => string, applyText: (text: string) => voi
 }
 
 function openDepthDialog(getText: () => string, applyText: (text: string) => void) {
+  const unit = parseCurrentUnits(getText()).toLowerCase();
   const form = createSetupForm(
     'setupDepthDialog',
     'Set how much material each roughing pass removes and how much is left for the finishing pass.');
@@ -145,11 +147,11 @@ function openDepthDialog(getText: () => string, applyText: (text: string) => voi
   const finishInput = createNumberInput('depthFinish', depth.finish);
 
   controls.appendChild(createSetupField(
-    'Rough cut depth',
+    `Rough cut depth (${unit})`,
     cutInput,
     'Maximum radial material removed per roughing pass.'));
   controls.appendChild(createSetupField(
-    'Finish allowance',
+    `Finish allowance (${unit})`,
     finishInput,
     'Small amount left for the final cleanup pass. Use 0 only when no finish allowance is needed.'));
 

@@ -55,7 +55,7 @@ export function openToolDialog(getText: () => string, applyText: (text: string) 
   container.className = 'toolDialog';
 
   let selectedInsertName = currentTool.insertName || KNOWN_INSERT_OPTIONS[0].name;
-  const presetParams = createParamInputs(currentTool.insertName ? currentTool.params : new Map(), 'presetParamInput');
+  const presetParams = createParamInputs(currentTool.insertName ? currentTool.params : new Map(), 'presetParamInput', currentUnits);
   const presetGallery = document.createElement('div');
   presetGallery.className = 'toolPresetGallery';
   container.appendChild(presetGallery);
@@ -82,7 +82,7 @@ export function openToolDialog(getText: () => string, applyText: (text: string) 
   const presetOverrides = document.createElement('div');
   presetOverrides.className = 'toolSecondaryGrid';
   for (const name of PRESET_PARAM_NAMES) {
-    presetOverrides.appendChild(createField(PARAM_LABELS[name], presetParams.get(name)!));
+    presetOverrides.appendChild(createField(paramLabel(name, currentUnits), presetParams.get(name)!));
   }
   container.appendChild(presetOverrides);
 
@@ -115,11 +115,11 @@ export function openToolDialog(getText: () => string, applyText: (text: string) 
   });
   manualDetails.appendChild(createFieldGroup('Tool shape', manualTypeBar));
 
-  const manualParams = createParamInputs(currentTool.insertName ? new Map() : currentTool.params, 'manualParamInput');
+  const manualParams = createParamInputs(currentTool.insertName ? new Map() : currentTool.params, 'manualParamInput', currentUnits);
   const manualParamGrid = document.createElement('div');
   manualParamGrid.className = 'toolSecondaryGrid';
   for (const name of TOOL_PARAM_NAMES) {
-    manualParamGrid.appendChild(createField(PARAM_LABELS[name], manualParams.get(name)!));
+    manualParamGrid.appendChild(createField(paramLabel(name, currentUnits), manualParams.get(name)!));
   }
   manualDetails.appendChild(manualParamGrid);
 
@@ -165,14 +165,18 @@ function createFieldGroup(labelText: string, control: HTMLElement): HTMLDivEleme
   return group;
 }
 
-function createNumberInput(param: ToolParamName): HTMLInputElement {
+function paramLabel(param: ToolParamName, units: UnitOption): string {
+  return `${PARAM_LABELS[param]} (${isLinearToolParam(param) ? UNIT_LABELS[units] : 'deg'})`;
+}
+
+function createNumberInput(param: ToolParamName, units: UnitOption): HTMLInputElement {
   const input = document.createElement('input');
   input.type = 'number';
   input.step = 'any';
   input.min = '0';
   input.className = 'toolParamInput';
   input.dataset.param = param;
-  input.setAttribute('aria-label', PARAM_LABELS[param]);
+  input.setAttribute('aria-label', paramLabel(param, units));
   return input;
 }
 
@@ -207,10 +211,11 @@ function createManualTypeBar(selectedType: ToolType, onChange: (type: ToolType) 
 
 function createParamInputs(
     values: Map<ToolParamName, string>,
-    className: string): Map<ToolParamName, HTMLInputElement> {
+    className: string,
+    units: UnitOption): Map<ToolParamName, HTMLInputElement> {
   const params = new Map<ToolParamName, HTMLInputElement>();
   for (const name of TOOL_PARAM_NAMES) {
-    const input = createNumberInput(name);
+    const input = createNumberInput(name, units);
     input.classList.add(className);
     input.value = values.get(name) || '';
     params.set(name, input);

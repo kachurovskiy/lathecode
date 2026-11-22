@@ -285,7 +285,8 @@ export class Editor extends EventTarget {
   private openScaleDialog() {
     if (!this.latheCode) return;
 
-    const partDimensions = this.latheCode.getPartDimensions();
+    const partDimensions = this.latheCode.getPartDimensionsInLatheUnits();
+    const unit = this.latheCode.getUnits().toLowerCase();
     const form = document.createElement('form');
     form.className = 'scaleDialog settingsDialog';
 
@@ -302,13 +303,13 @@ export class Editor extends EventTarget {
       factorInput,
       'Used when target diameter and target length are empty.'));
     grid.appendChild(this.createScaleField(
-      'Target diameter',
+      `Target diameter (${unit})`,
       targetDiameterInput,
-      partDimensions ? `Current part diameter is ${formatScaleValue(partDimensions.diameter)} mm.` : 'Current part diameter is unavailable.'));
+      partDimensions ? `Current part diameter is ${formatScaleValue(partDimensions.diameter)} ${unit}.` : 'Current part diameter is unavailable.'));
     grid.appendChild(this.createScaleField(
-      'Target length',
+      `Target length (${unit})`,
       targetLengthInput,
-      partDimensions ? `Current part length is ${formatScaleValue(partDimensions.length)} mm.` : 'Current part length is unavailable.'));
+      partDimensions ? `Current part length is ${formatScaleValue(partDimensions.length)} ${unit}.` : 'Current part length is unavailable.'));
 
     const error = document.createElement('div');
     error.className = 'toolDialogError';
@@ -453,7 +454,7 @@ export class Editor extends EventTarget {
     const factor = this.readOptionalPositiveNumber(factorInput, 'Scale factor');
     const targetDiameter = this.readOptionalPositiveNumber(targetDiameterInput, 'Target diameter');
     const targetLength = this.readOptionalPositiveNumber(targetLengthInput, 'Target length');
-    const partDimensions = this.latheCode?.getPartDimensions();
+    const partDimensions = this.latheCode?.getPartDimensionsInLatheUnits();
 
     if (targetDiameter === null && targetLength === null) {
       if (factor === null) throw new Error('Enter a scale factor, target diameter, or target length');

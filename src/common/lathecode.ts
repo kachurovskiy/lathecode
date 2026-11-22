@@ -220,6 +220,10 @@ export class LatheCode {
     return this.unitsMultiplier;
   }
 
+  getUnits(): UnitType {
+    return this.data.units?.unit ?? 'MM';
+  }
+
   /** Explicit source lines only: no inferred closures, extensions, or cutoff removal. */
   getSourceProfileSegmentDefinitions(side: ProfileSide): ProfileSegmentDefinition[] {
     return this.getProfileSegmentDefinitionsForSide(
@@ -437,7 +441,8 @@ export class LatheCode {
     return stockHole.value * (stockHole.name == 'ID' ? 1 : 2) * this.unitsMultiplier;
   }
 
-  private getPartDimensionsInLatheUnits(): PartDimensions | null {
+  /** Part dimensions in the source units, for dimensional editing controls. */
+  getPartDimensionsInLatheUnits(): PartDimensions | null {
     const outside = getProfileLineDimensions(this.data.outside);
     const inside = this.data.inside ? getProfileLineDimensions(this.data.inside.entries) : null;
     const stockDiameter = this.data.stock ? getStockDirectiveDiameterInLatheUnits(this.data.stock) : 0;

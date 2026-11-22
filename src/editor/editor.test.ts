@@ -258,6 +258,9 @@ describe('Editor', () => {
     const stockDiameterFields = document.querySelector<HTMLElement>('.stockDiameterFields')!;
     expect(stockDiameterFields.querySelector<HTMLInputElement>('input[name="stockDiameter"]')).not.toBeNull();
     expect(stockDiameterFields.querySelector<HTMLInputElement>('input[name="stockInnerDiameter"]')).not.toBeNull();
+    expect(stockDiameterFields.textContent).toContain('Outer diameter (in)');
+    expect(stockDiameterFields.textContent).toContain('Inner diameter (in)');
+    expect(document.querySelector<HTMLInputElement>('input[name="stockDiameter"]')!.value).toBe('0.393701');
     setInputValue('input[name="stockDiameter"]', '20');
     setInputValue('input[name="stockInnerDiameter"]', '4');
     clickDialogButton('Use stock');
@@ -266,6 +269,10 @@ describe('Editor', () => {
     expect(document.querySelector('.depthVisual')).toBeNull();
     expect(document.querySelector<HTMLButtonElement>('.dialogCloseButton')!.parentElement?.classList.contains('settingsActions'))
       .toBe(true);
+    expect(document.querySelector('.setupDepthDialog')!.textContent).toContain('Rough cut depth (in)');
+    expect(document.querySelector('.setupDepthDialog')!.textContent).toContain('Finish allowance (in)');
+    expect(document.querySelector<HTMLInputElement>('input[name="depthCut"]')!.value).toBe('0.019685');
+    expect(document.querySelector<HTMLInputElement>('input[name="depthFinish"]')!.value).toBe('0.003937');
     setInputValue('input[name="depthCut"]', '0.03');
     setInputValue('input[name="depthFinish"]', '0.005');
     clickDialogButton('Use depth');
@@ -367,8 +374,8 @@ describe('Editor', () => {
       .toContain('FEED MOVE7.874016 PASS1.968504 PART0.393701');
   });
 
-  it('scales lathecode by a factor', () => {
-    const container = createEditorContainer('STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
+  it.each(['', 'UNITS IN\n'])('scales lathecode by a factor with units %j', units => {
+    const container = createEditorContainer(units + 'STOCK D10\nTOOL RECT R0.2 L2\nL5 R4');
 
     new Editor(container);
     container.querySelector<HTMLButtonElement>('.scaleButton')!.click();
@@ -376,33 +383,40 @@ describe('Editor', () => {
     clickDialogButton('Scale lathecode');
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
-      .toBe('STOCK D16\nTOOL RECT R0.2 L2\nL10 R8');
+      .toBe(units + 'STOCK D16\nTOOL RECT R0.2 L2\nL10 R8');
   });
 
-  it('scales lathecode to target diameter and length', () => {
-    const container = createEditorContainer('STOCK D10\nL5 R4');
+  it.each(['MM', 'IN', 'CM', 'M', 'FT'])('scales to target dimensions in %s', units => {
+    const setup = `UNITS ${units}\nSTOCK D1\nTOOL RECT R0.01 L0.08\nDEPTH CUT0.02 FINISH0.005\n`;
+    const container = createEditorContainer(setup + 'L0.5 R0.4\nL0.08');
 
     new Editor(container);
     container.querySelector<HTMLButtonElement>('.scaleButton')!.click();
-    expect(document.querySelector<HTMLFormElement>('.scaleDialog')!.textContent).toContain('Target diameter');
-    setInputValue('input[name="targetDiameter"]', '30');
+    const dialogText = document.querySelector('.scaleDialog')!.textContent;
+    expect(dialogText).toContain(`Target diameter (${units.toLowerCase()})`);
+    expect(dialogText).toContain(`Target length (${units.toLowerCase()})`);
+    expect(dialogText).toContain(`Current part diameter is 0.8 ${units.toLowerCase()}.`);
+    expect(dialogText).toContain(`Current part length is 0.5 ${units.toLowerCase()}.`);
+    expect(document.querySelector<HTMLInputElement>('input[name="targetDiameter"]')!.placeholder).toBe('0.8');
+    expect(document.querySelector<HTMLInputElement>('input[name="targetLength"]')!.placeholder).toBe('0.5');
+    setInputValue('input[name="targetDiameter"]', '1.6');
+    setInputValue('input[name="targetLength"]', '1.5');
+    clickDialogButton('Scale lathecode');
+
+    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
+      .toBe(setup.replace('STOCK D1\n', 'STOCK D1.6\n') + 'L1.5 R0.8\nL0.08');
+  });
+
+  it.each(['', 'UNITS IN\n'])('scales uniformly to one target dimension with units %j', units => {
+    const container = createEditorContainer(units + 'STOCK D10\nL5 R4');
+
+    new Editor(container);
+    container.querySelector<HTMLButtonElement>('.scaleButton')!.click();
     setInputValue('input[name="targetLength"]', '20');
     clickDialogButton('Scale lathecode');
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
-      .toBe('STOCK D30\nL20 R15');
-  });
-
-  it('scales uniformly to one target dimension', () => {
-    const container = createEditorContainer('STOCK D10\nL5 R4');
-
-    new Editor(container);
-    container.querySelector<HTMLButtonElement>('.scaleButton')!.click();
-    setInputValue('input[name="targetLength"]', '20');
-    clickDialogButton('Scale lathecode');
-
-    expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
-      .toBe('STOCK D32\nL20 R16');
+      .toBe(units + 'STOCK D32\nL20 R16');
   });
 
   it('flips inside-only profiles', () => {
@@ -556,6 +570,8 @@ describe('Editor', () => {
     const insertCard = document.querySelector<HTMLButtonElement>('.toolPresetCard[data-insert="DCGT070204-AK"]')!;
     expect(insertCard.textContent).toContain('0.307087 in');
     insertCard.click();
+    expect(document.querySelector('.presetParamInput[data-param="A"]')!.getAttribute('aria-label'))
+      .toBe('Rotation angle (deg)');
     clickDialogButton('Use selected insert');
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
@@ -590,6 +606,10 @@ describe('Editor', () => {
 
     expect(document.querySelector<HTMLInputElement>('.manualParamInput[data-param="R"]')!.placeholder)
       .toBe('Default 0.007874 in');
+    expect(document.querySelector('.manualParamInput[data-param="R"]')!.closest('.toolField')!.textContent)
+      .toContain('Corner radius (in)');
+    expect(document.querySelector('.manualParamInput[data-param="L"]')!.closest('.toolField')!.textContent)
+      .toContain('Cut width or edge length (in)');
     clickDialogButton('Use manual definition');
 
     expect(container.querySelector<HTMLTextAreaElement>('.latheCodeInput')!.value)
