@@ -1,5 +1,6 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
-import { createLatheCodeFromDrawing, createLatheCodeFromPrompt, readImageFileAsDataUrl } from '../llm/openrouter.ts';
+import { createLatheCodeFromDrawing, createLatheCodeFromPrompt, estimateDrawingCost, estimatePromptCost, readImageFileAsDataUrl, type TechnicalDrawingImage } from '../llm/openrouter.ts';
+import { createCostEstimateControl } from '../llm/usageui.ts';
 import { hasOpenRouterApiKey, openOpenRouterKeyDialog } from '../llm/openrouterkeydialog.ts';
 import { createPrivacyDisclosure, openRouterActionPrivacyText } from '../llm/privacy.ts';
 import { openSettingsDialog } from './settingsdialog.ts';
@@ -16,7 +17,7 @@ type StartPanelOptions = {
 };
 
 export class StartLatheCodeEvent extends Event {
-  constructor(readonly text: string) {
+  constructor(readonly text: string, readonly options: {sourceImages?: readonly TechnicalDrawingImage[]; preserveSourceImages?: boolean} = {}) {
     super('start');
   }
 }
@@ -68,7 +69,7 @@ export class StartPanel extends EventTarget {
     this.sampleCatalogButton.addEventListener('click', () => this.openSampleDialog());
     this.startDimensionsButton.addEventListener('click', () => {
       openProfileDrawingDialog(
-        text => this.dispatchEvent(new StartLatheCodeEvent(text)),
+        text => this.dispatchEvent(new StartLatheCodeEvent(text, {preserveSourceImages: true})),
         this.getCurrentLatheCodeText(),
       );
     });
@@ -132,24 +133,30 @@ export class StartPanel extends EventTarget {
     submitButton.type = 'submit';
     submitButton.textContent = 'Create lathecode';
     actions.appendChild(submitButton);
+    const cost = createCostEstimateControl(() => estimatePromptCost(promptInput.input.value));
+    actions.appendChild(cost.element);
+    promptInput.input.addEventListener('input', cost.schedule);
     form.appendChild(actions);
 
     let dialog: HTMLDivElement;
     form.addEventListener('submit', event => {
       event.preventDefault();
       const description = promptInput.input.value.trim();
+      if (submitButton.disabled) return;
       if (!description) {
         error.textContent = 'Enter a part prompt';
         return;
       }
       runLlmDialogAction(submitButton, 'Creating...', error, async () => {
+        await cost.refresh();
         const text = await createLatheCodeFromPrompt(description);
+        cost.dispose();
         dialog.remove();
         this.dispatchEvent(new StartLatheCodeEvent(text));
       });
     });
 
-    dialog = createFullScreenDialog(form, 'From prompt');
+    dialog = createFullScreenDialog(form, 'From prompt', cost.dispose);
     promptInput.input.focus();
   }
 
@@ -211,6 +218,9 @@ export class StartPanel extends EventTarget {
     submitButton.type = 'submit';
     submitButton.textContent = 'Create lathecode';
     actions.appendChild(submitButton);
+    const cost = createCostEstimateControl(() => estimateDrawingCost(files, notesInput.input.value));
+    actions.appendChild(cost.element);
+    notesInput.input.addEventListener('input', cost.schedule);
     form.appendChild(actions);
 
     const getImageData = (file: File) => {
@@ -222,6 +232,7 @@ export class StartPanel extends EventTarget {
       return data;
     };
     const updateSelectedFiles = () => {
+      cost.schedule();
       selectedFiles.replaceChildren();
       if (!files.length) selectedFiles.textContent = 'No images selected';
       for (const file of files) {
@@ -293,10 +304,13 @@ export class StartPanel extends EventTarget {
         updateSelectedFiles();
         try {
           const images = await Promise.all(files.map(getImageData));
+          const notes = notesInput.input.value;
+          await cost.refresh();
           submitButton.textContent = 'Creating...';
-          const text = await createLatheCodeFromDrawing(images, notesInput.input.value);
+          const text = await createLatheCodeFromDrawing(images, notes);
+          cost.dispose();
           dialog.remove();
-          this.dispatchEvent(new StartLatheCodeEvent(text));
+          this.dispatchEvent(new StartLatheCodeEvent(text, {sourceImages: images}));
         } finally {
           fileInput.disabled = false;
           pasteTarget.removeAttribute('aria-disabled');
@@ -305,7 +319,7 @@ export class StartPanel extends EventTarget {
       });
     });
 
-    dialog = createFullScreenDialog(form, 'From technical drawing');
+    dialog = createFullScreenDialog(form, 'From technical drawing', cost.dispose);
     pasteTarget.focus();
   }
 

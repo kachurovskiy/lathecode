@@ -8,9 +8,12 @@ import { Planner } from './planner/planner.ts';
 import { LatheCode } from './common/lathecode.ts';
 import { CrossSection } from './crosssection.ts';
 import { loadAppSettings } from './common/settings.ts';
+import { resumePendingUsage } from './llm/usage.ts';
+import { SourceDrawingPanel } from './sourcedrawing.ts';
 
 const crossSectionContainer = document.getElementById('crossSectionContainer')!;
 const crossSection = new CrossSection(crossSectionContainer);
+const sourceDrawings = new SourceDrawingPanel(document.getElementById('sourceDrawingContainer')!);
 const sceneContainer = document.getElementById('sceneContainer')!;
 const scene = new Scene(sceneContainer, 500, loadAppSettings());
 const editorContainer = document.getElementById('editorContainer')!;
@@ -21,6 +24,7 @@ const start = new StartPanel(document.getElementById('startContainer')!, {
 const planner = new Planner(document.getElementById('plannerContainer')!);
 const gcode = new GCode(document.getElementById('gcodeContainer')!);
 let plannedLatheCode: LatheCode | null = null;
+void resumePendingUsage(loadAppSettings().openRouterApiKey);
 
 const hasSavedDraft = !!localStorage.getItem('latheCode')?.trim();
 editorContainer.hidden = !hasSavedDraft;
@@ -39,10 +43,12 @@ editor.addEventListener('change', () => setLatheCode());
 editor.addEventListener('saved', () => start.updateSavedLatheCodes());
 
 start.addEventListener('start', (event) => {
+  const started = event as StartLatheCodeEvent;
+  if (!started.options.preserveSourceImages) sourceDrawings.setImages(started.options.sourceImages ?? []);
   editorContainer.hidden = false;
   crossSectionContainer.hidden = false;
   sceneContainer.hidden = false;
-  editor.setText((event as StartLatheCodeEvent).text);
+  editor.setText(started.text);
   start.updateSavedLatheCodes();
 });
 
@@ -50,11 +56,14 @@ start.addEventListener('stlfile', async (event) => {
   editorContainer.hidden = false;
   crossSectionContainer.hidden = false;
   sceneContainer.hidden = false;
+  const before = editor.getText();
   await editor.importStlFile((event as StartStlEvent).file);
+  if (editor.getText() !== before) sourceDrawings.setImages([]);
   start.updateSavedLatheCodes();
 });
 
 start.addEventListener('settingschange', () => {
+  void resumePendingUsage(loadAppSettings().openRouterApiKey);
   gcode.updateSettings();
   scene.setSettings(loadAppSettings());
   setLatheCode();

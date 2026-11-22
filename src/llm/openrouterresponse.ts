@@ -3,6 +3,16 @@ import { truncateText } from './generatedlathecode.ts';
 const OPENROUTER_RESPONSE_EXCERPT_LENGTH = 800;
 
 export type OpenRouterResponse = {
+  id?: string,
+  model?: string,
+  usage?: {
+    cost?: number | null,
+    prompt_tokens?: number,
+    completion_tokens?: number,
+    completion_tokens_details?: {reasoning_tokens?: number},
+    prompt_tokens_details?: {cached_tokens?: number},
+    is_byok?: boolean,
+  },
   choices?: OpenRouterChoice[],
   error?: {
     code?: number,

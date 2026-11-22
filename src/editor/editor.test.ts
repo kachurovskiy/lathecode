@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Editor, PlanEvent, wrapStlText } from './editor';
 import { DEFAULT_APP_SETTINGS, DEFAULT_OPENROUTER_MODEL } from '../common/settings';
 
+vi.mock('../llm/pricing', async () => ({...await vi.importActual<object>('../llm/pricing'), estimateCost: async () => null}));
+
 describe('Editor', () => {
   beforeEach(() => {
     vi.restoreAllMocks();

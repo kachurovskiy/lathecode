@@ -15,6 +15,8 @@ import * as previews from './preview';
 import { SAMPLE_SECTIONS, START_SAMPLE_DEFINITIONS } from './samples';
 import { StartLatheCodeEvent, StartPanel } from './start';
 
+vi.mock('../llm/pricing', async () => ({...await vi.importActual<object>('../llm/pricing'), estimateCost: async () => null}));
+
 describe('StartPanel', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -1630,10 +1632,12 @@ describe('StartPanel', () => {
     const container = createStartContainer();
     const start = new StartPanel(container);
     const started: string[] = [];
+    const sourceImages: StartLatheCodeEvent['options']['sourceImages'][] = [];
     const fetchMock = mockOpenRouterLatheCodeResponse('STOCK D12\nTOOL RECT R0.2 L2\nL6 R5');
     vi.stubGlobal('fetch', fetchMock);
     start.addEventListener('start', event => {
       started.push((event as StartLatheCodeEvent).text);
+      sourceImages.push((event as StartLatheCodeEvent).options.sourceImages);
     });
 
     container.querySelector<HTMLButtonElement>('.startDrawingButton')!.click();
@@ -1649,6 +1653,7 @@ describe('StartPanel', () => {
     await waitForAsyncWork();
 
     expect(started).toEqual(['STOCK D12\nTOOL RECT R0.2 L2\nL6 R5']);
+    expect(sourceImages).toEqual([[{name: 'drawing.png', dataUrl: `data:image/png;base64,${btoa('drawing')}`}]]);
     const request = getOpenRouterRequest(fetchMock);
     expect(request.model).toBe(DEFAULT_OPENROUTER_VISION_MODEL);
     expect(request.messages[1].content[0].text).toContain('drawing.png');

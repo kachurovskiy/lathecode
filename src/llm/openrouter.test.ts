@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LatheCode } from '../common/lathecode';
 import { createLatheCodeFromDrawing, createLatheCodeFromPrompt, modifyLatheCodeWithPrompt } from './openrouter';
 
+// Pricing/network accounting is exercised separately in costs.test.ts.
+vi.mock('./pricing', async () => ({...await vi.importActual<object>('./pricing'), estimateCost: async () => null}));
+
 describe('OpenRouter lathecode generation', () => {
   beforeEach(() => {
     vi.restoreAllMocks();

@@ -17,6 +17,9 @@ import {
   isOpenRouterResponseTruncated,
   type OpenRouterResponse,
 } from './openrouterresponse.ts';
+import {estimateCost} from './pricing.ts';
+import {UsageOperation, type LlmAction} from './usage.ts';
+import {createUsageNotification} from './usageui.ts';
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_REPAIR_REQUESTS = 2;
@@ -66,7 +69,11 @@ Lathecode syntax:
 export async function createLatheCodeFromPrompt(description: string): Promise<string> {
   const settings = ensureOpenRouterSettings();
   const model = settings.openRouterModel || DEFAULT_OPENROUTER_MODEL;
-  return generateValidLatheCode(settings, model, [
+  return generateValidLatheCode(settings, model, promptMessages(description), 'prompt');
+}
+
+function promptMessages(description: string): OpenRouterMessage[] {
+  return [
     {role: 'system', content: LATHECODE_SYSTEM_PROMPT},
     {
       role: 'user',
@@ -75,13 +82,17 @@ export async function createLatheCodeFromPrompt(description: string): Promise<st
 Request:
 ${description.trim()}`,
     },
-  ]);
+  ];
 }
 
 export async function createLatheCodeFromDrawing(images: readonly TechnicalDrawingImage[], notes: string): Promise<string> {
   if (!images.length) throw new Error('Select at least one drawing image');
   const settings = ensureOpenRouterSettings();
   const model = settings.openRouterVisionModel || DEFAULT_OPENROUTER_VISION_MODEL;
+  return generateValidLatheCode(settings, model, drawingMessages(images, notes), 'drawing');
+}
+
+function drawingMessages(images: readonly TechnicalDrawingImage[], notes: string): OpenRouterMessage[] {
   const imageSummary = images.map(image => `- ${image.name}`).join('\n');
   const content: OpenRouterContentPart[] = [
     {
@@ -102,18 +113,24 @@ ${notes.trim() || '(none)'}`,
     })),
   ];
 
-  return generateValidLatheCode(settings, model, [
+  return [
     {role: 'system', content: LATHECODE_SYSTEM_PROMPT},
     {role: 'user', content},
-  ]);
+  ];
 }
 
 export async function modifyLatheCodeWithPrompt(currentLatheCode: string, modification: string): Promise<string> {
   const settings = ensureOpenRouterSettings();
   const model = settings.openRouterModel || DEFAULT_OPENROUTER_MODEL;
   const current = splitInitialCommentPrefix(currentLatheCode);
+  const generated = await generateValidLatheCode(settings, model, modificationMessages(currentLatheCode, modification), 'modify');
+  return prependInitialCommentPrefix(current.prefix, generated);
+}
+
+function modificationMessages(currentLatheCode: string, modification: string): OpenRouterMessage[] {
+  const current = splitInitialCommentPrefix(currentLatheCode);
   const latheCodeForPrompt = current.body.trim() || currentLatheCode.trim();
-  const generated = await generateValidLatheCode(settings, model, [
+  return [
     {role: 'system', content: LATHECODE_SYSTEM_PROMPT},
     {
       role: 'user',
@@ -127,8 +144,34 @@ ${modification.trim()}
 Current lathecode:
 ${latheCodeForPrompt}`,
     },
-  ]);
-  return prependInitialCommentPrefix(current.prefix, generated);
+  ];
+}
+
+export function estimatePromptCost(description: string) {
+  return estimateMessages(loadAppSettings().openRouterModel || DEFAULT_OPENROUTER_MODEL, promptMessages(description));
+}
+
+export function estimateDrawingCost(images: readonly {name: string}[], notes: string) {
+  return estimateMessages(loadAppSettings().openRouterVisionModel || DEFAULT_OPENROUTER_VISION_MODEL,
+    drawingMessages(images.map(image => ({name: image.name, dataUrl: ''})), notes));
+}
+
+export function estimateModificationCost(currentLatheCode: string, modification: string) {
+  return estimateMessages(loadAppSettings().openRouterModel || DEFAULT_OPENROUTER_MODEL, modificationMessages(currentLatheCode, modification));
+}
+
+function estimateMessages(model: string, messages: readonly OpenRouterMessage[]) {
+  let textCharacters = 0;
+  let images = 0;
+  for (const message of messages) {
+    if (typeof message.content === 'string') textCharacters += message.content.length;
+    else for (const part of message.content) {
+      if (part.type === 'text') textCharacters += part.text.length;
+      else images++;
+    }
+  }
+  const parameters = getOpenRouterModelParameters(model);
+  return estimateCost({model, textCharacters, images, maxOutputTokens: parameters.max_completion_tokens, reasoning: !!parameters.reasoning});
 }
 
 export function readImageFileAsDataUrl(file: File): Promise<TechnicalDrawingImage> {
@@ -180,13 +223,32 @@ async function generateValidLatheCode(
   settings: AppSettings,
   model: string,
   messages: readonly OpenRouterMessage[],
+  action: LlmAction,
+): Promise<string> {
+  const operation = new UsageOperation(action, model, await estimateMessages(model, messages));
+  createUsageNotification(operation);
+  try {
+    const text = await generateLatheCodeAttempts(settings, model, messages, operation);
+    operation.finish('succeeded');
+    return text;
+  } catch (error) {
+    operation.finish('failed');
+    throw error;
+  }
+}
+
+async function generateLatheCodeAttempts(
+  settings: AppSettings,
+  model: string,
+  messages: readonly OpenRouterMessage[],
+  operation: UsageOperation,
 ): Promise<string> {
   let repairMessages = [...messages];
   let lastError: Error | null = null;
   let lastText = '';
 
   for (let attempt = 0; attempt <= MAX_REPAIR_REQUESTS; attempt++) {
-    lastText = normalizeGeneratedLatheCode(stripLatheCode(await sendOpenRouterChatCompletion(settings.openRouterApiKey, model, repairMessages)));
+    lastText = normalizeGeneratedLatheCode(stripLatheCode(await sendOpenRouterChatCompletion(settings.openRouterApiKey, model, repairMessages, operation)));
     try {
       return validateOrRepairGeneratedLatheCode(lastText);
     } catch (error) {
@@ -226,6 +288,7 @@ async function sendOpenRouterChatCompletion(
   apiKey: string,
   model: string,
   messages: readonly OpenRouterMessage[],
+  operation: UsageOperation,
 ): Promise<string> {
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${apiKey}`,
@@ -235,19 +298,28 @@ async function sendOpenRouterChatCompletion(
   const referer = getOpenRouterReferer();
   if (referer) headers['HTTP-Referer'] = referer;
 
-  const response = await fetch(OPENROUTER_CHAT_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      messages,
-      provider: OPENROUTER_PROVIDER_PRIVACY,
-      ...getOpenRouterModelParameters(model),
-      stream: false,
-    }),
-  });
+  const request = operation.startRequest(operation.record.requests.length ? await estimateMessages(model, messages) : operation.record.estimate);
+  let response: Response;
+  try {
+    response = await fetch(OPENROUTER_CHAT_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages,
+        provider: OPENROUTER_PROVIDER_PRIVACY,
+        ...getOpenRouterModelParameters(model),
+        stream: false,
+      }),
+    });
+  } catch (error) {
+    operation.unavailable(request);
+    throw error;
+  }
 
   const data = await readOpenRouterResponse(response);
+  // Record charges before content validation: refusals, truncations and repairs can be billed.
+  operation.response(request, data, apiKey);
   if (!response.ok || data.error) {
     if (response.status === 404 || data.error?.code === 404) {
       throw new Error(`OpenRouter has no available endpoint for ${model} under the current model, privacy, and account settings. Choose another model in Settings or check OpenRouter availability. The data collection and ZDR filters have not been relaxed.\n\n${data.error?.message ?? response.statusText}`);
@@ -283,7 +355,8 @@ function getOpenRouterReferer(): string | undefined {
 
 async function readOpenRouterResponse(response: Response): Promise<OpenRouterResponse> {
   try {
-    return await response.json() as OpenRouterResponse;
+    const data = await response.json();
+    return data && typeof data === 'object' && !Array.isArray(data) ? data as OpenRouterResponse : {};
   } catch {
     return {};
   }

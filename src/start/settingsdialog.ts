@@ -1,5 +1,6 @@
 import { createFullScreenDialog } from '../common/dialog.ts';
 import { createOpenRouterPrivacyLink } from '../llm/privacy.ts';
+import { createUsageSection } from '../llm/usageui.ts';
 import {
   APP_SETTING_DEFINITIONS,
   APP_SETTING_SECTIONS,
@@ -17,6 +18,7 @@ export function openSettingsDialog(onSave?: () => void) {
   const currentSettings = loadAppSettings();
   const form = document.createElement('form');
   form.className = 'settingsDialog';
+  const usage = createUsageSection();
 
   for (const sectionDefinition of APP_SETTING_SECTIONS) {
     const section = document.createElement('section');
@@ -55,6 +57,7 @@ export function openSettingsDialog(onSave?: () => void) {
       });
       modelActions.append(recommendedButton, createOpenRouterPrivacyLink());
       section.appendChild(modelActions);
+      section.appendChild(usage.element);
     }
 
     form.appendChild(section);
@@ -75,7 +78,9 @@ export function openSettingsDialog(onSave?: () => void) {
 
   form.appendChild(actions);
 
-  const dialog = createFullScreenDialog(form, 'Settings');
+  const dialog = createFullScreenDialog(form, 'Settings', usage.dispose);
+  const remove = dialog.remove.bind(dialog);
+  dialog.remove = () => {usage.dispose(); remove();};
   const updateSectionVisibility = () => updateSettingsSectionVisibility(form);
   const saveSettings = () => {
     const settings = readSettingsForm(form);

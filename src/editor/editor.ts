@@ -5,7 +5,8 @@ import { openSetupDialog, type SetupDialogKind } from './setupdialog.ts';
 import StlImportWorker from './stlimportworker?worker&inline';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
 import { AppSettings, loadAppSettings } from '../common/settings.ts';
-import { modifyLatheCodeWithPrompt } from '../llm/openrouter.ts';
+import { estimateModificationCost, modifyLatheCodeWithPrompt } from '../llm/openrouter.ts';
+import { createCostEstimateControl } from '../llm/usageui.ts';
 import { hasOpenRouterApiKey, openOpenRouterKeyDialog } from '../llm/openrouterkeydialog.ts';
 import { createPrivacyDisclosure, openRouterActionPrivacyText } from '../llm/privacy.ts';
 
@@ -369,25 +370,32 @@ export class Editor extends EventTarget {
     applyButton.type = 'submit';
     applyButton.textContent = 'Modify lathecode';
     actions.appendChild(applyButton);
+    const cost = createCostEstimateControl(() => estimateModificationCost(this.latheCodeInput.value, input.value));
+    actions.appendChild(cost.element);
+    input.addEventListener('input', cost.schedule);
     form.appendChild(actions);
 
     let dialog: HTMLDivElement;
     form.addEventListener('submit', event => {
       event.preventDefault();
       const modification = input.value.trim();
+      if (applyButton.disabled) return;
       if (!modification) {
         error.textContent = 'Enter a modification request';
         return;
       }
       runLlmEditorAction(applyButton, error, async () => {
-        const text = await modifyLatheCodeWithPrompt(this.latheCodeInput.value, modification);
+        const currentText = this.latheCodeInput.value;
+        await cost.refresh();
+        const text = await modifyLatheCodeWithPrompt(currentText, modification);
         this.latheCodeInput.value = text;
         this.update();
+        cost.dispose();
         dialog.remove();
       });
     });
 
-    dialog = createFullScreenDialog(form, 'Ask LLM');
+    dialog = createFullScreenDialog(form, 'Ask LLM', cost.dispose);
     input.focus();
   }
 
