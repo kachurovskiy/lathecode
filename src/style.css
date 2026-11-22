@@ -869,10 +869,9 @@ progress {
 .llmCostEstimate {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 4px;
-  max-width: 460px;
-  padding: 6px 10px;
+  max-width: 620px;
+  margin: 0 0 12px;
   font-size: 14px;
 }
 

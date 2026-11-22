@@ -134,7 +134,7 @@ export class StartPanel extends EventTarget {
     submitButton.textContent = 'Create lathecode';
     actions.appendChild(submitButton);
     const cost = createCostEstimateControl(() => estimatePromptCost(promptInput.input.value));
-    actions.appendChild(cost.element);
+    form.appendChild(cost.element);
     promptInput.input.addEventListener('input', cost.schedule);
     form.appendChild(actions);
 
@@ -219,7 +219,7 @@ export class StartPanel extends EventTarget {
     submitButton.textContent = 'Create lathecode';
     actions.appendChild(submitButton);
     const cost = createCostEstimateControl(() => estimateDrawingCost(files, notesInput.input.value));
-    actions.appendChild(cost.element);
+    form.appendChild(cost.element);
     notesInput.input.addEventListener('input', cost.schedule);
     form.appendChild(actions);
 

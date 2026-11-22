@@ -387,7 +387,7 @@ export class Editor extends EventTarget {
     applyButton.textContent = 'Modify lathecode';
     actions.appendChild(applyButton);
     const cost = createCostEstimateControl(() => estimateModificationCost(this.latheCodeInput.value, input.value));
-    actions.appendChild(cost.element);
+    form.appendChild(cost.element);
     input.addEventListener('input', cost.schedule);
     form.appendChild(actions);
 
