@@ -4,6 +4,7 @@ export class SourceDrawingPanel {
   private readonly heading = document.createElement('h2');
   private readonly images = document.createElement('div');
   private disposeImages: (() => void)[] = [];
+  private sourceImages: readonly TechnicalDrawingImage[] | null = null;
 
   constructor(private readonly container: HTMLElement) {
     const guide = document.createElement('p');
@@ -14,6 +15,9 @@ export class SourceDrawingPanel {
   }
 
   setImages(images: readonly TechnicalDrawingImage[]): void {
+    // Text edits reuse their drawing references; keep any pinned lens in place.
+    if (images === this.sourceImages) return;
+    this.sourceImages = images;
     this.disposeImages.forEach(dispose => dispose());
     this.disposeImages = [];
     this.images.replaceChildren();

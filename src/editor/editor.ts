@@ -5,7 +5,7 @@ import { openSetupDialog, type SetupDialogKind } from './setupdialog.ts';
 import StlImportWorker from './stlimportworker?worker&inline';
 import { FromStlWorkerMessage } from './stlimportworker.ts';
 import { AppSettings, loadAppSettings } from '../common/settings.ts';
-import { estimateModificationCost, modifyLatheCodeWithPrompt } from '../llm/openrouter.ts';
+import { estimateModificationCost, modifyLatheCodeWithPrompt, type TechnicalDrawingImage } from '../llm/openrouter.ts';
 import { createCostEstimateControl } from '../llm/usageui.ts';
 import { hasOpenRouterApiKey, openOpenRouterKeyDialog } from '../llm/openrouterkeydialog.ts';
 import { createPrivacyDisclosure, openRouterActionPrivacyText } from '../llm/privacy.ts';
@@ -39,7 +39,8 @@ export class Editor extends EventTarget {
   private llmModifyButton: HTMLButtonElement;
   private latheCode: LatheCode | null = null;
   private worker: Worker | null = null;
-  private validTextHistory: string[] = [];
+  private sourceImages: readonly TechnicalDrawingImage[] = [];
+  private validTextHistory: {text: string; sourceImages: readonly TechnicalDrawingImage[]}[] = [];
   private validTextHistoryIndex = -1;
 
   constructor(container: HTMLElement, options: {deferInitialUpdate?: boolean} = {}) {
@@ -137,7 +138,16 @@ export class Editor extends EventTarget {
     return this.latheCodeInput.value;
   }
 
-  setText(text: string) {
+  getSourceImages(): readonly TechnicalDrawingImage[] {
+    return this.sourceImages;
+  }
+
+  setText(text: string, options: {sourceImages?: readonly TechnicalDrawingImage[]} = {}) {
+    const images = options.sourceImages;
+    if (images && (images.length !== this.sourceImages.length
+      || images.some((image, index) => image.name !== this.sourceImages[index].name || image.dataUrl !== this.sourceImages[index].dataUrl))) {
+      this.sourceImages = images.map(image => ({...image}));
+    }
     this.latheCodeInput.value = text;
     this.update();
   }
@@ -168,16 +178,20 @@ export class Editor extends EventTarget {
   }
 
   private recordValidText(text: string) {
-    if (this.validTextHistory[this.validTextHistoryIndex] === text) return;
+    if (this.isCurrentHistoryEntry()) return;
 
     this.validTextHistory.splice(this.validTextHistoryIndex + 1);
-    const lastText = this.validTextHistory[this.validTextHistory.length - 1];
-    if (lastText !== text) this.validTextHistory.push(text);
+    this.validTextHistory.push({text, sourceImages: this.sourceImages});
     this.validTextHistoryIndex = this.validTextHistory.length - 1;
   }
 
+  private isCurrentHistoryEntry(): boolean {
+    const current = this.validTextHistory[this.validTextHistoryIndex];
+    return current?.text === this.latheCodeInput.value && current.sourceImages === this.sourceImages;
+  }
+
   private updateHistoryButtons() {
-    const textIsCurrentHistoryEntry = this.latheCodeInput.value === this.validTextHistory[this.validTextHistoryIndex];
+    const textIsCurrentHistoryEntry = this.isCurrentHistoryEntry();
     const canUndo = this.validTextHistoryIndex >= 0
       && (!textIsCurrentHistoryEntry || this.validTextHistoryIndex > 0);
     const canRedo = this.validTextHistoryIndex < this.validTextHistory.length - 1;
@@ -187,7 +201,7 @@ export class Editor extends EventTarget {
   }
 
   private undoValidText() {
-    const textIsCurrentHistoryEntry = this.latheCodeInput.value === this.validTextHistory[this.validTextHistoryIndex];
+    const textIsCurrentHistoryEntry = this.isCurrentHistoryEntry();
     const targetIndex = textIsCurrentHistoryEntry
       ? this.validTextHistoryIndex - 1
       : this.validTextHistoryIndex;
@@ -201,7 +215,9 @@ export class Editor extends EventTarget {
   private restoreValidText(index: number) {
     if (index < 0 || index >= this.validTextHistory.length) return;
     this.validTextHistoryIndex = index;
-    this.latheCodeInput.value = this.validTextHistory[index];
+    const entry = this.validTextHistory[index];
+    this.latheCodeInput.value = entry.text;
+    this.sourceImages = entry.sourceImages;
     this.update({recordHistory: false});
   }
 
@@ -495,9 +511,8 @@ export class Editor extends EventTarget {
             this.statusContainer.textContent = '';
             resolve();
           } else if (m.latheCodeText) {
-            this.latheCodeInput.value = wrapStlText(file.name, m.latheCodeText, textBeforeImport);
             this.statusContainer.textContent = '';
-            this.update();
+            this.setText(wrapStlText(file.name, m.latheCodeText, textBeforeImport), {sourceImages: []});
             resolve();
           } else if (m.progressMessage) {
             this.statusContainer.textContent = m.progressMessage;

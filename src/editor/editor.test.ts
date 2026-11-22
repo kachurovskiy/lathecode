@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Editor, PlanEvent, wrapStlText } from './editor';
 import { DEFAULT_APP_SETTINGS, DEFAULT_OPENROUTER_MODEL } from '../common/settings';
+import { SourceDrawingPanel } from '../sourcedrawing';
+import StlImportWorker from './stlimportworker?worker&inline';
 
 vi.mock('../llm/pricing', async () => ({...await vi.importActual<object>('../llm/pricing'), estimateCost: async () => null}));
+vi.mock('./stlimportworker?worker&inline', () => ({default: vi.fn()}));
 
 describe('Editor', () => {
   beforeEach(() => {
@@ -144,6 +147,96 @@ describe('Editor', () => {
     expect(redoButton.hidden).toBe(true);
     undoButton.click();
     expect(input.value).toBe('STOCK D10\nL2 R3');
+  });
+
+  it('restores source drawings with undo and redo across generated parts and subsequent edits', () => {
+    const container = createEditorContainer('');
+    const editor = new Editor(container, {deferInitialUpdate: true});
+    const sourceContainer = document.createElement('section');
+    document.body.appendChild(sourceContainer);
+    const panel = new SourceDrawingPanel(sourceContainer);
+    editor.addEventListener('change', () => panel.setImages(editor.getSourceImages()));
+    const imagesA = [{name: 'A.png', dataUrl: 'data:image/png;base64,AA=='}, {name: 'A-detail.png', dataUrl: 'data:image/png;base64,AQ=='}];
+    const imagesB = [{name: 'B.png', dataUrl: 'data:image/png;base64,Ag=='}];
+    const captions = () => Array.from(sourceContainer.querySelectorAll('figcaption'), caption => caption.textContent);
+    const undo = container.querySelector<HTMLButtonElement>('.undoButton')!;
+    const redo = container.querySelector<HTMLButtonElement>('.redoButton')!;
+
+    editor.setText('STOCK D20\nL5 D8', {sourceImages: imagesA});
+    const originalFrame = sourceContainer.querySelector('.sourceDrawingFrame');
+    setInputValue('.latheCodeInput', 'STOCK D20\nL6 D8');
+    expect(sourceContainer.querySelector('.sourceDrawingFrame')).toBe(originalFrame);
+    editor.setText('STOCK D20\nL10 D12', {sourceImages: imagesB});
+    expect(captions()).toEqual(['B.png']);
+
+    undo.click();
+    expect(editor.getText()).toBe('STOCK D20\nL6 D8');
+    expect(captions()).toEqual(['A.png', 'A-detail.png']);
+    undo.click();
+    expect(editor.getText()).toBe('STOCK D20\nL5 D8');
+    expect(captions()).toEqual(['A.png', 'A-detail.png']);
+    redo.click();
+    redo.click();
+    expect(editor.getText()).toBe('STOCK D20\nL10 D12');
+    expect(captions()).toEqual(['B.png']);
+
+    undo.click();
+    editor.setText('STOCK D20\nL7 D8'); // Profile edits retain the restored reference.
+    expect(captions()).toEqual(['A.png', 'A-detail.png']);
+    expect(redo.hidden).toBe(true);
+    panel.setImages([]);
+  });
+
+  it('keeps distinct source history even when drawings and a new imageless part have identical code', () => {
+    const container = createEditorContainer('');
+    const editor = new Editor(container, {deferInitialUpdate: true});
+    const text = 'STOCK D20\nL5 D8';
+    const imagesA = [{name: 'A.png', dataUrl: 'data:image/png;base64,AA=='}];
+    const imagesB = [{name: 'B.png', dataUrl: 'data:image/png;base64,Ag=='}];
+    const undo = container.querySelector<HTMLButtonElement>('.undoButton')!;
+    const redo = container.querySelector<HTMLButtonElement>('.redoButton')!;
+    editor.setText(text, {sourceImages: imagesA});
+    editor.setText(text, {sourceImages: imagesB});
+    editor.setText(text, {sourceImages: []});
+    expect(editor.getSourceImages()).toEqual([]);
+    undo.click();
+    expect(editor.getSourceImages()).toEqual(imagesB);
+    undo.click();
+    expect(editor.getSourceImages()).toEqual(imagesA);
+    expect(undo.hidden).toBe(true);
+    redo.click();
+    expect(editor.getSourceImages()).toEqual(imagesB);
+    redo.click();
+    expect(editor.getSourceImages()).toEqual([]);
+    expect(editor.getText()).toBe(text);
+  });
+
+  it.each([true, false])('updates source history only for a successful STL import (success: %s)', async success => {
+    vi.mocked(StlImportWorker).mockImplementation(() => {
+      const worker = {
+        onmessage: null as ((event: {data: object}) => void) | null,
+        postMessage: () => worker.onmessage?.({data: success ? {latheCodeText: 'STOCK D20\nL10 D12'} : {error: 'Invalid STL'}}),
+      };
+      return worker as unknown as Worker;
+    });
+    const container = createEditorContainer('');
+    const editor = new Editor(container, {deferInitialUpdate: true});
+    const images = [{name: 'drawing.png', dataUrl: 'data:image/png;base64,AA=='}];
+    const original = 'STOCK D20\nL5 D8';
+    editor.setText(original, {sourceImages: images});
+    await editor.importStlFile(new File(['mock STL'], 'part.stl'));
+    expect(editor.getSourceImages()).toEqual(success ? [] : images);
+    if (success) {
+      expect(editor.getText()).toContain('; part.stl');
+      container.querySelector<HTMLButtonElement>('.undoButton')!.click();
+      expect(editor.getText()).toBe(original);
+      expect(editor.getSourceImages()).toEqual(images);
+      container.querySelector<HTMLButtonElement>('.redoButton')!.click();
+      expect(editor.getSourceImages()).toEqual([]);
+    } else {
+      expect(editor.getText()).toBe(original);
+      expect(container.querySelector<HTMLButtonElement>('.undoButton')!.hidden).toBe(true);
+    }
   });
 
   it('updates setup directives from dedicated editor dialogs', () => {

@@ -33,6 +33,7 @@ sceneContainer.hidden = !hasSavedDraft;
 
 function setLatheCode() {
   plannedLatheCode = null;
+  sourceDrawings.setImages(editor.getSourceImages());
   crossSection.setLatheCode(editor.getLatheCode());
   scene.setLatheCode(editor.getLatheCode());
   planner.setLatheCode(null);
@@ -44,11 +45,10 @@ editor.addEventListener('saved', () => start.updateSavedLatheCodes());
 
 start.addEventListener('start', (event) => {
   const started = event as StartLatheCodeEvent;
-  if (!started.options.preserveSourceImages) sourceDrawings.setImages(started.options.sourceImages ?? []);
   editorContainer.hidden = false;
   crossSectionContainer.hidden = false;
   sceneContainer.hidden = false;
-  editor.setText(started.text);
+  editor.setText(started.text, started.options.preserveSourceImages ? {} : {sourceImages: started.options.sourceImages ?? []});
   start.updateSavedLatheCodes();
 });
 
@@ -56,9 +56,7 @@ start.addEventListener('stlfile', async (event) => {
   editorContainer.hidden = false;
   crossSectionContainer.hidden = false;
   sceneContainer.hidden = false;
-  const before = editor.getText();
   await editor.importStlFile((event as StartStlEvent).file);
-  if (editor.getText() !== before) sourceDrawings.setImages([]);
   start.updateSavedLatheCodes();
 });
 
