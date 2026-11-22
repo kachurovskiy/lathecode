@@ -1,0 +1,225 @@
+; Outside profile from SampleLathePart2-Body.stl
+; STOCK D42.280
+; TOOL RECT R0.2 L2
+; MODE TURN
+; L1.42 DS32.06 DE36.06
+; L8 D36.06
+; L4 DS36.06 DE29.32
+; L13.89 R14.66
+; L4.32 RS14.66 RE21.14
+; L7.77 R21.14
+; L2
+
+; Run time 11.6 min, cutting 76% of time
+; Working area 41.41 by 21.30 mm
+; Axes expected: Z+ points left, X+ points up
+
+G21 ; metric
+G18 ; ZX plane
+G90 ; absolute positioning
+F200
+X-21.14 ; zero your tool X on centerline
+Z0 ; zero your tool Z at the right edge of the stock
+G91 ; relative positioning
+X0.5
+
+F50
+Z31.33 ; cut 15.6516 mm2
+Z0.27 X-0.41 ; cut 0.0449 mm2 at -33.37°
+
+F200
+Z0.14 X-0.09
+Z9.5
+
+F50
+Z0.09 X0.04 ; cut 0.071 mm2 at 66.04°
+Z0.07 X0.12 ; cut 0.2322 mm2 at 30.26°
+
+F200
+X-0.16
+Z-41.39
+X1
+
+F50
+Z30.99 ; cut 15.4866 mm2
+Z0.6 X-0.91 ; cut 0.0453 mm2 at -33.40°
+
+F200
+X-0.09
+Z-31.59
+X1.5
+
+F50
+Z30.65 ; cut 15.3166 mm2
+Z0.94 X-1.41 ; cut 0.0479 mm2 at -33.69°
+
+F200
+X-0.09
+Z-31.59
+X2
+
+F50
+Z30.32 ; cut 15.1516 mm2
+Z1.27 X-1.91 ; cut 0.047 mm2 at -33.62°
+
+F200
+X-0.09
+Z-31.59
+X2.5
+
+F50
+Z29.99 ; cut 14.9866 mm2
+Z1.6 X-2.41 ; cut 0.0453 mm2 at -33.58°
+
+F200
+X-0.09
+Z-31.59
+X3
+
+F50
+Z29.65 ; cut 14.8166 mm2
+Z1.94 X-2.91 ; cut 0.0479 mm2 at -33.69°
+
+F200
+X-0.09
+Z-31.59
+X3.5
+
+F50
+Z1.17 ; cut 0.5766 mm2
+Z0.27 X-0.39 ; cut 0.0469 mm2 at -34.70°
+
+F200
+Z0.15 X-0.1 ; cut 0.0004 mm2 at -56.31°
+
+F50
+Z9.67 ; cut 0.0964 mm2
+Z0.62 X0.49 ; cut 1.0614 mm2 at 51.68°
+Z17.44 ; cut 8.72 mm2
+Z2.27 X-3.41 ; cut 0.047 mm2 at -33.65°
+
+F200
+X-0.09
+Z-31.59
+X4
+
+F50
+Z0.81 ; cut 0.3966 mm2
+Z0.63 X-0.89 ; cut 0.0503 mm2 at -35.29°
+
+F200
+Z0.15 X-0.1
+Z9.67
+Z0.09 X0.04
+
+F50
+Z1.12 X0.95 ; cut 1.0776 mm2 at 49.69°
+Z16.52 ; cut 8.26 mm2
+Z2.6 X-3.91 ; cut 0.0453 mm2 at -33.62°
+
+F200
+X-0.09
+Z-31.59
+X4.5
+
+F50
+Z0.46 ; cut 0.2216 mm2
+Z0.98 X-1.39 ; cut 0.0486 mm2 at -35.19°
+
+F200
+Z0.15 X-0.1
+Z9.67
+Z0.09 X0.04
+
+F50
+Z1.72 X1.45 ; cut 1.0805 mm2 at 49.87°
+Z15.58 ; cut 7.79 mm2
+Z2.94 X-4.41 ; cut 0.0479 mm2 at -33.69°
+
+F200
+X-0.09
+Z-31.59
+X5
+
+F50
+Z0.11 X-0.01 ; cut 0.0462 mm2 at -84.81°
+Z1.3 X-1.84 ; cut 0.0465 mm2 at -35.24°
+
+F200
+Z0.18 X-0.14
+Z9.67
+Z0.09 X0.04
+
+F50
+Z2.31 X1.95 ; cut 1.079 mm2 at 49.83°
+Z14.66 ; cut 7.33 mm2
+Z3.27 X-4.91 ; cut 0.047 mm2 at -33.66°
+
+F200
+X-0.09
+Z-31.59
+X5.17
+Z1.41 X-2.02 ; cut 0.0009 mm2 at -34.92°
+Z0.18 X-0.14
+Z9.67
+Z0.09 X0.04
+
+F50
+Z2.9 X2.45 ; cut 1.0774 mm2 at 49.81°
+Z13.74 ; cut 6.87 mm2
+Z3.6 X-5.41 ; cut 0.0453 mm2 at -33.64°
+
+F200
+X-0.09
+Z-17.34
+X5.5
+
+F50
+Z0.6 X0.5 ; cut 1.0803 mm2 at 50.19°
+Z12.8 ; cut 6.4 mm2
+Z3.94 X-5.91 ; cut 0.0479 mm2 at -33.69°
+
+F200
+X-0.09
+Z-16.74
+X6
+
+F50
+Z0.45 X0.38 ; cut 0.7918 mm2 at 49.82°
+Z12.1 ; cut 4.598 mm2
+Z4.19 X-6.29 ; cut 0.0226 mm2 at -33.67°
+
+F200
+X-0.09
+Z-31.59
+
+F50
+X5.27 ; cut 0.1603 mm2
+Z0.06 X-0.12 ; cut 0.0062 mm2 at -26.57°
+Z1.38 X-1.94 ; cut 0.1434 mm2 at -35.43°
+Z0.1 X-0.08 ; cut 0.0054 mm2 at -51.34°
+Z0.05 X-0.02 ; cut 0.0031 mm2 at -68.20°
+Z9.67 ; cut 0.8118 mm2
+Z0.06 X0.02 ; cut 0.0024 mm2 at 71.57°
+Z3.98 X3.35 ; cut 0.5785 mm2 at 49.91°
+Z12.1 ; cut 1.2171 mm2
+Z4.23 X-6.35 ; cut 0.4413 mm2 at -33.67°
+
+F200
+Z0.09 X-0.09 ; cut 0.001 mm2 at -45.00°
+Z0.08 X-0.04 ; cut 0.0008 mm2 at -63.43°
+
+F50
+Z9.43 ; cut 0.0943 mm2
+
+F200
+Z0.06 X0.02 ; cut 0.0006 mm2 at 71.57°
+Z0.07 X0.07 ; cut 0.0008 mm2 at 45.00°
+Z0.03 X0.07 ; cut 0.0007 mm2 at 23.20°
+
+F50
+Z0.01 X21.14 ; cut 41.9784 mm2 at 0.03°
+
+F200
+X-21.3
+Z-41.41

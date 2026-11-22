@@ -133,7 +133,15 @@ class PixelPlannerWorker {
     }
 
     // Plan passes in advance so that we can finish the part fully before cutting off.
-    const cutXCoords = this.latheCode.getCutoffStarts().map(z => this.canvas.width - z * this.pxPerMm - this.tool.width + 1);
+    const cutXCoords = this.latheCode.getCutoffStarts().map(z => {
+      // Match the rasterizer's physical origin and pixel-center boundary rule.
+      // canvas.width is rounded up and can include an extra empty column; using
+      // it here misaligns tool-width slots. Fractional pass coordinates also
+      // make bitmap lookups see empty space instead of stock or protected part.
+      const boundaryPx = this.latheCode.getStock()!.length * this.pxPerMm - z * this.pxPerMm;
+      const firstPartPixel = Math.ceil(boundaryPx - 0.5);
+      return firstPartPixel - this.tool.width + 1;
+    });
     this.passes = cutXCoords.map(x => new Pass(x, true)).concat(cutXCoords.map(x => new Pass(x - 1, false)));
     if (this.mode === 'FACE') {
       let x = this.canvas.width;
@@ -143,7 +151,6 @@ class PixelPlannerWorker {
         if (x <= 0) break;
       }
     } else if (this.mode === 'TURN') {
-      this.passes.push(... this.latheCode.getCutoffStarts().map(z => new Pass(this.canvas.width - z * this.pxPerMm - this.tool.width, false)));
       if (!this.passes.length) this.passes.push(new Pass(0, true));
     }
     this.passes = this.mergeDuplicatePasses(this.passes);

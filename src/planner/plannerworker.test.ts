@@ -79,6 +79,47 @@ L1`, 10);
     expect(finishMessages.length).toBe(2);
   });
 
+  it('parts off the imported body when decimal lengths round up the stock bitmap', () => {
+    const code = new LatheCode(`STOCK D42.280
+TOOL RECT R0.2 L2
+MODE TURN
+L1.42 DS32.06 DE36.06
+L8 D36.06
+L4 DS36.06 DE29.32
+L13.89 R14.66
+L4.32 RS14.66 RE21.14
+L7.77 R21.14
+L2
+INSIDE
+L31.99 R6.17
+L7.41 R0`).getLatheCodeForProfile('outside')!;
+    const moves = planMoves(code.getText(), 100) as PixelMove[];
+    const cutoffMoves = moves.filter(move =>
+      move.cutArea > 0 &&
+      move.xStart + move.xDelta === 0 &&
+      move.yStart + move.yDelta <= 0);
+
+    expect(cutoffMoves.length).toBeGreaterThan(0);
+    expect(cutoffMoves.reduce((area, move) => area + move.cutArea, 0) / 100 ** 2).toBeGreaterThan(40);
+    expect(cutoffMoves.some(move => move.cutBounds?.minY === 0)).toBe(true);
+    expect(moves.every(move => [move.xStart, move.yStart, move.xDelta, move.yDelta].every(Number.isInteger))).toBe(true);
+  }, 120000);
+
+  it.each(['FACE', 'TURN'])('keeps fractional cutoff positions on the pixel grid in %s mode', mode => {
+    const moves = planMoves(`STOCK D4
+TOOL RECT R0 L1 H1
+MODE ${mode}
+L1.23 D2
+L1.2
+L1.05 D2`, 10) as PixelMove[];
+
+    expect(moves.every(move => [move.xStart, move.yStart, move.xDelta, move.yDelta].every(Number.isInteger))).toBe(true);
+    expect(moves.some(move =>
+      move.cutArea > 0 &&
+      move.cutBounds?.minY === 0 &&
+      move.cutBounds.minX > 10 && move.cutBounds.maxX < 23)).toBe(true);
+  });
+
   it('cuts a finish pass for outside profiles on tube stock', () => {
     const moves = planMoves(`STOCK D10 ID4
 TOOL ANG R0.2 L6 A35 NA55
