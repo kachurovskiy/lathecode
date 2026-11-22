@@ -51,7 +51,7 @@ export function getSelectableSegmentRanges(profile: ProfileDraft): SegmentRange[
     const tool = profile.segmentTools[index];
     if (tool === 'spline') {
       let endIndex = index + 1;
-      while (endIndex < profile.segmentTools.length && profile.segmentTools[endIndex] === 'spline')
+      while (sameSplineSpan(profile, index, endIndex))
         endIndex++;
       ranges.push({
         startIndex: index,
@@ -71,6 +71,10 @@ export function getSelectableSegmentRanges(profile: ProfileDraft): SegmentRange[
     index++;
   }
   return ranges;
+}
+export function sameSplineSpan(profile: ProfileDraft, first: number, next: number): boolean {
+  return profile.segmentTools[next] === 'spline'
+    && (profile.segmentSourceIds?.[first] ?? null) === (profile.segmentSourceIds?.[next] ?? null);
 }
 export function getSingleSegmentSamplePoints(profile: ProfileDraft, index: number): ProfilePoint[] {
   const start = profile.points[index];

@@ -41,8 +41,11 @@ export function renderDrawing(svg: SVGSVGElement, state: DrawingState, freehandS
     });
   }
   const outsideSamples = getProfileSamplePoints(state.profiles.outside);
+  if (outsideSamples.length && outsideSamples[0].z > 0) {
+    outsideSamples.unshift({...outsideSamples[0], z: 0});
+  }
   const outsideFillPoints = [
-    profileToScreen(state, { z: state.profiles.outside.points[0].z, radius: 0 }),
+    profileToScreen(state, { z: outsideSamples[0].z, radius: 0 }),
     ...outsideSamples.map(point => profileToScreen(state, point)),
     profileToScreen(state, { z: state.profiles.outside.points.at(-1)!.z, radius: 0 }),
   ];
@@ -61,6 +64,18 @@ export function renderDrawing(svg: SVGSVGElement, state: DrawingState, freehandS
       points: insideFillPoints.map(point => `${formatSvgNumber(point.x)},${formatSvgNumber(point.y)}`).join(' '),
       class: 'profileDrawingInsideCutout',
     });
+  }
+  const stockBoreRadius = (state.source?.stockInnerDiameterMm ?? 0) / 2;
+  if (stockBoreRadius > 0) {
+    const boreTop = profileToScreen(state, {z: 0, radius: stockBoreRadius}).y;
+    appendSvg(svg, 'rect', {
+      x: plot.left, y: boreTop, width: plot.width, height: plot.axisY - boreTop,
+      class: 'profileDrawingStockBore',
+    });
+    const label = appendSvg(svg, 'text', {
+      x: plot.left + 6, y: plot.axisY - 5, class: 'profileDrawingStockBoreLabel',
+    });
+    label.textContent = `Stock bore D${formatNumber(stockBoreRadius * 2)} mm`;
   }
   for (const side of PROFILE_SIDES) {
     if (!isProfileVisible(state, side))

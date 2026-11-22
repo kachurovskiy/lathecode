@@ -17,7 +17,11 @@ export function createFreehandProfilePreview(state: DrawingState, candidate: Fre
 export function createFreehandPartPreview(state: DrawingState, candidate: FreehandCandidate): HTMLDivElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'profileDrawingFreehandPartPreview';
-  wrapper.appendChild(createLatheCodePreview(buildLatheCodeFromDrawing(createFreehandCandidateState(state, candidate)), { width: FREEHAND_PART_PREVIEW_RENDER_SIZE, height: FREEHAND_PART_PREVIEW_RENDER_SIZE, }));
+  try {
+    wrapper.appendChild(createLatheCodePreview(buildLatheCodeFromDrawing(createFreehandCandidateState(state, candidate)), { width: FREEHAND_PART_PREVIEW_RENDER_SIZE, height: FREEHAND_PART_PREVIEW_RENDER_SIZE, reverseZ: !!state.source }));
+  } catch (caught) {
+    wrapper.textContent = caught instanceof Error ? caught.message : String(caught);
+  }
   return wrapper;
 }
 export function createFreehandCandidateState(state: DrawingState, candidate: FreehandCandidate): DrawingState {

@@ -11,6 +11,7 @@ import {
 } from '../common/settings';
 import { createToolFootprintGeometry } from '../common/toolgeometry';
 import { createLatheCodePreview } from './preview';
+import * as previews from './preview';
 import { SAMPLE_SECTIONS, START_SAMPLE_DEFINITIONS } from './samples';
 import { StartLatheCodeEvent, StartPanel } from './start';
 
@@ -584,6 +585,33 @@ describe('StartPanel', () => {
     expect(started[0]).not.toContain('L10 DS30 DE20');
   });
 
+  it('keeps the preview orientation when a fresh drawing is accepted and reopened', () => {
+    const setText = vi.fn();
+    vi.spyOn(previews, 'createAutoRotatingLatheCodePreview').mockReturnValue({setText, resize() {}, dispose() {}});
+    const container = createStartContainer();
+    let source = '';
+    const start = new StartPanel(container, {getCurrentLatheCodeText: () => source});
+    start.addEventListener('start', event => source = (event as StartLatheCodeEvent).text);
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const svg = document.querySelector<SVGSVGElement>('.profileDrawingSvg')!;
+    dispatchProfileMouse(svg, 'mousedown', 10, 20);
+    dispatchProfileMouse(window, 'mouseup', 10, 20);
+    // A dimension update flushes the pending preview immediately.
+    setInputValue('input[name="drawingLength"]', '60');
+    const [freshText, freshOptions] = setText.mock.calls.at(-1)!;
+    expect(freshOptions).toEqual({reverseZ: false});
+    clickDialogButton('Use lathecode');
+    const accepted = source;
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    const [importedText, importedOptions] = setText.mock.calls.at(-1)!;
+    expect(importedText).toBe(accepted);
+    expect(importedOptions).toEqual({reverseZ: true});
+    expect(new LatheCode(importedText).reverse()).toContain('L12 DS30 DE20');
+    expect(new LatheCode(freshText).getOutsideProfileSegments()).toEqual(new LatheCode(new LatheCode(importedText).reverse()).getOutsideProfileSegments());
+    clickDialogButton('Use lathecode');
+    expect(source).toBe(accepted);
+  });
+
   it('switches to select when clicking an existing point with a drawing tool active', () => {
     const container = createStartContainer();
     const start = new StartPanel(container);
@@ -631,6 +659,32 @@ describe('StartPanel', () => {
     const latheCode = new LatheCode(started[0]);
     expect(latheCode.getStock()).toEqual({diameter: 44, length: 12, innerDiameter: 0});
     expect(latheCode.getProfiles().map(profile => profile.side)).toEqual(['outside', 'inside']);
+  });
+
+  it('keeps an inch-based tube program exact through graphical view controls', () => {
+    const source = '; Original tube\nUNITS IN\nSTOCK D0.333 ID0.125\nTOOL RECT R0.01 L0.08\nDEPTH CUT0.01 FINISH0.002\nFEED MOVE10 PASS2 PART1\nMODE FACE\nAXES RIGHT DOWN\nL0.333 D0.3 CH0.01\n; Keep this note';
+    const container = createStartContainer();
+    const start = new StartPanel(container, {getCurrentLatheCodeText: () => source});
+    const started: string[] = [];
+    start.addEventListener('start', event => started.push((event as StartLatheCodeEvent).text));
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    expect(document.querySelector('.profileDrawingStockBore')).not.toBeNull();
+    expect(document.querySelector<HTMLElement>('.profileDrawingStockBoreLabel')!.textContent).toContain('3.175');
+    expect(Number(document.querySelector<HTMLInputElement>('[name="drawingDiameter"]')!.value)).toBeCloseTo(8.4582, 10);
+    setInputValue('[name="drawingSnap"]', '0.1');
+    setInputValue('[name="drawingGrid"]', '1');
+    clickDialogButton('Inside');
+    expect(document.querySelector<HTMLFormElement>('.profileDrawingDialog')!.checkValidity()).toBe(true);
+    clickDialogButton('Use lathecode');
+    expect(started).toEqual([source]);
+  });
+
+  it('leaves invalid source in the text editor instead of opening a default part', () => {
+    const container = createStartContainer();
+    new StartPanel(container, {getCurrentLatheCodeText: () => 'STOCK D10\nLinvalid'});
+    container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
+    expect(document.querySelector('.profileDrawingDialog')).toBeNull();
+    expect(document.querySelector<HTMLElement>('.toolDialogError')!.textContent).toContain('Your program has not been changed');
   });
 
   it('imports the goblet sample into profile designer without inside/outside crossings', () => {
@@ -687,7 +741,7 @@ describe('StartPanel', () => {
     expect(() => new LatheCode(started[0])).not.toThrow();
   });
 
-  it('fits edge feature sizes when profile edits make a segment shorter', () => {
+  it('offers explicit feature corrections when profile edits make a segment shorter', () => {
     const container = createStartContainer();
     const start = new StartPanel(container, {
       getCurrentLatheCodeText: () => 'STOCK D30\nL50 DS30 FI1 DE30 CH1',
@@ -699,6 +753,12 @@ describe('StartPanel', () => {
 
     container.querySelector<HTMLButtonElement>('.startDimensionsButton')!.click();
     setInputValue('input[name="drawingLength"]', '1');
+    clickDialogButton('Use lathecode');
+
+    expect(started).toHaveLength(0);
+    expect(document.querySelector<HTMLElement>('.toolDialogError')!.textContent).toContain('No features were changed');
+    expect(document.querySelector<HTMLElement>('.profileDrawingFeatureCorrections')!.textContent).toContain('Outside segment 1');
+    clickDialogButton('Apply listed feature corrections');
     clickDialogButton('Use lathecode');
 
     expect(started).toHaveLength(1);

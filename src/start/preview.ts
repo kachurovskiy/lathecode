@@ -30,19 +30,24 @@ const previewSubscribers = new Map<string, Set<HTMLDivElement>>();
 type PreviewJob = {
   cacheKey: string,
   text: string,
+  reverseZ: boolean,
   partRevolutionDegrees: number,
   width: number,
   height: number,
   sequence: number,
 };
 
-type LatheCodePreviewOptions = {
+type PreviewOrientationOptions = {
+  reverseZ?: boolean,
+};
+
+type LatheCodePreviewOptions = PreviewOrientationOptions & {
   width?: number,
   height?: number,
 };
 
 export type AutoRotatingLatheCodePreview = {
-  setText: (text: string) => void,
+  setText: (text: string, options?: PreviewOrientationOptions) => void,
   resize: (width: number, height: number) => void,
   dispose: () => void,
 };
@@ -64,6 +69,7 @@ export function createLatheCodePreview(text: string, options: LatheCodePreviewOp
   preview.setAttribute('aria-hidden', 'true');
   const width = sanitizePreviewDimension(options.width, DEFAULT_PREVIEW_WIDTH);
   const height = sanitizePreviewDimension(options.height, DEFAULT_PREVIEW_HEIGHT);
+  const reverseZ = options.reverseZ ?? false;
 
   try {
     new LatheCode(text);
@@ -78,7 +84,7 @@ export function createLatheCodePreview(text: string, options: LatheCodePreviewOp
   }
 
   const partRevolutionDegrees = loadAppSettings().partRevolutionDegrees;
-  const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees, width, height);
+  const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees, width, height, reverseZ);
   const cachedPreview = previewCache.get(cacheKey);
   if (cachedPreview instanceof HTMLCanvasElement) {
     preview.appendChild(cloneCanvas(cachedPreview));
@@ -88,7 +94,7 @@ export function createLatheCodePreview(text: string, options: LatheCodePreviewOp
     preview.appendChild(createPreviewFallback('Preview loading'));
     if (isPreviewSessionActive()) {
       subscribePreview(cacheKey, preview);
-      enqueuePreview(text, partRevolutionDegrees, width, height);
+      enqueuePreview(text, partRevolutionDegrees, width, height, reverseZ);
     }
   }
 
@@ -125,6 +131,7 @@ export function createAutoRotatingLatheCodePreview(container: HTMLElement): Auto
 
   let model: THREE.Group | null = null;
   let lastText = '';
+  let lastReverseZ = false;
   let width = DEFAULT_PREVIEW_WIDTH;
   let height = DEFAULT_PREVIEW_HEIGHT;
   let animationFrame: number | null = null;
@@ -166,24 +173,16 @@ export function createAutoRotatingLatheCodePreview(container: HTMLElement): Auto
   };
 
   const preview: AutoRotatingLatheCodePreview = {
-    setText(text: string) {
-      if (disposed || text === lastText) return;
+    setText(text: string, {reverseZ = false}: PreviewOrientationOptions = {}) {
+      if (disposed || (text === lastText && reverseZ === lastReverseZ)) return;
       lastText = text;
+      lastReverseZ = reverseZ;
       let nextModel: THREE.Group;
-      let unusedStockMesh: THREE.Object3D | null = null;
       try {
-        const renderObjects = createLatheRenderObjects(new LatheCode(text), {
-          partRevolutionDegrees: loadAppSettings().partRevolutionDegrees,
-        });
-        unusedStockMesh = renderObjects.stockMesh;
-        nextModel = new THREE.Group();
-        nextModel.add(renderObjects.latheMesh);
-        applySamplePreviewRotation(nextModel);
+        nextModel = createLathePreviewModel(new LatheCode(text), loadAppSettings().partRevolutionDegrees, reverseZ);
         nextModel.rotation.y = currentRotationY;
       } catch {
         return;
-      } finally {
-        if (unusedStockMesh) disposeObject(unusedStockMesh);
       }
 
       if (model) {
@@ -244,11 +243,11 @@ function createUnavailableAutoPreview(): AutoRotatingLatheCodePreview {
   };
 }
 
-function enqueuePreview(text: string, partRevolutionDegrees: number, width: number, height: number) {
+function enqueuePreview(text: string, partRevolutionDegrees: number, width: number, height: number, reverseZ: boolean) {
   if (!isPreviewSessionActive()) return;
-  const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees, width, height);
+  const cacheKey = getPreviewCacheKey(text, partRevolutionDegrees, width, height, reverseZ);
   if (previewCache.has(cacheKey) || previewQueue.some(job => job.cacheKey === cacheKey)) return;
-  previewQueue.push({cacheKey, text, partRevolutionDegrees, width, height, sequence: nextPreviewJobSequence++});
+  previewQueue.push({cacheKey, text, partRevolutionDegrees, width, height, reverseZ, sequence: nextPreviewJobSequence++});
   schedulePreviewQueue();
 }
 
@@ -296,7 +295,7 @@ function getPreviewQueueDelayMs() {
 
 function renderPreviewJob(job: PreviewJob): HTMLCanvasElement | 'unavailable' {
   try {
-    return renderLatheCodePreview(new LatheCode(job.text), job.partRevolutionDegrees, job.width, job.height);
+    return renderLatheCodePreview(new LatheCode(job.text), job.partRevolutionDegrees, job.width, job.height, job.reverseZ);
   } catch {
     return 'unavailable';
   }
@@ -307,6 +306,7 @@ function renderLatheCodePreview(
   partRevolutionDegrees: number,
   width: number,
   height: number,
+  reverseZ: boolean,
 ): HTMLCanvasElement {
   const renderer = getSharedRenderer();
   const pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_PREVIEW_DEVICE_PIXEL_RATIO);
@@ -317,12 +317,7 @@ function renderLatheCodePreview(
   const scene = new THREE.Scene();
   addLatheLights(scene);
 
-  const renderObjects = createLatheRenderObjects(latheCode, {
-    partRevolutionDegrees,
-  });
-  const group = new THREE.Group();
-  group.add(renderObjects.latheMesh);
-  applySamplePreviewRotation(group);
+  const group = createLathePreviewModel(latheCode, partRevolutionDegrees, reverseZ);
   scene.add(group);
 
   const camera = new THREE.OrthographicCamera(-7, 7, -7, 7, 0, 1000);
@@ -338,12 +333,23 @@ function renderLatheCodePreview(
   context.drawImage(renderer.domElement, 0, 0);
 
   disposeObject(group);
-  disposeObject(renderObjects.stockMesh);
   return canvas;
 }
 
-function getPreviewCacheKey(text: string, partRevolutionDegrees: number, width: number, height: number): string {
-  return `${partRevolutionDegrees}:${width}x${height}\n${text}`;
+/** Orient the complete part about its stock center, including partial profiles and cutoffs. */
+export function createLathePreviewModel(latheCode: LatheCode, partRevolutionDegrees: number, reverseZ = false): THREE.Group {
+  const renderObjects = createLatheRenderObjects(latheCode, {partRevolutionDegrees});
+  disposeObject(renderObjects.stockMesh);
+  const group = new THREE.Group();
+  group.add(renderObjects.latheMesh);
+  // Three.js uses Y for the lathe's Z axis. Mirror the centered mesh before view rotation.
+  group.scale.y = reverseZ ? -1 : 1;
+  applySamplePreviewRotation(group);
+  return group;
+}
+
+function getPreviewCacheKey(text: string, partRevolutionDegrees: number, width: number, height: number, reverseZ: boolean): string {
+  return `${partRevolutionDegrees}:${width}x${height}:${reverseZ}\n${text}`;
 }
 
 function sanitizePreviewDimension(value: number | undefined, fallback: number): number {

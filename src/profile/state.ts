@@ -1,17 +1,19 @@
 import { LatheCode, Segment, type ProfileSegmentDefinition } from '../common/lathecode.ts';
 import { getProfileEndpointFeatureContext, getProfileEndpointFeatureSizeLimit } from './edgefeatures.ts';
 import { DEFAULT_DIAMETER_MM, DEFAULT_GRID_MM, DEFAULT_LENGTH_MM, DEFAULT_SNAP_MM, GEOMETRY_EPSILON, HISTORY_LIMIT, IMPORT_EPSILON, MIN_SEGMENT_LENGTH_MM, PROFILE_SIDES, type DrawingHistory, type DrawingState, type ProfileDraft, type ProfilePoint, type ProfileSide, type SegmentEdgeFeature, type SegmentEdgeFeatures, type SegmentFeatureEndpoint, type SegmentSelection, type SegmentTool, type PointSelection, } from './types.ts';
-import { getDefaultGridMm, hasSegmentLength } from './geometry.ts';
+import { getDefaultGridMm, hasSegmentLength, sameSplineSpan } from './geometry.ts';
 export function createInitialState(initialText?: string | null): DrawingState {
-  const importedState = initialText?.trim() ? tryCreateStateFromLatheCodeForDrawing(initialText) : null;
-  return importedState ?? createDefaultState();
+  if (!initialText?.trim()) return createDefaultState();
+  new LatheCode(initialText); // Surface invalid source instead of silently replacing it.
+  const importedState = tryCreateStateFromLatheCodeForDrawing(initialText);
+  if (!importedState) throw new Error('This program cannot be drawn. Correct its stock and profile dimensions in the text editor.');
+  return importedState;
 }
 export function tryCreateStateFromLatheCodeForDrawing(text: string): DrawingState | null {
   const state = tryCreateStateFromLatheCode(text);
   if (!state)
     return null;
   reverseDrawingStateForEditor(state);
-  clampAllPoints(state);
   selectDefaultPoint(state, state.activeSide);
   return state;
 }
@@ -33,6 +35,7 @@ export function createDefaultState(): DrawingState {
 }
 export function resetDrawingState(state: DrawingState): void {
   const next = createDefaultState();
+  state.source = undefined;
   state.diameterMm = next.diameterMm;
   state.lengthMm = next.lengthMm;
   state.snapMm = next.snapMm;
@@ -45,6 +48,7 @@ export function resetDrawingState(state: DrawingState): void {
 }
 export function cloneDrawingState(state: DrawingState): DrawingState {
   return {
+    source: state.source,
     diameterMm: state.diameterMm,
     lengthMm: state.lengthMm,
     snapMm: state.snapMm,
@@ -65,6 +69,7 @@ export function cloneProfileDraft(profile: ProfileDraft): ProfileDraft {
     points: profile.points.map(point => ({ ...point })),
     segmentTools: profile.segmentTools.concat(),
     segmentFeatures: profile.segmentFeatures.map(cloneSegmentEdgeFeatures),
+    segmentSourceIds: profile.segmentSourceIds?.slice(),
   };
 }
 export function cloneSegmentEdgeFeatures(features: SegmentEdgeFeatures): SegmentEdgeFeatures {
@@ -82,11 +87,12 @@ export function reverseDrawingStateForEditor(state: DrawingState): void {
 export function reverseProfileDraftZ(profile: ProfileDraft, lengthMm: number): void {
   const segmentTools = profile.segmentTools.slice().reverse();
   const segmentFeatures = profile.segmentFeatures.slice().reverse().map(reverseSegmentEdgeFeatures);
-  profile.points = removeConsecutiveProfileDuplicates(profile.points
+  profile.points = profile.points
     .map(point => ({ z: lengthMm - point.z, radius: point.radius }))
-    .reverse());
+    .reverse();
   profile.segmentTools = segmentTools;
   profile.segmentFeatures = segmentFeatures;
+  profile.segmentSourceIds = profile.segmentSourceIds?.slice().reverse();
   alignSegmentToolsWithPoints(profile);
   normalizeProfileSplineControlZ(profile);
 }
@@ -98,6 +104,7 @@ export function reverseSegmentEdgeFeatures(features: SegmentEdgeFeatures): Segme
 }
 export function restoreDrawingState(target: DrawingState, source: DrawingState): void {
   const next = cloneDrawingState(source);
+  target.source = next.source;
   target.diameterMm = next.diameterMm;
   target.lengthMm = next.lengthMm;
   target.snapMm = next.snapMm;
@@ -152,16 +159,30 @@ export function tryCreateStateFromLatheCode(text: string): DrawingState | null {
       return null;
     const diameterMm = stock.diameter;
     const lengthMm = stock.length;
-    const outsideSegments = latheCode.getOutsidePartProfileSegmentDefinitions();
-    const insideSegments = latheCode.getInsidePartProfileSegmentDefinitions();
-    const outsideDraft = createProfileDraftFromSegmentDefinitions(outsideSegments, lengthMm)
+    const outsideSegments = latheCode.getSourceProfileSegmentDefinitions('outside');
+    const insideSegments = latheCode.getSourceProfileSegmentDefinitions('inside');
+    const lineIndices: Record<ProfileSide, number[]> = {outside: [], inside: []};
+    let side: ProfileSide = 'outside';
+    text.split(/\r?\n/).forEach((line, index) => {
+      if (/^INSIDE\b/.test(line)) side = 'inside';
+      if (/^L[\d.]/.test(line)) lineIndices[side].push(index);
+    });
+    const outsideDraft = createProfileDraftFromSegmentDefinitions(outsideSegments, lengthMm, lineIndices.outside)
       ?? createProfileDraft(diameterMm / 2, true, lengthMm);
-    const importedInsideDraft = createProfileDraftFromSegmentDefinitions(insideSegments, lengthMm);
+    const importedInsideDraft = createProfileDraftFromSegmentDefinitions(insideSegments, lengthMm, lineIndices.inside);
     const insideDraft = importedInsideDraft
-      ?? createProfileDraft(stock.innerDiameter / 2, stock.innerDiameter > 0, lengthMm);
-    insideDraft.enabled = insideDraft.enabled || hasDrawableProfile(insideDraft);
+      ?? createProfileDraft(stock.innerDiameter / 2, false, lengthMm);
     const activeSide: ProfileSide = outsideSegments.length ? 'outside' : insideDraft.enabled ? 'inside' : 'outside';
     const state: DrawingState = {
+      source: {
+        text,
+        unitMm: latheCode.getUnitsMultiplier(),
+        diameterMm,
+        lengthMm,
+        stockInnerDiameterMm: stock.innerDiameter,
+        lineIndices,
+        profiles: {outside: cloneProfileDraft(outsideDraft), inside: cloneProfileDraft(insideDraft)},
+      },
       diameterMm,
       lengthMm,
       snapMm: DEFAULT_SNAP_MM,
@@ -175,7 +196,6 @@ export function tryCreateStateFromLatheCode(text: string): DrawingState | null {
       selection: { side: activeSide, index: 1 },
       segmentSelection: null,
     };
-    clampAllPoints(state);
     selectDefaultPoint(state, activeSide);
     return state;
   }
@@ -183,13 +203,15 @@ export function tryCreateStateFromLatheCode(text: string): DrawingState | null {
     return null;
   }
 }
-export function createProfileDraftFromSegmentDefinitions(definitions: readonly ProfileSegmentDefinition[], lengthMm: number): ProfileDraft | null {
+export function createProfileDraftFromSegmentDefinitions(definitions: readonly ProfileSegmentDefinition[], _lengthMm: number, sourceIds?: readonly number[]): ProfileDraft | null {
   if (!definitions.length)
     return null;
   const points: ProfilePoint[] = [];
   const segmentTools: SegmentTool[] = [];
   const segmentFeatures: SegmentEdgeFeatures[] = [];
-  for (const definition of definitions) {
+  const segmentSourceIds: (number | null)[] = [];
+  for (const [definitionIndex, definition] of definitions.entries()) {
+    const sourceId = sourceIds?.[definitionIndex] ?? null;
     const segment = definition.segment;
     const start = segmentPointToProfilePoint(segment.start);
     if (!points.length) {
@@ -199,6 +221,7 @@ export function createProfileDraftFromSegmentDefinitions(definitions: readonly P
       points.push(start);
       segmentTools.push('line');
       segmentFeatures.push(createEmptySegmentFeatures());
+      segmentSourceIds.push(null);
     }
     if (segment.type === 'BSPLINE' && segment.controlPoints.length >= 2) {
       const splinePoints = getSplineDrawingPoints(segment);
@@ -206,25 +229,26 @@ export function createProfileDraftFromSegmentDefinitions(definitions: readonly P
         points.push(point);
         segmentTools.push('spline');
         segmentFeatures.push(createEmptySegmentFeatures());
+        segmentSourceIds.push(sourceId);
       }
     }
     else {
       points.push(segmentPointToProfilePoint(segment.end));
       segmentTools.push(segmentTypeToDrawingTool(segment.type));
       segmentFeatures.push(segmentEdgeFeaturesFromDefinition(definition));
+      segmentSourceIds.push(sourceId);
     }
   }
   const draft: ProfileDraft = {
     enabled: true,
-    points: removeConsecutiveProfileDuplicates(points),
+    points,
     segmentTools,
     segmentFeatures,
+    segmentSourceIds,
   };
   alignSegmentToolsWithPoints(draft);
   if (draft.points.length < 2)
     return null;
-  draft.points[0].z = 0;
-  draft.points.at(-1)!.z = Math.max(draft.points.at(-1)!.z, lengthMm);
   normalizeProfileSplineControlZ(draft);
   return draft;
 }
@@ -274,6 +298,10 @@ export function alignSegmentToolsWithPoints(profile: ProfileDraft): void {
   const needed = Math.max(0, profile.points.length - 1);
   profile.segmentTools = profile.segmentTools.slice(0, needed);
   profile.segmentFeatures = profile.segmentFeatures.slice(0, needed);
+  if (profile.segmentSourceIds) {
+    profile.segmentSourceIds = profile.segmentSourceIds.slice(0, needed);
+    while (profile.segmentSourceIds.length < needed) profile.segmentSourceIds.push(null);
+  }
   while (profile.segmentTools.length < needed)
     profile.segmentTools.push(profile.segmentTools.at(-1) ?? 'line');
   while (profile.segmentFeatures.length < needed)
@@ -289,7 +317,7 @@ export function normalizeProfileSplineControlZ(profile: ProfileDraft): void {
     }
     const startIndex = index;
     let endIndex = index + 1;
-    while (endIndex < profile.segmentTools.length && profile.segmentTools[endIndex] === 'spline')
+    while (sameSplineSpan(profile, startIndex, endIndex))
       endIndex++;
     normalizeSplineRangeControlZ(profile, startIndex, endIndex);
     index = endIndex;
@@ -316,11 +344,12 @@ export function getSplinePointRange(profile: ProfileDraft, pointIndex: number): 
     return null;
   if (profile.segmentTools[pointIndex] !== 'spline' && profile.segmentTools[pointIndex - 1] !== 'spline')
     return null;
-  let startIndex = pointIndex;
-  while (startIndex > 0 && profile.segmentTools[startIndex - 1] === 'spline')
+  const spanIndex = profile.segmentTools[pointIndex] === 'spline' ? pointIndex : pointIndex - 1;
+  let startIndex = spanIndex;
+  while (startIndex > 0 && sameSplineSpan(profile, spanIndex, startIndex - 1))
     startIndex--;
   let endIndex = pointIndex;
-  while (endIndex < profile.segmentTools.length && profile.segmentTools[endIndex] === 'spline')
+  while (sameSplineSpan(profile, startIndex, endIndex))
     endIndex++;
   return endIndex > startIndex ? { startIndex, endIndex } : null;
 }
@@ -361,16 +390,24 @@ export function insertPoint(state: DrawingState, side: ProfileSide, point: Profi
   clampPointInPlace(state, clamped);
   profile.points.splice(insertIndex, 0, clamped);
   profile.segmentTools.splice(insertIndex - 1, 1, tool, tool);
-  profile.segmentFeatures.splice(insertIndex - 1, 1, createEmptySegmentFeatures(), createEmptySegmentFeatures());
+  const previousFeatures = profile.segmentFeatures[insertIndex - 1];
+  profile.segmentFeatures.splice(insertIndex - 1, 1,
+    {start: previousFeatures?.start ?? null, end: null},
+    {start: null, end: previousFeatures?.end ?? null});
+  if (profile.segmentSourceIds) {
+    const sourceId = profile.segmentSourceIds[insertIndex - 1];
+    profile.segmentSourceIds.splice(insertIndex - 1, 1, sourceId, sourceId);
+  }
   normalizeProfileSplineControlZ(profile);
   state.selection = { side, index: insertIndex };
   state.segmentSelection = null;
 }
 export function updatePointPosition(state: DrawingState, selection: Exclude<PointSelection, null>, point: ProfilePoint, snap: boolean): void {
   const profile = state.profiles[selection.side];
+  const isSplineControl = isInternalSplineControlPoint(profile, selection.index);
   const sourcePoint = clampProfilePoint(state, point);
   const clamped = snap ? snapProfilePoint(state, sourcePoint) : sourcePoint;
-  const lockedZ = isInternalSplineControlPoint(profile, selection.index)
+  const lockedZ = isSplineControl
     ? profile.points[selection.index].z
     : null;
   const isFirstPoint = selection.index === 0;
@@ -381,12 +418,16 @@ export function updatePointPosition(state: DrawingState, selection: Exclude<Poin
     snapPointToNeighborPositions(state, clamped, [previous, next], sourcePoint);
   if (lockedZ !== null)
     clamped.z = lockedZ;
-  if (isFirstPoint)
+  if (isFirstPoint && Math.abs(profile.points[0].z) <= GEOMETRY_EPSILON)
     clamped.z = 0;
-  if (isLastPoint)
+  if (isLastPoint && Math.abs(profile.points.at(-1)!.z - state.lengthMm) <= GEOMETRY_EPSILON)
     clamped.z = state.lengthMm;
   clamped.z = clampZBetweenNeighbors(clamped.z, previous, next);
   clampPointInPlace(state, clamped);
+  if (isSplineControl) {
+    // A spline control can lie outside the stock while its actual curve stays inside.
+    clamped.radius = Math.max(0, snap && state.snapMm > 0 ? snapNumber(point.radius * 2, state.snapMm) / 2 : point.radius);
+  }
   profile.points[selection.index] = clamped;
   normalizeProfileSplineControlZ(profile);
   state.selection = selection;
@@ -400,7 +441,11 @@ export function removeSelectedPoint(state: DrawingState): boolean {
   const mergedTool = profile.segmentTools[Math.max(0, index - 1)] ?? 'line';
   profile.points.splice(index, 1);
   profile.segmentTools.splice(index - 1, 2, mergedTool);
-  profile.segmentFeatures.splice(index - 1, 2, createEmptySegmentFeatures());
+  profile.segmentFeatures.splice(index - 1, 2, {
+    start: profile.segmentFeatures[index - 1]?.start ?? null,
+    end: profile.segmentFeatures[index]?.end ?? null,
+  });
+  if (profile.segmentSourceIds) profile.segmentSourceIds.splice(index - 1, 2, profile.segmentSourceIds[index - 1] ?? profile.segmentSourceIds[index]);
   normalizeProfileSplineControlZ(profile);
   state.selection = { side, index: Math.min(index, profile.points.length - 1) };
   state.segmentSelection = null;
@@ -459,8 +504,6 @@ export function setSelectedSegmentTool(state: DrawingState, tool: SegmentTool): 
     if (profile.segmentTools[index] === tool)
       continue;
     profile.segmentTools[index] = tool;
-    if (tool !== 'line')
-      profile.segmentFeatures[index] = createEmptySegmentFeatures();
     changed = true;
   }
   if (changed)
@@ -560,10 +603,10 @@ export function getSelectedSegmentToolRange(profile: ProfileDraft, index: number
   if (profile.segmentTools[index] !== 'spline')
     return { startIndex: index, endIndex: index + 1 };
   let startIndex = index;
-  while (startIndex > 0 && profile.segmentTools[startIndex - 1] === 'spline')
+  while (startIndex > 0 && sameSplineSpan(profile, index, startIndex - 1))
     startIndex--;
   let endIndex = index + 1;
-  while (endIndex < profile.segmentTools.length && profile.segmentTools[endIndex] === 'spline')
+  while (sameSplineSpan(profile, index, endIndex))
     endIndex++;
   return { startIndex, endIndex };
 }
@@ -578,7 +621,7 @@ function getSelectedSegmentEndpointFeatureContext(state: DrawingState, selection
 }
 
 function getProfileClosureRadius(state: DrawingState, side: ProfileSide): number {
-  return side === 'inside' ? state.diameterMm / 2 : 0;
+  return side === 'inside' ? state.diameterMm / 2 : (state.source?.stockInnerDiameterMm ?? 0) / 2;
 }
 
 export function selectDefaultPoint(state: DrawingState, side: ProfileSide): void {
@@ -671,13 +714,34 @@ export function resizeDrawing(state: DrawingState, nextDiameterMm: number, nextL
     scaleZ(state, nextLengthMm / state.lengthMm);
     state.lengthMm = nextLengthMm;
   }
-  clampAllPoints(state);
 }
 export function scaleRadii(state: DrawingState, scale: number): void {
-  for (const profile of Object.values(state.profiles)) {
-    profile.points = profile.points.map(point => ({
+  const boreRadius = (state.source?.stockInnerDiameterMm ?? 0) / 2;
+  const sourceOutside = state.source?.profiles.outside;
+  const boreSourceIds = new Set(sourceOutside?.segmentSourceIds?.filter((id, index) => (
+    id !== null && sourceOutside.segmentTools[index] === 'line'
+    && Math.abs(sourceOutside.points[index].radius - boreRadius) <= GEOMETRY_EPSILON
+    && Math.abs(sourceOutside.points[index + 1].radius - boreRadius) <= GEOMETRY_EPSILON
+  )));
+  for (const side of PROFILE_SIDES) {
+    const profile = state.profiles[side];
+    if (side === 'inside' && state.source && !state.source.lineIndices.inside.length
+      && profile.points.every(point => Math.abs(point.radius - state.source!.stockInnerDiameterMm / 2) <= GEOMETRY_EPSILON)) continue;
+    const borePoints = new Set<number>();
+    if (side === 'outside' && boreRadius > 0) {
+      profile.segmentSourceIds?.forEach((id, index) => {
+        if (id === null || !boreSourceIds.has(id) || profile.segmentTools[index] !== 'line') return;
+        // A source cutoff still on the stock bore must remain a through cut.
+        if (Math.abs(profile.points[index].radius - boreRadius) <= GEOMETRY_EPSILON
+          && Math.abs(profile.points[index + 1].radius - boreRadius) <= GEOMETRY_EPSILON) {
+          borePoints.add(index);
+          borePoints.add(index + 1);
+        }
+      });
+    }
+    profile.points = profile.points.map((point, index) => ({
       ...point,
-      radius: point.radius * scale,
+      radius: borePoints.has(index) ? boreRadius : point.radius * scale,
     }));
   }
 }

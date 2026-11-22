@@ -66,7 +66,7 @@ export function createNumberField(labelText: string, name: string, value: number
   input.name = name;
   input.min = String(options.min ?? 0.1);
   input.step = String(options.step ?? 0.1);
-  input.value = formatNumber(value);
+  input.value = String(value);
   input.className = 'settingInput';
   field.appendChild(input);
   return { field, input };

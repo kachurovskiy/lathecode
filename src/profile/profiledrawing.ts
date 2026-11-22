@@ -7,7 +7,7 @@ import { findNearestPointSelection, findNearestSegmentSelection, getDrawingViewB
 import { canAddPointNextToPoint, canRemoveSelectedPoint, canSelectedSegmentEndpointHaveFeature, canSplitSegmentAtProfilePoint, cloneDrawingState, cloneProfileDraft, createInitialState, ensureProfileEnabled, getDefaultSegmentFeatureSize, getProfileSideLabel, getSelectedPoint, getSelectedSegmentFeature, getSelectedSegmentFeatureSize, getSelectedSegmentTool, insertPoint, isInternalSplineControlPoint, midpointProfilePoint, recordUndoState, recordUndoStateIfChanged, redoDrawingState, removeSelectedPoint, resetDrawingState, resizeDrawing, restoreDrawingState, selectDefaultPoint, setSelectedSegmentFeature, setSelectedSegmentTool, tryCreateStateFromLatheCodeForDrawing, undoDrawingState, updatePointPosition, } from './state.ts';
 import { appendFreehandStrokePoint, createFreehandCandidates, createFreehandPartPreview, createFreehandProfilePreview, } from './freehand.ts';
 import { renderDrawing } from './render.ts';
-import { buildLatheCodeFromDrawing, buildOutgoingLatheCodeFromDrawing } from './serialization.ts';
+import { applyDrawingFeatureCorrections, buildLatheCodeFromDrawing, buildOutgoingLatheCodeFromDrawing, formatFeatureCorrection, getDrawingFeatureCorrections, isEdgeFeatureValidationError, type DrawingFeatureCorrection } from './serialization.ts';
 
 type ProfileDrawingSnapshot = {
   id: string;
@@ -20,7 +20,16 @@ const profileDrawingSnapshots: ProfileDrawingSnapshot[] = [];
 let profileDrawingSnapshotSequence = 0;
 
 export function openProfileDrawingDialog(onAccept: (text: string) => void, initialText?: string | null): void {
-  const state = createInitialState(initialText);
+  let state: DrawingState;
+  try {
+    state = createInitialState(initialText);
+  } catch (caught) {
+    const message = document.createElement('p');
+    message.className = 'toolDialogError';
+    message.textContent = `Cannot open this program in the profile designer. ${caught instanceof Error ? caught.message : caught} Correct it in the text editor and try again. Your program has not been changed.`;
+    createFullScreenDialog(message, 'Profile Designer');
+    return;
+  }
   state.selection = null;
   state.segmentSelection = null;
   const history: DrawingHistory = { undoStack: [], redoStack: [], };
@@ -32,6 +41,7 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   let contextMenu: HTMLDivElement | null = null;
   let previewUpdateTimer: number | null = null;
   let previewText = '';
+  let previewReverseZ = false;
   let previewRenderSizeKey = '';
   let forceImmediatePreviewUpdate = false;
   let updatingPointFields = false;
@@ -45,10 +55,16 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   const controls = document.createElement('div');
   controls.className = 'profileDrawingControls';
   form.appendChild(controls);
-  const diameterField = createNumberField('Diameter', 'drawingDiameter', state.diameterMm);
-  const lengthField = createNumberField('Length', 'drawingLength', state.lengthMm);
-  const snapField = createNumberField('Snap', 'drawingSnap', state.snapMm, { min: 0, step: 0.1 });
-  const gridField = createNumberField('Grid', 'drawingGrid', state.gridMm, { min: 0.1, step: 0.1 });
+  if (state.source) {
+    const guide = document.createElement('p');
+    guide.className = 'settingGuide';
+    guide.textContent = 'Drawing dimensions are in mm. The original units, stock bore, machining setup, and comments are retained. Overall resizing scales the profile; endpoint features must still fit.';
+    form.appendChild(guide);
+  }
+  const diameterField = createNumberField('Diameter', 'drawingDiameter', state.diameterMm, {min: 0, step: 'any'});
+  const lengthField = createNumberField('Length', 'drawingLength', state.lengthMm, {min: 0, step: 'any'});
+  const snapField = createNumberField('Snap', 'drawingSnap', state.snapMm, { min: 0, step: 'any' });
+  const gridField = createNumberField('Grid', 'drawingGrid', state.gridMm, { min: 0, step: 'any' });
   controls.append(diameterField.field, lengthField.field, snapField.field, gridField.field);
   const profileBar = createSegmentedGroup('profileDrawingProfileTools', 'Profile side');
   controls.appendChild(profileBar);
@@ -141,8 +157,8 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   pointEditor.className = 'profileDrawingPointEditor';
   const pointFields = document.createElement('div');
   pointFields.className = 'profileDrawingPointFields';
-  const pointZField = createNumberField('Z', 'drawingPointZ', 0, { min: 0, step: 0.001 });
-  const pointDiameterField = createNumberField('Diameter', 'drawingPointDiameter', 0, { min: 0, step: 0.001 });
+  const pointZField = createNumberField('Z', 'drawingPointZ', 0, { min: 0, step: 'any' });
+  const pointDiameterField = createNumberField('Diameter', 'drawingPointDiameter', 0, { min: 0, step: 'any' });
   pointFields.append(pointZField.field, pointDiameterField.field);
   pointEditor.appendChild(pointFields);
   const deletePointButton = createButton('Delete point', 'setupSegmentButton profileDrawingDeletePointButton');
@@ -200,7 +216,7 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       featureBar.appendChild(button);
     }
     row.appendChild(featureBar);
-    const sizeField = createNumberField('Size', `drawingSegment${capitalize(endpoint)}FeatureSize`, 1, { min: 0, step: 0.1 });
+    const sizeField = createNumberField('Size', `drawingSegment${capitalize(endpoint)}FeatureSize`, 1, { min: 0, step: 'any' });
     sizeField.input.addEventListener('input', () => {
       const current = getSelectedSegmentFeature(state, endpoint);
       if (!current)
@@ -230,16 +246,28 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       return;
     const sizeKey = getPreviewRenderSizeKey(getPreviewRenderSize(preview3d));
     if (sizeKey !== previewRenderSizeKey)
-      schedulePreviewUpdate(previewText, true);
+      schedulePreviewUpdate(previewText, true, previewReverseZ);
   }) : null;
   previewResizeObserver?.observe(preview3d);
   const error = document.createElement('div');
   error.className = 'toolDialogError';
   form.appendChild(error);
-  const handleDimensionInput = () => {
+  const correctionDetails = document.createElement('pre');
+  correctionDetails.className = 'profileDrawingFeatureCorrections';
+  const correctionButton = createButton('Apply listed feature corrections', 'profileDrawingCorrectFeatures');
+  let pendingCorrections: DrawingFeatureCorrection[] = [];
+  correctionButton.addEventListener('click', () => {
+    if (!pendingCorrections.length) return;
     const before = cloneDrawingState(state);
-    const nextDiameter = readPositiveNumber(diameterField.input, state.diameterMm);
-    const nextLength = readPositiveNumber(lengthField.input, state.lengthMm);
+    applyDrawingFeatureCorrections(state, pendingCorrections);
+    recordUndoStateIfChanged(history, before, state);
+    render();
+  });
+  form.append(correctionDetails, correctionButton);
+  const handleDimensionInput = (event: Event) => {
+    const before = cloneDrawingState(state);
+    const nextDiameter = event.target === diameterField.input ? readPositiveNumber(diameterField.input, state.diameterMm) : state.diameterMm;
+    const nextLength = event.target === lengthField.input ? readPositiveNumber(lengthField.input, state.lengthMm) : state.lengthMm;
     const dimensionsChanged = Math.abs(nextDiameter - state.diameterMm) > GEOMETRY_EPSILON || Math.abs(nextLength - state.lengthMm) > GEOMETRY_EPSILON;
     state.snapMm = readNonNegativeNumber(snapField.input, state.snapMm);
     state.gridMm = readPositiveNumber(gridField.input, state.gridMm);
@@ -253,15 +281,15 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   lengthField.input.addEventListener('input', handleDimensionInput);
   snapField.input.addEventListener('input', handleDimensionInput);
   gridField.input.addEventListener('input', handleDimensionInput);
-  const handlePointInput = () => {
+  const handlePointInput = (event: Event) => {
     if (updatingPointFields || !state.selection)
       return;
     const point = getSelectedPoint(state);
     if (!point)
       return;
     const before = cloneDrawingState(state);
-    const z = readFiniteNumber(pointZField.input, point.z);
-    const diameter = readFiniteNumber(pointDiameterField.input, point.radius * 2);
+    const z = event.target === pointZField.input ? readFiniteNumber(pointZField.input, point.z) : point.z;
+    const diameter = event.target === pointDiameterField.input ? readFiniteNumber(pointDiameterField.input, point.radius * 2) : point.radius * 2;
     updatePointPosition(state, state.selection, { z, radius: diameter / 2 }, false);
     clearFreehandWork();
     recordUndoStateIfChanged(history, before, state);
@@ -488,7 +516,20 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
   function render() {
     updateWorkspaceLayout();
     renderDrawing(svg, state, freehandStroke ?? []);
-    const text = buildLatheCodeFromDrawing(state);
+    let text: string | null = null;
+    error.textContent = '';
+    pendingCorrections = [];
+    try {
+      buildOutgoingLatheCodeFromDrawing(state);
+      text = buildLatheCodeFromDrawing(state);
+    } catch (caught) {
+      error.textContent = String(caught instanceof Error ? caught.message : caught)
+        + (previewText ? '\nThe 3D preview shows the last valid profile.' : '');
+      if (isEdgeFeatureValidationError(caught)) pendingCorrections = getDrawingFeatureCorrections(state);
+    }
+    correctionDetails.textContent = pendingCorrections.map(formatFeatureCorrection).join('\n');
+    correctionDetails.hidden = correctionButton.hidden = !pendingCorrections.length;
+    acceptButton.disabled = text === null;
     updatePointEditor();
     updateSegmentEditor();
     const hasSelectionControls = !pointEditor.hidden || !segmentEditor.hidden;
@@ -496,7 +537,6 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     const hasSelectionRowContent = hasSelectionControls || !snapshotField.hidden;
     selectionControls.classList.toggle('empty', !hasSelectionRowContent);
     selectionControls.setAttribute('aria-hidden', String(!hasSelectionRowContent));
-    error.textContent = '';
     for (const [side, button] of profileButtons) {
       button.classList.toggle('selected', state.activeSide === side);
       button.setAttribute('aria-pressed', String(state.activeSide === side));
@@ -514,7 +554,7 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     }
     const forcePreviewUpdate = forceImmediatePreviewUpdate;
     forceImmediatePreviewUpdate = false;
-    schedulePreviewUpdate(text, forcePreviewUpdate);
+    if (text !== null) schedulePreviewUpdate(text, forcePreviewUpdate);
   }
   function updateSegmentHoverCursor(svgPoint: {
     x: number;
@@ -641,12 +681,12 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     const profile = state.profiles[state.selection.side];
     const zLocked = isInternalSplineControlPoint(profile, state.selection.index);
     updatingPointFields = true;
-    pointZField.input.max = formatNumber(state.lengthMm);
+    pointZField.input.max = String(state.lengthMm);
     pointZField.input.disabled = zLocked;
     pointZField.input.title = zLocked ? 'Spline control Z is set by the spline span' : '';
-    pointDiameterField.input.max = formatNumber(state.diameterMm);
-    pointZField.input.value = formatNumber(point.z);
-    pointDiameterField.input.value = formatNumber(point.radius * 2);
+    pointDiameterField.input.max = isInternalSplineControlPoint(profile, state.selection.index) ? '' : String(state.diameterMm);
+    pointZField.input.value = String(point.z);
+    pointDiameterField.input.value = String(point.radius * 2);
     updatingPointFields = false;
     deletePointButton.disabled = !canRemoveSelectedPoint(state);
   }
@@ -665,13 +705,13 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       const endpointCanHaveFeature = canSelectedSegmentEndpointHaveFeature(state, endpoint);
       segmentFeatureRows.get(endpoint)!.classList.toggle('disabled', !endpointCanHaveFeature);
       for (const [featureTool, button] of segmentFeatureButtons.get(endpoint)!) {
-        button.disabled = !endpointCanHaveFeature;
+        button.disabled = featureTool !== 'none' && !endpointCanHaveFeature;
         button.classList.toggle('selected', activeFeature === featureTool);
         button.setAttribute('aria-pressed', String(activeFeature === featureTool));
       }
       const sizeField = segmentFeatureSizeFields.get(endpoint)!;
       sizeField.input.disabled = !endpointCanHaveFeature || !feature;
-      sizeField.input.value = formatNumber(feature?.size ?? getDefaultSegmentFeatureSize(state, endpoint));
+      sizeField.input.value = String(feature?.size ?? getDefaultSegmentFeatureSize(state, endpoint));
     }
   }
   function applyFreehandCandidate(candidate: FreehandCandidate) {
@@ -940,10 +980,10 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
     render();
   }
   function syncDimensionInputs() {
-    diameterField.input.value = formatNumber(state.diameterMm);
-    lengthField.input.value = formatNumber(state.lengthMm);
-    snapField.input.value = formatNumber(state.snapMm);
-    gridField.input.value = formatNumber(state.gridMm);
+    diameterField.input.value = String(state.diameterMm);
+    lengthField.input.value = String(state.lengthMm);
+    snapField.input.value = String(state.snapMm);
+    gridField.input.value = String(state.gridMm);
   }
   function recordCurrentSnapshot(): string {
     const text = getValidSnapshotText();
@@ -981,37 +1021,38 @@ export function openProfileDrawingDialog(onAccept: (text: string) => void, initi
       snapshotSelect.value = profileDrawingSnapshots.at(-1)!.id;
     }
   }
-  function schedulePreviewUpdate(text: string, force = false) {
+  function schedulePreviewUpdate(text: string, force = false, reverseZ = !!state.source) {
     if (force) {
       if (previewUpdateTimer !== null) {
         window.clearTimeout(previewUpdateTimer);
         previewUpdateTimer = null;
       }
-      update3dPreview(text);
+      update3dPreview(text, reverseZ);
       return;
     }
-    if (!force && text === previewText && getPreviewRenderSizeKey(getPreviewRenderSize(preview3d)) === previewRenderSizeKey) {
+    if (!force && text === previewText && reverseZ === previewReverseZ && getPreviewRenderSizeKey(getPreviewRenderSize(preview3d)) === previewRenderSizeKey) {
       return;
     }
     if (!previewText) {
-      update3dPreview(text);
+      update3dPreview(text, reverseZ);
       return;
     }
     if (previewUpdateTimer !== null)
       window.clearTimeout(previewUpdateTimer);
     previewUpdateTimer = window.setTimeout(() => {
       previewUpdateTimer = null;
-      update3dPreview(text);
+      update3dPreview(text, reverseZ);
     }, PREVIEW_UPDATE_DELAY_MS);
   }
-  function update3dPreview(text: string) {
+  function update3dPreview(text: string, reverseZ: boolean) {
     const renderSize = getPreviewRenderSize(preview3d);
     previewText = text;
+    previewReverseZ = reverseZ;
     previewRenderSizeKey = getPreviewRenderSizeKey(renderSize);
     preview3d.dataset.previewText = text;
     preview3d.dataset.previewSize = previewRenderSizeKey;
     autoPreview3d.resize(renderSize.width, renderSize.height);
-    autoPreview3d.setText(text);
+    autoPreview3d.setText(text, {reverseZ});
   }
   render();
 }

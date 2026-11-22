@@ -862,6 +862,21 @@ progress {
   line-height: 1.35;
 }
 
+.profileDrawingStockBore {
+  fill: white;
+  stroke: #777;
+  stroke-dasharray: 4 3;
+}
+
+.profileDrawingStockBoreLabel {
+  fill: #555;
+  font-size: 11px;
+}
+
+.profileDrawingFeatureCorrections {
+  white-space: pre-wrap;
+}
+
 .settingsActions, .settingsModelActions {
   display: flex;
   flex-wrap: wrap;

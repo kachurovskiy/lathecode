@@ -216,6 +216,18 @@ export class LatheCode {
     return this.text;
   }
 
+  getUnitsMultiplier(): number {
+    return this.unitsMultiplier;
+  }
+
+  /** Explicit source lines only: no inferred closures, extensions, or cutoff removal. */
+  getSourceProfileSegmentDefinitions(side: ProfileSide): ProfileSegmentDefinition[] {
+    return this.getProfileSegmentDefinitionsForSide(
+      side === 'outside' ? this.data.outside : this.data.inside?.entries ?? [],
+      side === 'outside' ? this.getStockInnerDiameter() / 2 : this.getStockDiameter() / 2,
+    );
+  }
+
   getTitle(): string {
     return this.data.leadingComments[1] || '';
   }

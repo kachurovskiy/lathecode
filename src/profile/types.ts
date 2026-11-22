@@ -60,6 +60,18 @@ export type ProfileDraft = {
   points: ProfilePoint[];
   segmentTools: SegmentTool[];
   segmentFeatures: SegmentEdgeFeatures[];
+  // Original source line for each span; null denotes a new span or radial connector.
+  segmentSourceIds?: (number | null)[];
+};
+export type DrawingSource = {
+  readonly text: string;
+  readonly unitMm: number;
+  readonly diameterMm: number;
+  readonly lengthMm: number;
+  readonly stockInnerDiameterMm: number;
+  readonly lineIndices: Record<ProfileSide, number[]>;
+  // Original, unextended profiles in program order, before editor reversal.
+  readonly profiles: Record<ProfileSide, ProfileDraft>;
 };
 export type PointSelection = {
   side: ProfileSide;
@@ -70,6 +82,7 @@ export type SegmentSelection = {
   index: number;
 } | null;
 export type DrawingState = {
+  source?: DrawingSource;
   diameterMm: number;
   lengthMm: number;
   snapMm: number;
@@ -92,14 +105,11 @@ export type FieldControl = {
 };
 export type NumberFieldOptions = {
   min?: number;
-  step?: number;
+  step?: number | 'any';
 };
 export type DrawingHistory = {
   undoStack: DrawingState[];
   redoStack: DrawingState[];
-};
-export type BuildLatheCodeOptions = {
-  stripEdgeFeatures?: boolean;
 };
 export type ContextMenuItem = {
   label: string;
