@@ -1,1 +1,1 @@
-export { StartLatheCodeEvent, StartPanel, StartStlEvent } from './start.ts';
+export { StartLatheCodeEvent, StartPanel, StartModelEvent } from './start.ts';

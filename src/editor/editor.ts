@@ -2,8 +2,8 @@ import { LatheCode, ProfileSide } from '../common/lathecode.ts';
 import { createFullScreenDialog } from '../common/dialog.ts';
 import { openToolDialog } from './tooldialog.ts';
 import { openSetupDialog, type SetupDialogKind } from './setupdialog.ts';
-import StlImportWorker from './stlimportworker?worker&inline';
-import { FromStlWorkerMessage } from './stlimportworker.ts';
+import ModelImportWorker from './modelimportworker?worker&inline';
+import type { FromModelWorkerMessage } from './modelimportworker.ts';
 import { AppSettings, loadAppSettings } from '../common/settings.ts';
 import { estimateModificationCost, modifyLatheCodeWithPrompt, type TechnicalDrawingImage } from '../llm/openrouter.ts';
 import { createCostEstimateControl } from '../llm/usageui.ts';
@@ -482,46 +482,57 @@ export class Editor extends EventTarget {
     return value;
   }
 
-  async importStlFile(file: File) {
+  async importModelFile(file: File) {
     this.errorContainer.textContent = '';
+    this.statusContainer.textContent = 'Reading model file...';
     document.body.style.cursor = 'wait';
     try {
-      await this.importStl(file);
+      await this.importModel(file);
     } catch (error) {
       this.errorContainer.textContent = error instanceof Error ? error.message : String(error);
     } finally {
+      this.statusContainer.textContent = '';
       document.body.style.cursor = 'default';
     }
   }
 
-  private async importStl(file: File) {
+  private async importModel(file: File) {
     return new Promise<void>((resolve, reject) => {
       const textBeforeImport = this.latheCodeInput.value;
       const reader = new FileReader();
-      reader.onload = async () => {
-        const stl = reader.result as ArrayBuffer;
+      reader.onload = () => {
+        const buffer = reader.result as ArrayBuffer;
         if (this.worker) {
           this.worker.onmessage = null;
           this.worker.terminate();
         }
-        this.worker = new StlImportWorker();
-        this.worker.onmessage = (event: MessageEvent<any>) => {
-          const m = event.data as FromStlWorkerMessage;
+        try {
+          this.worker = new ModelImportWorker();
+        } catch (error) {
+          reject(error);
+          return;
+        }
+        this.worker.onerror = event => {
+          this.worker?.terminate();
+          reject(new Error(event.message || 'Unable to import model file.'));
+        };
+        this.worker.onmessage = (event: MessageEvent<FromModelWorkerMessage>) => {
+          const m = event.data as FromModelWorkerMessage;
           if (m.error) {
             this.errorContainer.textContent = m.error;
             this.statusContainer.textContent = '';
             resolve();
           } else if (m.latheCodeText) {
             this.statusContainer.textContent = '';
-            this.setText(wrapStlText(file.name, m.latheCodeText, textBeforeImport), {sourceImages: []});
+            this.setText(wrapImportedText(file.name, m.latheCodeText, textBeforeImport), {sourceImages: []});
             resolve();
           } else if (m.progressMessage) {
             this.statusContainer.textContent = m.progressMessage;
           }
         };
-        this.worker.postMessage({ stl, settings: this.getAppSettings() });
+        this.worker.postMessage({fileName: file.name, buffer, settings: this.getAppSettings()}, [buffer]);
       };
-      reader.onerror = reject;
+      reader.onerror = () => reject(reader.error ?? new Error('Unable to read model file.'));
       reader.readAsArrayBuffer(file);
     });
   }
@@ -595,7 +606,7 @@ function formatEditorNumber(value: number): string {
   return rounded.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 }
 
-export function wrapStlText(name:string, stlText: string, previousText = '') {
+export function wrapImportedText(name: string, profileText: string, previousText = '') {
   const preservedToolLine = findToolLine(previousText);
   return `; ${name}
 
@@ -607,7 +618,7 @@ export function wrapStlText(name:string, stlText: string, previousText = '') {
 ; MODE TURN ; for classic style of material removal
 ; AXES RIGHT DOWN ; for non-NanoEls controllers
 
-` + insertToolLine(stlText, preservedToolLine);
+` + insertToolLine(profileText, preservedToolLine);
 }
 
 function findToolLine(text: string): string | undefined {
@@ -618,10 +629,10 @@ function findToolLine(text: string): string | undefined {
     ?.trim();
 }
 
-function insertToolLine(stlText: string, toolLine: string | undefined): string {
-  if (!toolLine) return stlText;
+function insertToolLine(profileText: string, toolLine: string | undefined): string {
+  if (!toolLine) return profileText;
 
-  const lines = stlText.replace(/\r\n/g, '\n').split('\n');
+  const lines = profileText.replace(/\r\n/g, '\n').split('\n');
   const existingToolIndex = lines.findIndex(line => line.trimStart().startsWith('TOOL '));
   if (existingToolIndex >= 0) {
     lines[existingToolIndex] = toolLine;

@@ -4,6 +4,10 @@ Text format for lathe parts and other objects with circular symmetry. Defines st
 
 **[Try it in the online editor.](https://kachurovskiy.com/lathecode)**
 
+Use **Import STL / STEP** to import `.stl`, `.step`, or `.stp` files locally in the browser. STEP files are converted to millimetres and tessellated before using the same lathe-profile extraction as STL. Export a single part with its turning axis aligned to X, Y, or Z; multi-body STEP files are rejected. This imports an approximate turning profile, not CAD features or exact analytic curves. Tessellation uses a linear deflection of at most 0.01 mm (or one profile pixel, if smaller); subsequent profile processing also affects accuracy.
+
+STEP conversion uses [occt-import-js](https://github.com/kovacsv/occt-import-js) and OpenCascade. The WebAssembly reader is bundled with the app for offline use and initialized only for STEP imports. See [third-party notices](THIRD_PARTY_NOTICES.txt) for licenses and source links.
+
 The shape of the object is defined in segments. Each segment can be straight, angled, circular, or a B-spline, and its position is relative to the segment before it. For example, in lathecode, a simple cylinder is defined in one segment. A cylinder with a length of 7mm and a diameter of 6mm is described as:
 
 ```

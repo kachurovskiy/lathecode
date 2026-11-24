@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, test, expect } from 'vitest';
 import { readFileSync, readdirSync, writeFileSync, rmSync } from 'fs';
 import { resolve } from 'path';
+import { pathToFileURL } from 'node:url';
 import puppeteer, { type Page } from 'puppeteer';
 import { createServer, type ViteDevServer } from 'vite';
 
@@ -80,7 +81,7 @@ async function openStarterLatheCode(page: Page) {
   await page.waitForSelector('#editorContainer:not([hidden])', { visible: true });
 }
 
-async function waitForImportedStl(page: Page, fileName: string) {
+async function waitForImportedModel(page: Page, fileName: string) {
   await page.waitForFunction(expectedHeader => {
     const errorText = document.querySelector<HTMLDivElement>('.errorContainer')?.innerText;
     if (errorText) return true;
@@ -103,16 +104,40 @@ test('stl to lathecode', async () => {
     await setLatheCodeInput(page, '');
 
     // Pick the STL file from the Start UI.
-    const [fileChooser] = await Promise.all([page.waitForFileChooser(), page.click('.startStlButton')]);
+    const [fileChooser] = await Promise.all([page.waitForFileChooser(), page.click('.startModelButton')]);
     await fileChooser.accept([resolve(__dirname, fileName)]);
 
-    await waitForImportedStl(page, fileName);
+    await waitForImportedModel(page, fileName);
 
     // Ensure there's no error reported parsing lathecode
     expect(await page.$eval('.errorContainer', el => (el as HTMLDivElement).innerText), `Error in file ${name}`).toBe('');
 
     let latheCode = await page.$eval('.latheCodeInput', el => (el as HTMLTextAreaElement).value);
     saveInput(name, normalize(latheCode));
+  } finally {
+    await browser.close();
+  }
+}, {timeout: 120000});
+
+test.each(['development', 'offline build'])('STEP import in the %s', async mode => {
+  const browser = await puppeteer.launch(PUPPETEER_LAUNCH_OPTIONS);
+  try {
+    const page = await browser.newPage();
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(String(error)));
+    if (mode === 'offline build') await page.setOfflineMode(true);
+    await page.goto(mode === 'offline build'
+      ? pathToFileURL(resolve(__dirname, '../../docs/index.html')).href
+      : getAppUrl(), {waitUntil: 'domcontentloaded'});
+    const [chooser] = await Promise.all([page.waitForFileChooser(), page.click('.startModelButton')]);
+    await chooser.accept([resolve(__dirname, 'pipe.step')]);
+    await waitForImportedModel(page, 'pipe.step');
+    expect(await page.$eval('.errorContainer', el => el.textContent)).toBe('');
+    const text = await page.$eval('.latheCodeInput', el => (el as HTMLTextAreaElement).value);
+    expect(text).toContain('; pipe.step');
+    expect(text).toContain('STOCK D6.000 ID2.000');
+    expect(text).toContain('L10.000 R3.000');
+    expect(pageErrors).toEqual([]);
   } finally {
     await browser.close();
   }

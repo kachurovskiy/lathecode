@@ -13,7 +13,7 @@ import { createToolFootprintGeometry } from '../common/toolgeometry';
 import { createLatheCodePreview } from './preview';
 import * as previews from './preview';
 import { SAMPLE_SECTIONS, START_SAMPLE_DEFINITIONS } from './samples';
-import { StartLatheCodeEvent, StartPanel } from './start';
+import { StartLatheCodeEvent, StartModelEvent, StartPanel } from './start';
 import { createFullScreenDialog } from '../common/dialog';
 
 vi.mock('../llm/pricing', async () => ({...await vi.importActual<object>('../llm/pricing'), estimateCost: async () => null}));
@@ -24,6 +24,22 @@ describe('StartPanel', () => {
     vi.unstubAllGlobals();
     localStorage.clear();
     document.body.innerHTML = '';
+  });
+
+  it('offers STL and STEP files and forwards the selected file', () => {
+    const container = createStartContainer();
+    const start = new StartPanel(container);
+    const files: File[] = [];
+    start.addEventListener('modelfile', event => files.push((event as StartModelEvent).file));
+    const file = new File(['STEP data'], 'part.STP');
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function(this: HTMLInputElement) {
+      expect(this.type).toBe('file');
+      expect(this.accept).toBe('.stl,.step,.stp');
+      Object.defineProperty(this, 'files', {value: [file]});
+      this.dispatchEvent(new Event('change'));
+    });
+    container.querySelector<HTMLButtonElement>('.startModelButton')!.click();
+    expect(files).toEqual([file]);
   });
 
   it('emits sectioned sample lathecodes without hiding the start section', () => {
@@ -1875,7 +1891,7 @@ function createStartContainer(): HTMLElement {
     <section class="startSection">
       <button class="sampleCatalogButton"></button>
       <button class="startDimensionsButton"></button>
-      <button class="startStlButton"></button>
+      <button class="startModelButton"></button>
       <button class="startPromptButton"></button>
       <button class="startDrawingButton"></button>
       <div class="startPanel">

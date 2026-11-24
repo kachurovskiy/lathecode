@@ -22,9 +22,9 @@ export class StartLatheCodeEvent extends Event {
   }
 }
 
-export class StartStlEvent extends Event {
+export class StartModelEvent extends Event {
   constructor(readonly file: File) {
-    super('stlfile');
+    super('modelfile');
   }
 }
 
@@ -38,7 +38,7 @@ export class StartPanel extends EventTarget {
   private loadSelect: HTMLSelectElement;
   private deleteButton: HTMLButtonElement;
   private importInput: HTMLInputElement;
-  private startStlButton: HTMLButtonElement;
+  private startModelButton: HTMLButtonElement;
   private overflowButton: HTMLButtonElement;
   private overflowMenu: HTMLElement;
   private settingsButtons: HTMLButtonElement[];
@@ -58,7 +58,7 @@ export class StartPanel extends EventTarget {
     this.loadSelect = container.querySelector<HTMLSelectElement>('.loadSelect')!;
     this.deleteButton = container.querySelector<HTMLButtonElement>('.deleteButton')!;
     this.importInput = container.querySelector<HTMLInputElement>('#importFile')!;
-    this.startStlButton = container.querySelector<HTMLButtonElement>('.startStlButton')!;
+    this.startModelButton = container.querySelector<HTMLButtonElement>('.startModelButton')!;
     this.overflowButton = container.querySelector<HTMLButtonElement>('.overflowButton')!;
     this.overflowMenu = container.querySelector<HTMLElement>('.overflowMenu')!;
     this.settingsButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.settingsButton'));
@@ -77,7 +77,7 @@ export class StartPanel extends EventTarget {
     this.startDrawingButton.addEventListener('click', () => this.openLlmEntryDialog(() => this.openDrawingDialog()));
     this.loadButton.addEventListener('click', () => this.loadLatheCode());
     this.deleteButton.addEventListener('click', () => this.deleteLatheCode());
-    this.startStlButton.addEventListener('click', () => this.openStlFilePicker());
+    this.startModelButton.addEventListener('click', () => this.openModelFilePicker());
     this.overflowButton.addEventListener('click', () => this.toggleOverflowMenu());
     this.settingsButtons.forEach(button => button.addEventListener('click', () => {
       openSettingsDialog(() => {
@@ -474,13 +474,13 @@ export class StartPanel extends EventTarget {
     this.updateSavedLatheCodes();
   }
 
-  private openStlFilePicker() {
+  private openModelFilePicker() {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.stl';
+    input.accept = '.stl,.step,.stp';
     input.addEventListener('change', () => {
       const selectedFile = input.files?.[0];
-      if (selectedFile) this.dispatchEvent(new StartStlEvent(selectedFile));
+      if (selectedFile) this.dispatchEvent(new StartModelEvent(selectedFile));
     });
     input.click();
   }

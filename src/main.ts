@@ -3,7 +3,7 @@ import { Scene } from './scene.ts';
 import { createDownloadLink } from './stl.ts';
 import { GCode, GCodeMoveSelectionEvent } from './gcode/gcode.ts';
 import { Editor, PlanEvent } from './editor/editor.ts';
-import { StartLatheCodeEvent, StartPanel, StartStlEvent } from './start/index.ts';
+import { StartLatheCodeEvent, StartPanel, StartModelEvent } from './start/index.ts';
 import { Planner } from './planner/planner.ts';
 import { LatheCode } from './common/lathecode.ts';
 import { CrossSection } from './crosssection.ts';
@@ -52,11 +52,11 @@ start.addEventListener('start', (event) => {
   start.updateSavedLatheCodes();
 });
 
-start.addEventListener('stlfile', async (event) => {
+start.addEventListener('modelfile', async (event) => {
   editorContainer.hidden = false;
   crossSectionContainer.hidden = false;
   sceneContainer.hidden = false;
-  await editor.importStlFile((event as StartStlEvent).file);
+  await editor.importModelFile((event as StartModelEvent).file);
   start.updateSavedLatheCodes();
 });
 

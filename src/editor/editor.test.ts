@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Editor, PlanEvent, wrapStlText } from './editor';
+import { Editor, PlanEvent, wrapImportedText } from './editor';
 import { DEFAULT_APP_SETTINGS, DEFAULT_OPENROUTER_MODEL } from '../common/settings';
 import { SourceDrawingPanel } from '../sourcedrawing';
-import StlImportWorker from './stlimportworker?worker&inline';
+import ModelImportWorker from './modelimportworker?worker&inline';
 
 vi.mock('../llm/pricing', async () => ({...await vi.importActual<object>('../llm/pricing'), estimateCost: async () => null}));
-vi.mock('./stlimportworker?worker&inline', () => ({default: vi.fn()}));
+vi.mock('./modelimportworker?worker&inline', () => ({default: vi.fn()}));
 
 describe('Editor', () => {
   beforeEach(() => {
@@ -211,11 +211,16 @@ describe('Editor', () => {
     expect(editor.getText()).toBe(text);
   });
 
-  it.each([true, false])('updates source history only for a successful STL import (success: %s)', async success => {
-    vi.mocked(StlImportWorker).mockImplementation(() => {
+  it.each(['part.stl', 'part.STEP', 'part.stp'].flatMap(fileName => [true, false].map(success => ({fileName, success}))))
+  ('updates source history only for a successful $fileName import (success: $success)', async ({fileName, success}) => {
+    const posted = vi.fn();
+    vi.mocked(ModelImportWorker).mockImplementation(() => {
       const worker = {
         onmessage: null as ((event: {data: object}) => void) | null,
-        postMessage: () => worker.onmessage?.({data: success ? {latheCodeText: 'STOCK D20\nL10 D12'} : {error: 'Invalid STL'}}),
+        postMessage: (message: unknown) => {
+          posted(message);
+          worker.onmessage?.({data: success ? {latheCodeText: 'STOCK D20\nL10 D12'} : {error: 'Invalid model'}});
+        },
       };
       return worker as unknown as Worker;
     });
@@ -224,10 +229,11 @@ describe('Editor', () => {
     const images = [{name: 'drawing.png', dataUrl: 'data:image/png;base64,AA=='}];
     const original = 'STOCK D20\nL5 D8';
     editor.setText(original, {sourceImages: images});
-    await editor.importStlFile(new File(['mock STL'], 'part.stl'));
+    await editor.importModelFile(new File(['mock model'], fileName));
+    expect(posted).toHaveBeenCalledWith(expect.objectContaining({fileName}));
     expect(editor.getSourceImages()).toEqual(success ? [] : images);
     if (success) {
-      expect(editor.getText()).toContain('; part.stl');
+      expect(editor.getText()).toContain(`; ${fileName}`);
       container.querySelector<HTMLButtonElement>('.undoButton')!.click();
       expect(editor.getText()).toBe(original);
       expect(editor.getSourceImages()).toEqual(images);
@@ -237,6 +243,27 @@ describe('Editor', () => {
       expect(editor.getText()).toBe(original);
       expect(container.querySelector<HTMLButtonElement>('.undoButton')!.hidden).toBe(true);
     }
+  });
+
+  it('reports worker failures without replacing the current model', async () => {
+    const terminate = vi.fn();
+    vi.mocked(ModelImportWorker).mockImplementation(() => {
+      const worker = {
+        onerror: null as ((event: {message: string}) => void) | null,
+        postMessage: () => worker.onerror?.({message: 'STEP worker failed'}),
+        terminate,
+      };
+      return worker as unknown as Worker;
+    });
+    const container = createEditorContainer('');
+    const editor = new Editor(container, {deferInitialUpdate: true});
+    editor.setText('L10 D6');
+    await editor.importModelFile(new File(['STEP data'], 'part.step'));
+    expect(editor.getText()).toBe('L10 D6');
+    expect(container.querySelector('.errorContainer')!.textContent).toBe('STEP worker failed');
+    expect(container.querySelector('.statusContainer')!.textContent).toBe('');
+    expect(document.body.style.cursor).toBe('default');
+    expect(terminate).toHaveBeenCalledOnce();
   });
 
   it('updates setup directives from dedicated editor dialogs', () => {
@@ -633,7 +660,7 @@ describe('Editor', () => {
   });
 
   it('keeps the existing tool when wrapping imported STL lathecode without stock', () => {
-    const text = wrapStlText(
+    const text = wrapImportedText(
       'part.stl',
       'L10 R3',
       'STOCK D20\nTOOL ROUND R4\nL1 R1');
@@ -642,7 +669,7 @@ describe('Editor', () => {
   });
 
   it('keeps the existing tool after imported STL stock when stock is generated', () => {
-    const text = wrapStlText(
+    const text = wrapImportedText(
       'part.stl',
       'STOCK D8 ID2\nL10 R4',
       'STOCK D20\nTOOL ANG R0.4 L7.8 A32.5 NA55\nL1 R1');

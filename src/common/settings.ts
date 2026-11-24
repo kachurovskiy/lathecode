@@ -173,7 +173,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
   {
     id: 'planning',
     label: 'Planning',
-    guidance: 'Core planner selection and resolution shared by planning and STL import.',
+    guidance: 'Core planner selection and resolution shared by planning and STL/STEP import.',
     definitions: [
       {
         key: 'pxPerMm',
@@ -186,7 +186,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
         step: 1,
         unit: 'px/mm',
         reasonableValues: PX_PER_MM_OPTIONS.join(', '),
-        guidance: 'Raster resolution for planning and STL import. Higher values preserve more detail but make planning slower and memory-heavy.',
+        guidance: 'Raster resolution for planning and STL/STEP import. Higher values preserve more detail but make planning slower and memory-heavy.',
         integer: true,
       },
       {
@@ -612,13 +612,13 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
   },
   {
     id: 'stlImport',
-    label: 'STL Import Advanced',
-    guidance: 'Numerical tolerances used when projecting or slicing STL meshes into lathe profiles.',
+    label: 'STL / STEP Import Advanced',
+    guidance: 'Numerical tolerances shared by STL and STEP meshes when extracting lathe profiles.',
     definitions: [
       {
         key: 'stlProjectionScale',
         type: 'number',
-        label: 'STL projection scale',
+        label: 'Mesh projection scale',
         storageKey: 'stlProjectionScale',
         defaultValue: DEFAULT_APP_SETTINGS.stlProjectionScale,
         min: 1000,
@@ -632,7 +632,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
       {
         key: 'stlCutPlaneToleranceMm',
         type: 'number',
-        label: 'STL cut-plane tolerance',
+        label: 'Mesh cut-plane tolerance',
         storageKey: 'stlCutPlaneToleranceMm',
         defaultValue: DEFAULT_APP_SETTINGS.stlCutPlaneToleranceMm,
         min: 0.000000001,
@@ -640,12 +640,12 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
         step: 0.000001,
         unit: 'mm',
         reasonableValues: '0.000001 to 0.00001',
-        guidance: 'Distance tolerance for classifying STL vertices and faces as lying on a slicing plane.',
+        guidance: 'Distance tolerance for classifying mesh vertices and faces as lying on a slicing plane.',
       },
       {
         key: 'stlProjectionMinimumAreaPx2',
         type: 'number',
-        label: 'STL minimum projection area',
+        label: 'Mesh minimum projection area',
         storageKey: 'stlProjectionMinimumAreaPx2',
         defaultValue: DEFAULT_APP_SETTINGS.stlProjectionMinimumAreaPx2,
         min: 0,
@@ -653,12 +653,12 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
         step: 0.001,
         unit: 'px2',
         reasonableValues: '0.001 to 0.1',
-        guidance: 'Minimum projected polygon area kept after STL section cleanup.',
+        guidance: 'Minimum projected polygon area kept after mesh section cleanup.',
       },
       {
         key: 'stlConstantRadiusTolerancePx',
         type: 'number',
-        label: 'STL constant radius tolerance',
+        label: 'Mesh constant radius tolerance',
         storageKey: 'stlConstantRadiusTolerancePx',
         defaultValue: DEFAULT_APP_SETTINGS.stlConstantRadiusTolerancePx,
         min: 0,
@@ -671,7 +671,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
       {
         key: 'stlSizeMatchTolerance',
         type: 'number',
-        label: 'STL size match tolerance',
+        label: 'Mesh size match tolerance',
         storageKey: 'stlSizeMatchTolerance',
         defaultValue: DEFAULT_APP_SETTINGS.stlSizeMatchTolerance,
         min: 0,
@@ -679,7 +679,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
         step: 0.01,
         unit: 'ratio',
         reasonableValues: '0.1 to 0.4',
-        guidance: 'Relative bounding-box mismatch allowed when ranking candidate STL projections against the source mesh size.',
+        guidance: 'Relative bounding-box mismatch allowed when ranking candidate mesh projections against the source mesh size.',
       },
     ],
   },
@@ -747,7 +747,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
       {
         key: 'stlDebugCanvasSizePx',
         type: 'number',
-        label: 'STL debug preview size',
+        label: 'Mesh debug preview size',
         storageKey: 'stlDebugCanvasSizePx',
         defaultValue: DEFAULT_APP_SETTINGS.stlDebugCanvasSizePx,
         min: 100,
@@ -755,7 +755,7 @@ export const APP_SETTING_SECTIONS: readonly AppSettingSectionDefinition[] = [
         step: 50,
         unit: 'px',
         reasonableValues: '300 to 1000',
-        guidance: 'Canvas size for STL projection debug views. This affects debug display only.',
+        guidance: 'Canvas size for mesh projection debug views. This affects debug display only.',
         integer: true,
       },
     ],

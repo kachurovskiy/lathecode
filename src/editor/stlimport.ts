@@ -13,10 +13,15 @@ import { type AppSettings, DEFAULT_APP_SETTINGS, loadAppSettings, normalizeAppSe
 type CoordinatePlane = "xy" | "xz" | "yz";
 
 export function stlToLatheCodes(stl: ArrayBuffer, pxPerMm: number, callback: (progressMessage: string) => void, settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS): LatheCode[] {
-  const normalizedSettings = normalizeAppSettings({...settings, pxPerMm});
-  // Mesh is centered around 0
   const loader = new STLLoader();
-  const geometry = loader.parse(stl).center();
+  return meshToLatheCodes(loader.parse(stl), pxPerMm, callback, settings);
+}
+
+export function meshToLatheCodes(geometry: THREE.BufferGeometry, pxPerMm: number, callback: (progressMessage: string) => void, settings: Partial<AppSettings> = DEFAULT_APP_SETTINGS): LatheCode[] {
+  const normalizedSettings = normalizeAppSettings({...settings, pxPerMm});
+  // Section extraction expects triangle vertices, not an indexed mesh.
+  geometry = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  geometry.center();
 
   // We don't know how the mesh is oriented and along which axis is intended to be rotated so we try all options and let user choose.
   callback("Calculating xy section...");
